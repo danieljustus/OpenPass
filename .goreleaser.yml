@@ -1,0 +1,142 @@
+# GoReleaser configuration for OpenPass
+# Documentation: https://goreleaser.com
+
+version: 2
+
+before:
+  hooks:
+    - env GOWORK=off go mod tidy
+    - env GOWORK=off go mod download
+    - env GOWORK=off make completions
+    - env GOWORK=off make manpages
+    - >-
+      sh -c 'SENSITIVE_FILES="identity.age mcp-token .env coverage coverage.out *.test cmd.test mcp.test vault.test";
+      for f in $SENSITIVE_FILES; do
+      if [ -e "$f" ]; then
+      echo "ERROR: Sensitive file found in project root: $f";
+      exit 1;
+      fi;
+      done;
+      if find . -name ".env" -not -path "./.git/*" 2>/dev/null | grep -q .; then
+      echo "ERROR: .env file found outside .git - remove before release";
+      exit 1;
+      fi;
+      echo "Secret/artifact gate passed"'
+
+builds:
+  - id: openpass
+    main: .
+    binary: openpass
+    env:
+      - CGO_ENABLED=0
+      - GOWORK=off
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    goamd64:
+      - v1
+    goarm:
+      - "7"
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+      - -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: openpass
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+      - completions/*
+      - docs/man/*.1
+    wrap_in_directory: true
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: "^feat[:\\(]"
+      order: 0
+    - title: Bug Fixes
+      regexp: "^fix[:\\(]"
+      order: 1
+    - title: Performance Improvements
+      regexp: "^perf[:\\(]"
+      order: 2
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: "danieljustus"
+    name: "OpenPass"
+  draft: false
+  prerelease: auto
+  name_template: "{{ .ProjectName }} {{ .Version }}"
+  header: |
+    ## OpenPass {{ .Version }}
+    
+    OpenPass is a secure password management CLI tool.
+  footer: |
+    ## Installation
+
+    ### Download
+    Download the appropriate binary for your platform from the assets below.
+
+    ### Build from source
+    ```bash
+    go install github.com/danieljustus/OpenPass@{{ .Tag }}
+    ```
+
+nfpms:
+  - id: openpass
+    package_name: openpass
+    file_name_template: "{{ .PackageName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    vendor: danieljustus
+    homepage: "https://github.com/danieljustus/OpenPass"
+    maintainer: "danieljustus <88160656+danieljustus@users.noreply.github.com>"
+    description: "Secure password management CLI tool"
+    license: "MIT"
+    formats:
+      - deb
+      - rpm
+      - apk
+    recommends:
+      - git
+    bindir: /usr/bin
+    section: utils
+    priority: optional
+
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+dist: dist

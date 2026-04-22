@@ -1,0 +1,209 @@
+// Package config provides configuration management for OpenPass.
+// It handles vault, git, and MCP server configuration with support for
+// YAML serialization and default value merging.
+package config
+
+import (
+	"fmt"
+	"os"
+	"time"
+)
+
+// VaultConfig holds vault-related configuration.
+type VaultConfig struct {
+	Path              string   `yaml:"path,omitempty"`
+	DefaultRecipients []string `yaml:"default_recipients,omitempty"`
+	ConfirmRemove     bool     `yaml:"confirm_remove,omitempty"`
+	UseTouchID        bool     `yaml:"useTouchID,omitempty"`
+}
+
+// GitConfig holds git-related configuration for automatic commits and pushes.
+type GitConfig struct {
+	CommitTemplate string `yaml:"commit_template,omitempty"`
+	AutoPush       bool   `yaml:"auto_push,omitempty"`
+}
+
+// MCPConfig holds MCP server-related configuration for AI agent integration.
+type MCPConfig struct {
+	Bind              string        `yaml:"bind,omitempty"`
+	HTTPTokenFile     string        `yaml:"httpTokenFile,omitempty"`
+	Port              int           `yaml:"port,omitempty"`
+	Stdio             bool          `yaml:"stdio,omitempty"`
+	ApprovalRequired  bool          `yaml:"approval_required,omitempty"`
+	ReadHeaderTimeout time.Duration `yaml:"read_header_timeout,omitempty"`
+	ReadTimeout       time.Duration `yaml:"read_timeout,omitempty"`
+	WriteTimeout      time.Duration `yaml:"write_timeout,omitempty"`
+	ShutdownTimeout   time.Duration `yaml:"shutdown_timeout,omitempty"`
+	ApprovalTimeout   time.Duration `yaml:"approval_timeout,omitempty"`
+}
+
+// ClipboardConfig holds clipboard-related configuration.
+type ClipboardConfig struct {
+	AutoClearDuration int `yaml:"auto_clear_duration,omitempty"` // seconds, 0 = disabled
+}
+
+// defaultVaultConfig returns the default vault configuration.
+func defaultVaultConfig() VaultConfig {
+	return VaultConfig{
+		Path:              "",
+		DefaultRecipients: []string{},
+	}
+}
+
+// defaultGitConfig returns the default git configuration.
+func defaultGitConfig() GitConfig {
+	return GitConfig{
+		AutoPush:       true,
+		CommitTemplate: "Update from OpenPass",
+	}
+}
+
+// defaultMCPConfig returns the default MCP server configuration.
+func defaultMCPConfig() MCPConfig {
+	return MCPConfig{
+		Port:              8080,
+		Bind:              "127.0.0.1",
+		Stdio:             false,
+		HTTPTokenFile:     "auto",
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		ShutdownTimeout:   5 * time.Second,
+		ApprovalTimeout:   30 * time.Second,
+	}
+}
+
+// defaultClipboardConfig returns the default clipboard configuration.
+func defaultClipboardConfig() ClipboardConfig {
+	return ClipboardConfig{
+		AutoClearDuration: 30,
+	}
+}
+
+// fileVaultConfig is the file-based vault configuration with pointer fields
+// for optional YAML unmarshaling.
+type fileVaultConfig struct {
+	ConfirmRemove     *bool    `yaml:"confirm_remove,omitempty"`
+	UseTouchID        *bool    `yaml:"useTouchID,omitempty"`
+	Path              string   `yaml:"path,omitempty"`
+	DefaultRecipients []string `yaml:"default_recipients,omitempty"`
+}
+
+// fileGitConfig is the file-based git configuration with pointer fields
+// for optional YAML unmarshaling.
+type fileGitConfig struct {
+	AutoPush       *bool   `yaml:"auto_push,omitempty"`
+	CommitTemplate *string `yaml:"commit_template,omitempty"`
+}
+
+// fileMCPConfig is the file-based MCP configuration with pointer fields
+// for optional YAML unmarshaling.
+type fileMCPConfig struct {
+	Port              *int           `yaml:"port,omitempty"`
+	Bind              *string        `yaml:"bind,omitempty"`
+	Stdio             *bool          `yaml:"stdio,omitempty"`
+	ApprovalRequired  *bool          `yaml:"approval_required,omitempty"` // deprecated, parsed but ignored
+	HTTPTokenFile     *string        `yaml:"httpTokenFile,omitempty"`
+	ReadHeaderTimeout *time.Duration `yaml:"read_header_timeout,omitempty"`
+	ReadTimeout       *time.Duration `yaml:"read_timeout,omitempty"`
+	WriteTimeout      *time.Duration `yaml:"write_timeout,omitempty"`
+	ShutdownTimeout   *time.Duration `yaml:"shutdown_timeout,omitempty"`
+	ApprovalTimeout   *time.Duration `yaml:"approval_timeout,omitempty"`
+}
+
+// fileClipboardConfig is the file-based clipboard configuration with pointer fields
+// for optional YAML unmarshaling.
+type fileClipboardConfig struct {
+	AutoClearDuration *int `yaml:"auto_clear_duration,omitempty"`
+}
+
+// MergeFileVaultConfig merges file config with defaults, returning the final
+// VaultConfig. If fileCfg is nil, defaults are returned unchanged.
+func MergeFileVaultConfig(fileCfg *fileVaultConfig, defaults VaultConfig) VaultConfig {
+	if fileCfg == nil {
+		return defaults
+	}
+	result := defaults
+	if fileCfg.Path != "" {
+		result.Path = fileCfg.Path
+	}
+	if fileCfg.DefaultRecipients != nil {
+		result.DefaultRecipients = append([]string(nil), fileCfg.DefaultRecipients...)
+	}
+	if fileCfg.ConfirmRemove != nil {
+		result.ConfirmRemove = *fileCfg.ConfirmRemove
+	}
+	if fileCfg.UseTouchID != nil {
+		result.UseTouchID = *fileCfg.UseTouchID
+	}
+	return result
+}
+
+// MergeFileGitConfig merges file config with defaults, returning the final
+// GitConfig. If fileCfg is nil, defaults are returned unchanged.
+func MergeFileGitConfig(fileCfg *fileGitConfig, defaults GitConfig) GitConfig {
+	if fileCfg == nil {
+		return defaults
+	}
+	result := defaults
+	if fileCfg.AutoPush != nil {
+		result.AutoPush = *fileCfg.AutoPush
+	}
+	if fileCfg.CommitTemplate != nil {
+		result.CommitTemplate = *fileCfg.CommitTemplate
+	}
+	return result
+}
+
+// MergeFileMCPConfig merges file config with defaults, returning the final
+// MCPConfig. If fileCfg is nil, defaults are returned unchanged.
+func MergeFileMCPConfig(fileCfg *fileMCPConfig, defaults MCPConfig) MCPConfig {
+	if fileCfg == nil {
+		return defaults
+	}
+	result := defaults
+	if fileCfg.ApprovalRequired != nil {
+		fmt.Fprintln(os.Stderr, "Warning: approval_required is deprecated and will be removed in a future version")
+	}
+	if fileCfg.Port != nil {
+		result.Port = *fileCfg.Port
+	}
+	if fileCfg.Bind != nil {
+		result.Bind = *fileCfg.Bind
+	}
+	if fileCfg.Stdio != nil {
+		result.Stdio = *fileCfg.Stdio
+	}
+	if fileCfg.HTTPTokenFile != nil {
+		result.HTTPTokenFile = *fileCfg.HTTPTokenFile
+	}
+	if fileCfg.ReadHeaderTimeout != nil {
+		result.ReadHeaderTimeout = *fileCfg.ReadHeaderTimeout
+	}
+	if fileCfg.ReadTimeout != nil {
+		result.ReadTimeout = *fileCfg.ReadTimeout
+	}
+	if fileCfg.WriteTimeout != nil {
+		result.WriteTimeout = *fileCfg.WriteTimeout
+	}
+	if fileCfg.ShutdownTimeout != nil {
+		result.ShutdownTimeout = *fileCfg.ShutdownTimeout
+	}
+	if fileCfg.ApprovalTimeout != nil {
+		result.ApprovalTimeout = *fileCfg.ApprovalTimeout
+	}
+	return result
+}
+
+// MergeFileClipboardConfig merges file config with defaults, returning the final
+// ClipboardConfig. If fileCfg is nil, defaults are returned unchanged.
+func MergeFileClipboardConfig(fileCfg *fileClipboardConfig, defaults ClipboardConfig) ClipboardConfig {
+	if fileCfg == nil {
+		return defaults
+	}
+	result := defaults
+	if fileCfg.AutoClearDuration != nil {
+		result.AutoClearDuration = *fileCfg.AutoClearDuration
+	}
+	return result
+}

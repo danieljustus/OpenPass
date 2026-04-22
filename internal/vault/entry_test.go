@@ -1,0 +1,451 @@
+package vault
+
+import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"testing"
+	"time"
+
+	"github.com/danieljustus/OpenPass/internal/testutil"
+)
+
+func TestEntryJSONSerialization(t *testing.T) {
+	created := time.Date(2026, 3, 30, 10, 0, 0, 0, time.UTC)
+	updated := time.Date(2026, 3, 30, 10, 5, 0, 0, time.UTC)
+	entry := Entry{
+		Data: map[string]any{
+			"username": "alice",
+			"nested":   map[string]any{"token": "abc"},
+		},
+		Metadata: EntryMetadata{Created: created, Updated: updated, Version: 7},
+	}
+
+	raw, err := entry.MarshalJSON()
+	if err != nil {
+		t.Fatalf("marshal entry: %v", err)
+	}
+
+	var got Entry
+	if err := got.UnmarshalJSON(raw); err != nil {
+		t.Fatalf("unmarshal entry: %v", err)
+	}
+
+	if !reflect.DeepEqual(got, entry) {
+		t.Fatalf("roundtrip mismatch:\n got: %#v\nwant: %#v", got, entry)
+	}
+}
+
+func TestWriteAndReadEntryRoundTrip(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	entry := &Entry{
+		Data: map[string]any{
+			"username": "alice",
+			"password": "s3cr3t",
+		},
+	}
+
+	if err := WriteEntry(vaultDir, "github.com/user", entry, id); err != nil {
+		t.Fatalf("write entry: %v", err)
+	}
+
+	path := filepath.Join(vaultDir, "entries", "github.com", "user.age")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected entry file at %s: %v", path, err)
+	}
+
+	got, err := ReadEntry(vaultDir, "github.com/user", id)
+	if err != nil {
+		t.Fatalf("read entry: %v", err)
+	}
+
+	if !reflect.DeepEqual(got.Data, entry.Data) {
+		t.Fatalf("data mismatch: got %#v want %#v", got.Data, entry.Data)
+	}
+	if got.Metadata.Version != 1 {
+		t.Fatalf("version = %d, want 1", got.Metadata.Version)
+	}
+	if got.Metadata.Created.IsZero() || got.Metadata.Updated.IsZero() {
+		t.Fatal("metadata timestamps must be set")
+	}
+	if got.Metadata.Updated.Before(got.Metadata.Created) {
+		t.Fatal("updated must not be before created")
+	}
+}
+
+func TestDeleteEntryRemovesFile(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	if err := WriteEntry(vaultDir, "github.com/user", &Entry{Data: map[string]any{"x": 1}}, id); err != nil {
+		t.Fatalf("write entry: %v", err)
+	}
+	if err := DeleteEntry(vaultDir, "github.com/user"); err != nil {
+		t.Fatalf("delete entry: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(vaultDir, "entries", "github.com", "user.age")); !os.IsNotExist(err) {
+		t.Fatalf("expected file deleted, got err=%v", err)
+	}
+}
+
+func TestMergeEntryPreservesUnknownFieldsAndIncrementsVersion(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	original := &Entry{
+		Data: map[string]any{
+			"username": "alice",
+			"password": "old",
+			"notes":    "keep-me",
+		},
+	}
+	if err := WriteEntry(vaultDir, "github.com/user", original, id); err != nil {
+		t.Fatalf("write entry: %v", err)
+	}
+
+	merged, err := MergeEntry(vaultDir, "github.com/user", map[string]any{"password": "new"}, id)
+	if err != nil {
+		t.Fatalf("merge entry: %v", err)
+	}
+
+	if merged.Metadata.Version != 2 {
+		t.Fatalf("version = %d, want 2", merged.Metadata.Version)
+	}
+	if merged.Data["username"] != "alice" {
+		t.Fatalf("username = %#v, want %q", merged.Data["username"], "alice")
+	}
+	if merged.Data["password"] != "new" {
+		t.Fatalf("password = %#v, want %q", merged.Data["password"], "new")
+	}
+	if merged.Data["notes"] != "keep-me" {
+		t.Fatalf("notes = %#v, want %q", merged.Data["notes"], "keep-me")
+	}
+	if merged.Metadata.Updated.Before(merged.Metadata.Created) {
+		t.Fatal("updated must not be before created")
+	}
+}
+
+func TestEntryFileNamingUsesPathParts(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	if err := WriteEntry(vaultDir, "github.com/user", &Entry{Data: map[string]any{"x": 1}}, id); err != nil {
+		t.Fatalf("write entry: %v", err)
+	}
+
+	want := filepath.Join(vaultDir, "entries", "github.com", "user.age")
+	if _, err := os.Stat(want); err != nil {
+		t.Fatalf("expected file at %s: %v", want, err)
+	}
+}
+
+func TestEntryFileNamingUsesEntriesRootForTopLevelPath(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	if err := WriteEntry(vaultDir, "github", &Entry{Data: map[string]any{"x": 1}}, id); err != nil {
+		t.Fatalf("write entry: %v", err)
+	}
+
+	want := filepath.Join(vaultDir, "entries", "github.age")
+	if _, err := os.Stat(want); err != nil {
+		t.Fatalf("expected file at %s: %v", want, err)
+	}
+	if _, err := os.Stat(filepath.Join(vaultDir, "github.age")); !os.IsNotExist(err) {
+		t.Fatalf("expected no root-level entry file, got err=%v", err)
+	}
+}
+
+func TestValidateEntryPathRejectsTraversal(t *testing.T) {
+	vaultDir := t.TempDir()
+
+	tests := []string{
+		"../etc/passwd",
+		"entries/../identity",
+		"./github",
+		"github/./user",
+		"github/../identity",
+		`github\..\identity`,
+		`github\.\user`,
+		"/absolute/path",
+	}
+
+	for _, path := range tests {
+		t.Run(path, func(t *testing.T) {
+			err := validateEntryPath(vaultDir, path)
+			if err == nil {
+				t.Fatal("expected error for invalid path")
+			}
+		})
+	}
+}
+
+func TestDeleteEntryRejectsTraversal(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	err := DeleteEntry(vaultDir, "../etc/passwd")
+	if err == nil {
+		t.Fatal("expected error for path traversal")
+	}
+
+	// Also test with WriteEntry path traversal
+	err = WriteEntry(vaultDir, "../../../tmp/evil", &Entry{Data: map[string]any{"x": 1}}, id)
+	if err == nil {
+		t.Fatal("expected error for path traversal in WriteEntry")
+	}
+}
+
+func TestLegacyFallbackDoesNotTouchIdentity(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+	identityPath := filepath.Join(vaultDir, "identity.age")
+	if err := os.WriteFile(identityPath, []byte("identity"), 0o600); err != nil {
+		t.Fatalf("write identity file: %v", err)
+	}
+
+	_, err := ReadEntry(vaultDir, "identity", id)
+	if !os.IsNotExist(err) {
+		t.Fatalf("ReadEntry(identity) error = %v, want IsNotExist", err)
+	}
+
+	if err := DeleteEntry(vaultDir, "identity"); !os.IsNotExist(err) {
+		t.Fatalf("DeleteEntry(identity) error = %v, want IsNotExist", err)
+	}
+	if _, err := os.Stat(identityPath); err != nil {
+		t.Fatalf("identity file should remain: %v", err)
+	}
+}
+
+func TestReadEntryFileNotFound(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	_, err := ReadEntry(vaultDir, "nonexistent/entry", id)
+	if err == nil {
+		t.Fatal("expected error for nonexistent entry")
+	}
+}
+
+func TestReadEntryFallsBackToLegacyRootPath(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	if err := WriteEntry(vaultDir, "legacy/nested", &Entry{Data: map[string]any{"username": "alice"}}, id); err != nil {
+		t.Fatalf("write entry: %v", err)
+	}
+	newPath := filepath.Join(vaultDir, "entries", "legacy", "nested.age")
+	legacyPath := filepath.Join(vaultDir, "legacy", "nested.age")
+	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o700); err != nil {
+		t.Fatalf("create legacy dir: %v", err)
+	}
+	if err := os.Rename(newPath, legacyPath); err != nil {
+		t.Fatalf("move entry to legacy path: %v", err)
+	}
+
+	//nolint:errcheck // type assertion in test code
+	got, err := ReadEntry(vaultDir, "legacy/nested", id)
+	if err != nil {
+		t.Fatalf("read legacy entry: %v", err)
+		//nolint:errcheck // type assertion in test code
+	}
+	if got.Data["username"] != "alice" {
+		t.Fatalf("username = %#v, want alice", got.Data["username"])
+	}
+}
+
+func TestCloneEntryWithNilData(t *testing.T) {
+	entry := &Entry{
+		Data:     nil,
+		Metadata: EntryMetadata{Version: 5},
+	}
+	clone := cloneEntry(entry)
+	if clone == nil {
+		t.Fatal("clone should not be nil")
+	}
+	if clone.Data != nil {
+		t.Error("clone.Data should be nil")
+	}
+}
+
+func TestDeepCloneValueWithSlice(t *testing.T) {
+	original := []any{"a", "b", map[string]any{"nested": "value"}}
+	//nolint:errcheck // type assertion in test code
+	clone := deepCloneValue(original).([]any)
+	if len(clone) != 3 {
+		t.Fatalf("expected 3 elements, got %d", len(clone))
+	}
+
+	// Modify original to ensure deep clone
+	//nolint:errcheck // type assertion in test code
+	original[0] = "modified"
+	if clone[0] == "modified" {
+		t.Error("clone should be independent of original")
+	}
+
+	// Check nested map is also deep cloned
+	//nolint:errcheck // type assertion in test code
+	nested := clone[2].(map[string]any)
+	nested["nested"] = "changed"
+	//nolint:errcheck // type assertion in test code
+	origNested := original[2].(map[string]any)
+	//nolint:errcheck // type assertion in test code
+	if origNested["nested"] == "changed" {
+		t.Error("nested map should be deep cloned")
+	}
+}
+
+func TestMergeEntryRecursiveMerge(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	original := &Entry{
+		Data: map[string]any{
+			"config": map[string]any{
+				"host": "localhost",
+				"port": 8080,
+			},
+		},
+	}
+	if err := WriteEntry(vaultDir, "app/config", original, id); err != nil {
+		t.Fatalf("write entry: %v", err)
+	}
+
+	merged, err := MergeEntry(vaultDir, "app/config", map[string]any{
+		"config": map[string]any{
+			"port": 9090,
+			"tls":  true,
+		},
+	}, id)
+	if err != nil {
+		t.Fatalf("merge entry: %v", err)
+	}
+
+	//nolint:errcheck // type assertion in test code
+	config := merged.Data["config"].(map[string]any)
+	if config["host"] != "localhost" {
+		t.Error("existing nested field should be preserved")
+	}
+	if config["port"] != float64(9090) {
+		t.Error("nested field should be updated")
+	}
+	if config["tls"] != true {
+		t.Error("new nested field should be added")
+	}
+}
+
+func TestReadEntryV2WithNonexistentEntry(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	_, err := ReadEntryV2(vaultDir, "nonexistent", id)
+	if err == nil {
+		t.Fatal("expected error for nonexistent entry")
+	}
+}
+
+func TestGetEntryMetadataReturnsMetadataWithoutFullDecryption(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	entry := &Entry{
+		Data: map[string]any{
+			"username": "alice",
+			"password": "s3cr3t",
+		},
+	}
+
+	if err := WriteEntry(vaultDir, "github.com/user", entry, id); err != nil {
+		t.Fatalf("write entry: %v", err)
+	}
+
+	meta, err := GetEntryMetadata(vaultDir, "github.com/user", id)
+	if err != nil {
+		t.Fatalf("get entry metadata: %v", err)
+	}
+
+	if meta.Version != 1 {
+		t.Fatalf("version = %d, want 1", meta.Version)
+	}
+	if meta.Created.IsZero() || meta.Updated.IsZero() {
+		t.Fatal("metadata timestamps must be set")
+	}
+	if meta.Updated.Before(meta.Created) {
+		t.Fatal("updated must not be before created")
+	}
+}
+
+func TestGetEntryMetadataReturnsErrorForNonexistentEntry(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	_, err := GetEntryMetadata(vaultDir, "nonexistent/entry", id)
+	if err == nil {
+		t.Fatal("expected error for nonexistent entry")
+	}
+	if !os.IsNotExist(err) {
+		t.Fatalf("expected IsNotExist error, got: %v", err)
+	}
+}
+
+func TestGetEntryMetadataReturnsUpdatedMetadataAfterMerge(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	original := &Entry{
+		Data: map[string]any{
+			"username": "alice",
+			"password": "old",
+		},
+	}
+	if err := WriteEntry(vaultDir, "github.com/user", original, id); err != nil {
+		t.Fatalf("write entry: %v", err)
+	}
+
+	// Get initial metadata
+	meta1, err := GetEntryMetadata(vaultDir, "github.com/user", id)
+	if err != nil {
+		t.Fatalf("get initial metadata: %v", err)
+	}
+	if meta1.Version != 1 {
+		t.Fatalf("initial version = %d, want 1", meta1.Version)
+	}
+
+	// Merge to update entry
+	if _, mergeErr := MergeEntry(vaultDir, "github.com/user", map[string]any{"password": "new"}, id); mergeErr != nil {
+		t.Fatalf("merge entry: %v", mergeErr)
+	}
+
+	// Get updated metadata
+	meta2, err := GetEntryMetadata(vaultDir, "github.com/user", id)
+	if err != nil {
+		t.Fatalf("get updated metadata: %v", err)
+	}
+	if meta2.Version != 2 {
+		t.Fatalf("updated version = %d, want 2", meta2.Version)
+	}
+	if !meta2.Updated.After(meta1.Updated) {
+		t.Fatal("updated timestamp should be later after merge")
+	}
+}
+
+func TestGetEntryMetadataRejectsNilIdentity(t *testing.T) {
+	vaultDir := t.TempDir()
+
+	_, err := GetEntryMetadata(vaultDir, "test/entry", nil)
+	if err == nil {
+		t.Fatal("expected error for nil identity")
+	}
+}
+
+func TestGetEntryMetadataRejectsPathTraversal(t *testing.T) {
+	vaultDir := t.TempDir()
+	_ = testutil.TempIdentity(t)
+
+	err := validateEntryPath(vaultDir, "../etc/passwd")
+	if err == nil {
+		t.Fatal("expected error for path traversal")
+	}
+}

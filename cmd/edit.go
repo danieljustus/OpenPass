@@ -1,0 +1,128 @@
+package cmd
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+
+	"github.com/spf13/cobra"
+
+	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
+)
+
+var editorFlag string
+
+var editCmd = &cobra.Command{
+	Use:   "edit <name>",
+	Short: "Edit an existing password entry",
+	Long: `Opens an existing password entry in your default editor for modification.
+
+The entry is opened in JSON format. Save and exit the editor to update the entry.
+If the entry does not exist, an error is returned.
+
+The editor is determined by the --editor flag or EDITOR environment variable (defaults to vi).
+
+	Examples:
+  openpass edit github
+  openpass edit work/aws
+  openpass edit personal/bank --editor nano
+  EDITOR=nano openpass edit personal/bank`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultDir, err := vaultPath()
+		if err != nil {
+			return err
+		}
+
+		if !vaultpkg.IsInitialized(vaultDir) {
+			return fmt.Errorf("vault not initialized. Run 'openpass init' first")
+		}
+
+		v, err := unlockVault(vaultDir, true)
+		if err != nil {
+			return err
+		}
+
+		name := args[0]
+
+		entry, err := vaultpkg.ReadEntry(v.Dir, name, v.Identity)
+		if err != nil {
+			return fmt.Errorf("entry not found: %s", name)
+		}
+
+		editor := editorFlag
+		if editor == "" {
+			editor = os.Getenv("EDITOR")
+		}
+		if editor == "" {
+			editor = "vi"
+		}
+
+		// Validate editor exists in PATH before executing (G204 mitigation)
+		if _, lookErr := exec.LookPath(editor); lookErr != nil {
+			return fmt.Errorf("editor %q not found in PATH: %w", editor, lookErr)
+		}
+
+		tmpFile, err := os.CreateTemp("", "openpass-edit-*.json")
+		if err != nil {
+			return fmt.Errorf("cannot create temp file: %w", err)
+		}
+		defer func() { _ = os.Remove(tmpFile.Name()) }()
+
+		encoder := json.NewEncoder(tmpFile)
+		encoder.SetIndent("", "  ")
+		if encErr := encoder.Encode(entry); encErr != nil {
+			_ = tmpFile.Close()
+			return fmt.Errorf("cannot encode entry: %w", encErr)
+		}
+		if closeErr := tmpFile.Close(); closeErr != nil {
+			return fmt.Errorf("cannot close temp file: %w", closeErr)
+		}
+
+		//nolint:gosec // Editor path already validated via exec.LookPath above; this is intentional subprocess invocation
+		editorCmd := exec.Command(editor, tmpFile.Name())
+		editorCmd.Stdin = os.Stdin
+		editorCmd.Stdout = os.Stdout
+		editorCmd.Stderr = os.Stderr
+
+		if runErr := editorCmd.Run(); runErr != nil {
+			return fmt.Errorf("editor failed: %w", runErr)
+		}
+
+		content, err := os.ReadFile(tmpFile.Name())
+		if err != nil {
+			return fmt.Errorf("cannot read edited file: %w", err)
+		}
+
+		content = bytes.TrimSpace(content)
+		if len(content) == 0 {
+			return fmt.Errorf("empty file, changes discarded")
+		}
+
+		var updatedEntry vaultpkg.Entry
+		if err := json.Unmarshal(content, &updatedEntry); err != nil {
+			return fmt.Errorf("invalid JSON: %w", err)
+		}
+
+		if updatedEntry.Data == nil {
+			updatedEntry.Data = map[string]any{}
+		}
+
+		if err := vaultpkg.WriteEntryWithRecipients(v.Dir, name, &updatedEntry, v.Identity); err != nil {
+			return fmt.Errorf("cannot save entry: %w", err)
+		}
+
+		if err := v.AutoCommit(fmt.Sprintf("Edit %s", name)); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: auto-commit failed: %v\n", err)
+		}
+		fmt.Printf("Entry updated: %s\n", name)
+		return nil
+	},
+}
+
+func init() {
+	editCmd.Flags().StringVar(&editorFlag, "editor", "", "Editor to use (overrides EDITOR env var)")
+	rootCmd.AddCommand(editCmd)
+}

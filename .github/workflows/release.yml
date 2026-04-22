@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  test:
+    name: Pre-release Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Run tests
+        run: GOWORK=off go test -v -race -timeout=30m ./...
+
+      - name: Verify release dependency graph
+        run: |
+          clipboard_dir="$(GOWORK=off go list -f '{{ .Dir }}' github.com/atotto/clipboard)"
+          clipboard_version="$(GOWORK=off go list -m -f '{{ .Version }}' github.com/atotto/clipboard)"
+          if [ "$clipboard_version" != "v0.1.4" ]; then
+            echo "expected github.com/atotto/clipboard v0.1.4, got $clipboard_version"
+            exit 1
+          fi
+          case "$clipboard_dir" in
+            "$PWD"/clipboardpkg|"$PWD"/clipboardpkg/*)
+              echo "release dependency graph resolved clipboard to local workspace stub: $clipboard_dir"
+              exit 1
+              ;;
+          esac
+
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Run govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-input: '1.26'
+          go-package: ./...
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [test, govulncheck]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GOWORK: off

@@ -1,0 +1,53 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: 
+          - ".*\\.age$"
+          - ".*\\.md$"
+      - id: end-of-file-fixer
+        exclude: 
+          - ".*\\.age$"
+      - id: check-yaml
+        exclude: 
+          - ".*\\.age$"
+      - id: check-json
+        exclude: 
+          - ".*\\.age$"
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: destroyed-symlinks
+      - id: check-case-conflict
+
+  - repo: local
+    hooks:
+      - id: go-fmt
+        name: Go Format
+        entry: bash -c 'make fmt-check'
+        language: system
+        files: \\.go$
+        pass_filenames: false
+        
+      - id: go-vet
+        name: Go Vet
+        entry: bash -c 'make vet'
+        language: system
+        files: \\.go$
+        pass_filenames: false
+        
+      - id: golangci-lint
+        name: golangci-lint
+        entry: bash -c 'make lint'
+        language: system
+        files: \\.go$
+        pass_filenames: false
+        
+      - id: go-test-short
+        name: Go Test (Short)
+        entry: bash -c 'go test -short ./...'
+        language: system
+        files: \\.go$
+        pass_filenames: false

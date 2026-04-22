@@ -1,0 +1,64 @@
+# Binaries
+openpass
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of go coverage
+*.out
+*_output.txt
+
+# Dependency directories
+vendor/
+
+# Go workspace
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+*.tmp
+*.temp
+
+# TestSprite temporary test files
+testsprite_tests/
+
+# Vault MCP token (auto-generated bearer token for HTTP MCP mode)
+mcp-token
+
+# Build artifacts
+dist/
+coverage/
+vault_coverage.html
+coverage.html
+
+# Tool artifacts
+.sisyphus/
+docs/superpowers/
+CYCLE_COMPLETION_SUMMARY.md
+complete_cycle.sh
+mise.toml
+
+# Playwright MCP logs
+.playwright-mcp/
+.playwright-cli/
+
+# Agent/developer workspace files (local-only, not for release)
+AGENTS.md
+CLAUDE.md
+.opencode/
+.claude/
