@@ -1,0 +1,121 @@
+package crypto
+
+//nosec:G505
+import (
+	"crypto/hmac"
+	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/base32"
+	"encoding/binary"
+	"fmt"
+	"hash"
+	"strings"
+	"time"
+)
+
+// TOTPCode represents a generated TOTP code with metadata
+type TOTPCode struct {
+	ExpiresAt time.Time
+	Code      string
+	Period    int
+}
+
+// ValidateTOTPParams enforces RFC 6238 bounds on TOTP parameters.
+// Empty algorithm and zero digits/period are accepted (used to detect if values need to be set).
+// This prevents DoS/overflow from malformed entries.
+func ValidateTOTPParams(algorithm string, digits, period int) error {
+	algo := strings.ToUpper(algorithm)
+	if algo != "" && algo != "SHA1" && algo != "SHA256" && algo != "SHA512" {
+		return fmt.Errorf("invalid TOTP algorithm %q: must be SHA1, SHA256, or SHA512", algorithm)
+	}
+	if digits != 0 && digits != 6 && digits != 8 {
+		return fmt.Errorf("invalid TOTP digits %d: must be 6 or 8", digits)
+	}
+	if period != 0 && (period <= 0 || period > 3600) {
+		return fmt.Errorf("invalid TOTP period %d: must be 1-3600 seconds", period)
+	}
+	return nil
+}
+
+// GenerateTOTP generates a TOTP code from the given secret and configuration
+// This is a standard TOTP implementation per RFC 6238
+func GenerateTOTP(secret string, algorithm string, digits int, period int) (*TOTPCode, error) {
+	if err := ValidateTOTPParams(algorithm, digits, period); err != nil {
+		return nil, err
+	}
+
+	// Set defaults
+	if algorithm == "" {
+		algorithm = "SHA1"
+	}
+	if digits == 0 {
+		digits = 6
+	}
+	if period == 0 {
+		period = 30
+	}
+
+	// Clean the secret (remove spaces and convert to uppercase)
+	secret = strings.ToUpper(strings.ReplaceAll(secret, " ", ""))
+
+	// Decode base32 secret
+	key, err := base32.StdEncoding.DecodeString(secret)
+	if err != nil {
+		// Try without padding
+		key, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
+		if err != nil {
+			return nil, fmt.Errorf("invalid TOTP secret: %w", err)
+		}
+	}
+
+	// Get current time and calculate time step
+	now := time.Now()
+	counter := uint64(now.Unix()) / uint64(period)
+
+	// Calculate next expiration time
+	expiresAt := now.Add(time.Duration(period) * time.Second)
+	expiresAt = expiresAt.Add(-time.Duration(expiresAt.Unix()%int64(period)) * time.Second)
+
+	// Generate HMAC
+	var h hash.Hash
+	switch strings.ToUpper(algorithm) {
+	case "SHA256":
+		h = hmac.New(sha256.New, key)
+	case "SHA512":
+		h = hmac.New(sha512.New, key)
+	default: // SHA1
+		h = hmac.New(sha1.New, key)
+	}
+
+	// Write counter as 8-byte big-endian
+	counterBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(counterBytes, counter)
+	h.Write(counterBytes)
+	hash := h.Sum(nil)
+
+	// Dynamic truncation
+	offset := hash[len(hash)-1] & 0x0f
+	code := binary.BigEndian.Uint32(hash[offset:offset+4]) & 0x7fffffff
+
+	// Modulo to get desired number of digits
+	code = code % uint32(power10(digits))
+
+	// Format with leading zeros
+	codeStr := fmt.Sprintf("%0*d", digits, code)
+
+	return &TOTPCode{
+		Code:      codeStr,
+		ExpiresAt: expiresAt,
+		Period:    period,
+	}, nil
+}
+
+// power10 returns 10^n
+func power10(n int) int {
+	result := 1
+	for i := 0; i < n; i++ {
+		result *= 10
+	}
+	return result
+}

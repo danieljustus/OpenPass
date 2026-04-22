@@ -1,0 +1,80 @@
+# OpenPass configuration example.
+# Copy this file to ~/.openpass/config.yaml for global settings or to a vault
+# directory as config.yaml for vault-specific settings.
+
+# Default vault directory used when OPENPASS_VAULT and --vault are not set.
+vaultDir: ~/.openpass
+
+# Default MCP agent profile used when --agent is not set.
+defaultAgent: default
+
+# OS keyring cache TTL for unlocked vault passphrases.
+sessionTimeout: 15m
+
+# Agent profiles for MCP access.
+agents:
+  default:
+    # Prefix patterns the agent can access. Use ["*"] for all entries.
+    allowedPaths: ["*"]
+    # Whether the agent can create, update, or delete entries.
+    canWrite: false
+    # none allows configured operations, deny rejects writes, prompt degrades to
+    # deny in MCP contexts where interactive approval is unavailable.
+    approvalMode: none
+    # Timeout for interactive approval prompts (approvalMode: prompt).
+    # Overrides the global mcp.approval_timeout for this agent.
+    # approvalTimeout: 30s
+  # Read-only agents: codex and opencode default to canWrite=false for safety.
+  # These agents are designed for read-only vault access.
+  codex:
+    allowedPaths: ["work/", "personal/"]
+    canWrite: false
+    approvalMode: none
+    # approvalTimeout: 60s
+
+  # Write-capable agents: claude-code, hermes, and openclaw have canWrite=true.
+  # These agents are allowed to create, update, and delete vault entries.
+  hermes:
+    allowedPaths: ["*"]
+    canWrite: true
+    approvalMode: none
+
+# Vault-specific settings. These can also live inside <vault>/config.yaml.
+vault:
+  # Vault directory path.
+  path: ~/.openpass
+  # Age recipients used for newly written entries.
+  default_recipients: []
+  #  - age1...
+  # Ask for confirmation before removing recipients.
+  confirm_remove: true
+
+# Git integration for automatic commits and optional pushes.
+git:
+  # Automatically push after OpenPass commits a vault change.
+  auto_push: true
+  # Commit message used for automatic commits.
+  commit_template: "Update from OpenPass"
+
+# MCP server configuration.
+mcp:
+  # HTTP server bind address and port.
+  bind: 127.0.0.1
+  port: 8080
+  # Use stdio transport instead of HTTP.
+  stdio: false
+  # HTTP bearer token file path. "auto" stores mcp-token in the vault.
+  httpTokenFile: auto
+  # HTTP server timeouts. Increase for slow networks or large payloads.
+  # read_header_timeout: 5s
+  # read_timeout: 10s
+  # write_timeout: 10s
+  # shutdown_timeout: 5s
+  # Default timeout for interactive approval prompts (approvalMode: prompt).
+  # Can be overridden per agent profile via approvalTimeout.
+  # approval_timeout: 30s
+
+# Clipboard behavior.
+clipboard:
+  # Seconds before copied secrets are cleared. Set 0 to disable auto-clear.
+  auto_clear_duration: 30

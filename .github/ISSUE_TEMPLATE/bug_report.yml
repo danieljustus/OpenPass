@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a reproducible problem in OpenPass.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Do not include passwords, tokens, private keys, vault contents, or other secrets.
+  - type: input
+    id: version
+    attributes:
+      label: OpenPass version
+      description: Run `openpass version` or provide the commit SHA.
+      placeholder: "v1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS 15.4, Ubuntu 24.04, Windows 11"
+    validations:
+      required: true
+  - type: input
+    id: go
+    attributes:
+      label: Go version
+      description: Required when building from source.
+      placeholder: "go1.26.2"
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Use a minimal synthetic example. Do not paste real secrets.
+      placeholder: |
+        1. Run `openpass ...`
+        2. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include error output where useful. Redact paths, usernames, and secrets if needed.
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Logs, config snippets, or screenshots that do not contain secrets.

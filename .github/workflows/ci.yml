@@ -1,0 +1,279 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+    tags-ignore:
+      - 'v*'
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Run govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-input: '1.26'
+          go-package: ./...
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.11.4
+          install-mode: binary
+          args: --timeout=5m --verbose
+
+      - name: Run gosec SAST scanner
+        continue-on-error: true
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec -fmt sarif -out gosec.sarif ./...
+
+      - name: Upload gosec SARIF report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gosec-sarif
+          path: gosec.sarif
+          retention-days: 7
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.26']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          go mod download
+
+      - name: Run tests
+        # GOWORK=off validates the release path without local workspace replacements
+        run: GOWORK=off go test -v -race -timeout=30m -coverprofile=coverage.out ./...
+
+      - name: Verify release dependency graph
+        run: |
+          clipboard_dir="$(GOWORK=off go list -f '{{ .Dir }}' github.com/atotto/clipboard)"
+          clipboard_version="$(GOWORK=off go list -m -f '{{ .Version }}' github.com/atotto/clipboard)"
+          if [ "$clipboard_version" != "v0.1.4" ]; then
+            echo "expected github.com/atotto/clipboard v0.1.4, got $clipboard_version"
+            exit 1
+          fi
+          case "$clipboard_dir" in
+            "$PWD"/clipboardpkg|"$PWD"/clipboardpkg/*)
+              echo "release dependency graph resolved clipboard to local workspace stub: $clipboard_dir"
+              exit 1
+              ;;
+          esac
+
+      - name: Check coverage threshold
+        run: |
+          COVERAGE_THRESHOLD=75
+          echo "Checking coverage threshold: ${COVERAGE_THRESHOLD}%"
+          TOTAL_LINE=$(go tool cover -func=coverage.out | grep "total:")
+          echo "Coverage line: $TOTAL_LINE"
+          COVERAGE=$(echo "$TOTAL_LINE" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
+          echo "Total coverage: ${COVERAGE}%"
+          if awk "BEGIN {exit !($COVERAGE < $COVERAGE_THRESHOLD)}"; then
+            echo "FAIL: Coverage ${COVERAGE}% is below threshold of ${COVERAGE_THRESHOLD}%"
+            exit 1
+          fi
+          echo "PASS: Coverage ${COVERAGE}% meets threshold of ${COVERAGE_THRESHOLD}%"
+
+      - name: Run smoke tests
+        run: GOWORK=off go test -v -timeout=15m -tags smoke ./...
+
+      - name: Generate coverage report
+        run: go tool cover -html=coverage.out -o coverage.html
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.html
+          retention-days: 7
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+            extension: .exe
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          output_name="openpass-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.extension }}"
+          # GOWORK=off ensures the release binary is built with the real dependency tree
+          GOWORK=off go build -ldflags="-s -w -X main.version=dev -X main.commit=${{ github.sha }}" -o "$output_name" .
+          echo "Built: $output_name"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openpass-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: openpass-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.extension }}
+          retention-days: 7
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          go mod download
+
+      - name: Install GPG (for encryption tests)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnupg2
+
+      - name: Run integration tests
+        run: |
+          # Run tests with longer timeout for integration tests
+          # GOWORK=off validates the release path without local workspace replacements
+          GOWORK=off go test -v -timeout=10m ./... -run Integration 2>&1
+        env:
+          CI: true
+
+  smoke-test:
+    name: Binary Smoke Test
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Download linux-amd64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: openpass-linux-amd64
+          path: ./bin
+
+      - name: Make binary executable
+        run: chmod +x ./bin/openpass-linux-amd64
+
+      - name: Smoke test - help flag
+        run: ./bin/openpass-linux-amd64 --help
+
+      - name: Smoke test - subcommand help pages
+        run: |
+          ./bin/openpass-linux-amd64 get --help
+          ./bin/openpass-linux-amd64 set --help
+          ./bin/openpass-linux-amd64 list --help
+          ./bin/openpass-linux-amd64 serve --help
+
+      - name: Smoke test - vault operations
+        run: |
+          BIN="./bin/openpass-linux-amd64"
+          VAULT_DIR=$(mktemp -d)
+          PASSPHRASE="test-passphrase-123"
+          
+          echo "Testing vault initialization..."
+          echo "$PASSPHRASE" | $BIN init "$VAULT_DIR"
+          
+          echo "Testing entry creation..."
+          OPENPASS_PASSPHRASE="$PASSPHRASE" $BIN --vault "$VAULT_DIR" set "test.entry" --value "test-value-456"
+          
+          echo "Testing entry retrieval..."
+          OUTPUT=$(OPENPASS_PASSPHRASE="$PASSPHRASE" $BIN --vault "$VAULT_DIR" get "test.entry")
+          if [ "$OUTPUT" != "test-value-456" ]; then
+            echo "ERROR: Expected 'test-value-456', got '$OUTPUT'"
+            exit 1
+          fi
+          echo "Entry retrieval successful"
+          
+          echo "Testing list command..."
+          LIST_OUTPUT=$(OPENPASS_PASSPHRASE="$PASSPHRASE" $BIN --vault "$VAULT_DIR" list)
+          if ! echo "$LIST_OUTPUT" | grep -q "test"; then
+            echo "ERROR: List output does not contain 'test'"
+            exit 1
+          fi
+          echo "List command successful"
+          
+          echo "Testing find command..."
+          FIND_OUTPUT=$(OPENPASS_PASSPHRASE="$PASSPHRASE" $BIN --vault "$VAULT_DIR" find "test-value")
+          if ! echo "$FIND_OUTPUT" | grep -q "test"; then
+            echo "ERROR: Find output does not contain 'test'"
+            exit 1
+          fi
+          echo "Find command successful"
+          
+          echo "Cleaning up test vault..."
+          rm -rf "$VAULT_DIR"
+          
+          echo "All smoke tests passed!"

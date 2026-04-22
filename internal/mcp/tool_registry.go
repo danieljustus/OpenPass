@@ -1,0 +1,213 @@
+package mcp
+
+import (
+	"context"
+	"encoding/json"
+)
+
+type toolHandler func(*Server, context.Context, CallToolRequest) (*CallToolResult, error)
+type toolAvailable func(*Server) bool
+
+type toolDefinition struct {
+	Name        string
+	Description string
+	InputSchema map[string]any
+	Handler     toolHandler
+	Available   toolAvailable
+	Deprecated  bool
+	AliasFor    string
+}
+
+type schemaProperty struct {
+	Type        string
+	Description string
+}
+
+func objectSchema(required []string, properties map[string]schemaProperty) map[string]any {
+	props := make(map[string]any, len(properties))
+	for name, prop := range properties {
+		props[name] = map[string]any{
+			"type":        prop.Type,
+			"description": prop.Description,
+		}
+	}
+
+	schema := map[string]any{
+		"type":       "object",
+		"properties": props,
+	}
+	if len(required) > 0 {
+		schema["required"] = required
+	}
+	return schema
+}
+
+func toolDefinitions() []toolDefinition {
+	return []toolDefinition{
+		{
+			Name:        "list_entries",
+			Description: "List vault entries matching a prefix",
+			InputSchema: objectSchema(nil, map[string]schemaProperty{
+				"prefix": {Type: "string", Description: "Path prefix to filter"},
+			}),
+			Handler: (*Server).handleList,
+		},
+		{
+			Name:        "get_entry",
+			Description: "Get a vault entry by path",
+			InputSchema: objectSchema([]string{"path"}, map[string]schemaProperty{
+				"path":             {Type: "string", Description: "Entry path"},
+				"include_metadata": {Type: "boolean", Description: "When true, returns {data: {...}, meta: {...}}. Default: false."},
+			}),
+			Handler: (*Server).handleGet,
+		},
+		{
+			Name:        "get_entry_metadata",
+			Description: "Get metadata for a vault entry without retrieving sensitive data",
+			InputSchema: objectSchema([]string{"path"}, map[string]schemaProperty{
+				"path": {Type: "string", Description: "Entry path"},
+			}),
+			Handler: (*Server).handleGetMetadata,
+		},
+		{
+			Name:        "find_entries",
+			Description: "Search entries by query string",
+			InputSchema: objectSchema([]string{"query"}, map[string]schemaProperty{
+				"query": {Type: "string", Description: "Search query"},
+			}),
+			Handler: (*Server).handleFind,
+		},
+		{
+			Name:        "set_entry_field",
+			Description: "Set a field on an entry (requires write scope)",
+			InputSchema: objectSchema([]string{"path", "field", "value"}, map[string]schemaProperty{
+				"path":  {Type: "string", Description: "Entry path"},
+				"field": {Type: "string", Description: "Field name"},
+				"value": {Type: "string", Description: "Field value"},
+			}),
+			Handler: (*Server).handleSet,
+		},
+		{
+			Name:        "generate_password",
+			Description: "Generate a secure password",
+			InputSchema: objectSchema(nil, map[string]schemaProperty{
+				"length":  {Type: "number", Description: "Password length"},
+				"symbols": {Type: "boolean", Description: "Include symbols. Default: true."},
+			}),
+			Handler: (*Server).handleGenerate,
+		},
+		{
+			Name:        "delete_entry",
+			Description: "Delete a password entry by path",
+			InputSchema: objectSchema([]string{"path"}, map[string]schemaProperty{
+				"path": {Type: "string", Description: "Entry path to delete"},
+			}),
+			Handler: (*Server).handleDelete,
+		},
+		{
+			Name:        "openpass_delete",
+			Description: "Deprecated alias for delete_entry. Use delete_entry for new clients.",
+			InputSchema: objectSchema([]string{"path"}, map[string]schemaProperty{
+				"path": {Type: "string", Description: "Entry path to delete"},
+			}),
+			Handler:    (*Server).handleDelete,
+			Deprecated: true,
+			AliasFor:   "delete_entry",
+		},
+		{
+			Name:        "generate_totp",
+			Description: "Generate a TOTP code for an entry with TOTP configuration",
+			InputSchema: objectSchema([]string{"path"}, map[string]schemaProperty{
+				"path": {Type: "string", Description: "Entry path with TOTP configuration"},
+			}),
+			Handler: (*Server).handleGenerateTOTP,
+		},
+		{
+			Name:        "health",
+			Description: "Return OpenPass MCP server health information",
+			InputSchema: objectSchema(nil, map[string]schemaProperty{}),
+			Handler:     (*Server).handleHealth,
+		},
+		{
+			Name:        "secure_input",
+			Description: "Prompt the user for sensitive data via an interactive TTY and store it without exposing the value to the agent",
+			InputSchema: objectSchema([]string{"path", "field"}, map[string]schemaProperty{
+				"path":        {Type: "string", Description: "Entry path to store the value"},
+				"field":       {Type: "string", Description: "Field name to store the value under"},
+				"description": {Type: "string", Description: "Optional description shown to the user in the prompt"},
+			}),
+			Handler:   (*Server).handleSecureInput,
+			Available: secureInputToolAvailable,
+		},
+	}
+}
+
+func availableToolDefinitions(s *Server) []toolDefinition {
+	definitions := toolDefinitions()
+	available := make([]toolDefinition, 0, len(definitions))
+	for _, def := range definitions {
+		if def.Available != nil && !def.Available(s) {
+			continue
+		}
+		available = append(available, def)
+	}
+	return available
+}
+
+func findToolDefinition(name string) (toolDefinition, bool) {
+	for _, def := range toolDefinitions() {
+		if def.Name == name {
+			return def, true
+		}
+	}
+	return toolDefinition{}, false
+}
+
+func toolsListPayload(s *Server) []map[string]any {
+	definitions := availableToolDefinitions(s)
+	tools := make([]map[string]any, 0, len(definitions))
+	for _, def := range definitions {
+		payload := map[string]any{
+			"name":        def.Name,
+			"description": def.Description,
+			"inputSchema": def.InputSchema,
+		}
+		if def.Deprecated {
+			payload["deprecated"] = true
+		}
+		if def.AliasFor != "" {
+			payload["aliasFor"] = def.AliasFor
+		}
+		tools = append(tools, payload)
+	}
+	return tools
+}
+
+func callToolResultPayload(result *CallToolResult) map[string]any {
+	if result == nil {
+		result = NewToolResultText("")
+	}
+	return map[string]any{
+		"content": []map[string]any{
+			{
+				"type": "text",
+				"text": result.Text,
+			},
+		},
+		"isError": result.IsError,
+	}
+}
+
+func decodeToolRequest(args json.RawMessage) (CallToolRequest, error) {
+	req := CallToolRequest{Arguments: map[string]any{}}
+	if len(args) == 0 || string(args) == "null" {
+		return req, nil
+	}
+	if err := json.Unmarshal(args, &req.Arguments); err != nil {
+		return req, err
+	}
+	if req.Arguments == nil {
+		req.Arguments = map[string]any{}
+	}
+	return req, nil
+}

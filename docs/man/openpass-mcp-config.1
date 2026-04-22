@@ -1,0 +1,35 @@
+.nh
+.TH "OPENPASS" "1" "Apr 2026" "OpenPass" "OpenPass Manual"
+
+.SH NAME
+openpass-mcp-config - Output MCP config snippet for an AI tool
+
+
+.SH SYNOPSIS
+\fBopenpass mcp-config  [flags]\fP
+
+
+.SH DESCRIPTION
+Generate the MCP server configuration snippet for a specific AI tool.
+
+.PP
+The output is JSON that can be pasted into the tool's MCP configuration.
+By default, outputs a stdio-based config. Use --http for HTTP-based config.
+
+
+.SH OPTIONS
+\fB-h\fP, \fB--help\fP[=false]
+	help for mcp-config
+
+.PP
+\fB--http\fP[=false]
+	Output HTTP-based config instead of stdio
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--vault\fP="~/.openpass"
+	path to the password vault
+
+
+.SH SEE ALSO
+\fBopenpass(1)\fP
