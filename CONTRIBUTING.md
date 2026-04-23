@@ -144,7 +144,7 @@ fmt.Println("Entry created: path/to/entry")
 fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 ```
 
-This allows users to pipe normal output to other commands while still seeing errors:</para>
+This allows users to pipe normal output to other commands while still seeing errors.
 
 ```bash
 openpass list | grep work        # Filter list output

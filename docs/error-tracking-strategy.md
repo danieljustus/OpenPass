@@ -8,7 +8,7 @@
 OpenPass does **NOT** use external error tracking services (Sentry, Datadog, Crashlytics, etc.) for the following reasons:
 
 1. **Privacy-First**: As a password manager, OpenPass handles highly sensitive data. External telemetry services create unacceptable data exposure risks.
-2. **Secret Safety**: Even with redaction, error reports from a密码 manager could inadvertently leak sensitive patterns.
+2. **Secret Safety**: Even with redaction, error reports from a password manager could inadvertently leak sensitive patterns.
 3. **GDPR Compliance**: External telemetry would require explicit user consent and data processing agreements.
 4. **User Trust**: Password manager users expect minimal network activity and no data exfiltration.
 
