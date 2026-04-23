@@ -67,8 +67,8 @@ func (c *Checker) CheckWithForce(ctx context.Context, currentVersion string, for
 
 	if !force && c.Cache != nil {
 		if entry, err := c.Cache.Load(); err == nil && entry != nil {
-			latest, ok := parseStableVersion(entry.LatestVersion)
-			if ok {
+			latest, cacheOk := parseStableVersion(entry.LatestVersion)
+			if cacheOk {
 				return &Result{
 					CurrentVersion:  current.String(),
 					LatestVersion:   latest.String(),

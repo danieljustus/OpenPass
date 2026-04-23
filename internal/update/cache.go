@@ -1,3 +1,4 @@
+// Package update provides functionality for checking and managing OpenPass updates.
 package update
 
 import (
