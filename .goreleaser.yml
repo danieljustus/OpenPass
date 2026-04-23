@@ -108,6 +108,18 @@ release:
   footer: |
     ## Installation
 
+    ### Quick install (recommended)
+
+    **macOS / Linux:**
+    ```bash
+    curl -sSfL https://raw.githubusercontent.com/danieljustus/OpenPass/main/scripts/install.sh | sh
+    ```
+
+    **Windows (PowerShell):**
+    ```powershell
+    irm https://raw.githubusercontent.com/danieljustus/OpenPass/main/scripts/install.ps1 | iex
+    ```
+
     ### Download
     Download the appropriate binary for your platform from the assets below.
 
@@ -115,6 +127,37 @@ release:
     ```bash
     go install github.com/danieljustus/OpenPass@{{ .Tag }}
     ```
+
+brews:
+  - id: openpass
+    name: openpass
+    repository:
+      owner: danieljustus
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/danieljustus/OpenPass"
+    description: "Modern CLI password manager with age encryption"
+    license: "MIT"
+    skip_upload: auto
+    install: |
+      bin.install "openpass"
+      generate_completions_from_executable(bin/"openpass", "completion")
+      man1.install Dir["docs/man/*.1"]
+    caveats: |
+      OpenPass has been installed!
+
+      To get started:
+        openpass init                    # Initialize a new vault
+        openpass set github.com/username # Add your first entry
+        openpass get github.com/username # Retrieve it
+
+      For MCP server setup:
+        openpass mcp-config <name>
+
+      Documentation: https://github.com/danieljustus/OpenPass#readme
+    test: |
+      system "#{bin}/openpass", "version"
 
 nfpms:
   - id: openpass

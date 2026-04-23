@@ -96,6 +96,7 @@ func TestCheckerRejectsInvalidLatestTag(t *testing.T) {
 
 	checker := NewChecker(server.Client())
 	checker.LatestReleaseURL = server.URL
+	checker.Cache = nil
 
 	_, err := checker.Check(context.Background(), "1.0.0")
 	if err == nil {
@@ -114,6 +115,7 @@ func TestCheckerReturnsHTTPError(t *testing.T) {
 
 	checker := NewChecker(server.Client())
 	checker.LatestReleaseURL = server.URL
+	checker.Cache = nil
 
 	_, err := checker.Check(context.Background(), "1.0.0")
 	if err == nil {
@@ -133,6 +135,7 @@ func TestCheckerReturnsDecodeError(t *testing.T) {
 
 	checker := NewChecker(server.Client())
 	checker.LatestReleaseURL = server.URL
+	checker.Cache = nil
 
 	_, err := checker.Check(context.Background(), "1.0.0")
 	if err == nil {
@@ -156,6 +159,7 @@ func TestCheckerReturnsTimeoutError(t *testing.T) {
 
 	checker := NewChecker(client)
 	checker.LatestReleaseURL = server.URL
+	checker.Cache = nil
 
 	_, err := checker.Check(context.Background(), "1.0.0")
 	if err == nil {
@@ -178,5 +182,136 @@ func TestCompareStableVersions(t *testing.T) {
 
 	if compareStableVersions(left, right) <= 0 {
 		t.Fatalf("expected %s to be newer than %s", left.String(), right.String())
+	}
+}
+
+func TestCheckerUsesCache(t *testing.T) {
+	tmpDir := t.TempDir()
+	cache := NewCacheWithTTL(tmpDir+"/update-cache.json", 24*time.Hour)
+
+	_ = cache.Save(&CacheEntry{
+		Timestamp:     time.Now(),
+		LatestVersion: "1.5.0",
+		ReleaseURL:    "https://example.com/v1.5.0",
+	})
+
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tag_name":"v1.5.0","html_url":"https://example.com/v1.5.0"}`))
+	}))
+	defer server.Close()
+
+	checker := NewChecker(server.Client())
+	checker.LatestReleaseURL = server.URL
+	checker.Cache = cache
+
+	result, err := checker.Check(context.Background(), "1.0.0")
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if requestCount != 0 {
+		t.Fatalf("expected cache hit, but got %d HTTP requests", requestCount)
+	}
+	if result.LatestVersion != "1.5.0" {
+		t.Fatalf("LatestVersion = %q, want %q", result.LatestVersion, "1.5.0")
+	}
+	if result.ReleaseURL != "https://example.com/v1.5.0" {
+		t.Fatalf("ReleaseURL = %q, want %q", result.ReleaseURL, "https://example.com/v1.5.0")
+	}
+}
+
+func TestCheckerForceBypassesCache(t *testing.T) {
+	tmpDir := t.TempDir()
+	cache := NewCacheWithTTL(tmpDir+"/update-cache.json", 24*time.Hour)
+
+	_ = cache.Save(&CacheEntry{
+		Timestamp:     time.Now(),
+		LatestVersion: "1.5.0",
+		ReleaseURL:    "https://example.com/v1.5.0",
+	})
+
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tag_name":"v1.6.0","html_url":"https://example.com/v1.6.0"}`))
+	}))
+	defer server.Close()
+
+	checker := NewChecker(server.Client())
+	checker.LatestReleaseURL = server.URL
+	checker.Cache = cache
+
+	result, err := checker.CheckWithForce(context.Background(), "1.0.0", true)
+	if err != nil {
+		t.Fatalf("CheckWithForce() error = %v", err)
+	}
+	if requestCount != 1 {
+		t.Fatalf("expected 1 HTTP request with --force, got %d", requestCount)
+	}
+	if result.LatestVersion != "1.6.0" {
+		t.Fatalf("LatestVersion = %q, want %q", result.LatestVersion, "1.6.0")
+	}
+}
+
+func TestCheckerSavesToCache(t *testing.T) {
+	tmpDir := t.TempDir()
+	cachePath := tmpDir + "/update-cache.json"
+	cache := NewCacheWithTTL(cachePath, 24*time.Hour)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tag_name":"v1.2.0","html_url":"https://example.com/v1.2.0"}`))
+	}))
+	defer server.Close()
+
+	checker := NewChecker(server.Client())
+	checker.LatestReleaseURL = server.URL
+	checker.Cache = cache
+
+	_, err := checker.Check(context.Background(), "1.0.0")
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+
+	loaded, err := cache.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("expected cache to be saved")
+	}
+	if loaded.LatestVersion != "1.2.0" {
+		t.Fatalf("cached LatestVersion = %q, want %q", loaded.LatestVersion, "1.2.0")
+	}
+	if loaded.ReleaseURL != "https://example.com/v1.2.0" {
+		t.Fatalf("cached ReleaseURL = %q, want %q", loaded.ReleaseURL, "https://example.com/v1.2.0")
+	}
+}
+
+func TestCheckerNilCache(t *testing.T) {
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tag_name":"v1.2.0","html_url":"https://example.com/v1.2.0"}`))
+	}))
+	defer server.Close()
+
+	checker := NewChecker(server.Client())
+	checker.LatestReleaseURL = server.URL
+	checker.Cache = nil
+
+	result, err := checker.Check(context.Background(), "1.0.0")
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if requestCount != 1 {
+		t.Fatalf("expected 1 HTTP request with nil cache, got %d", requestCount)
+	}
+	if result.LatestVersion != "1.2.0" {
+		t.Fatalf("LatestVersion = %q, want %q", result.LatestVersion, "1.2.0")
 	}
 }

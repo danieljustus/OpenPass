@@ -1,8 +1,15 @@
+# This formula is a reference template. GoReleaser generates the actual
+# formula with correct version/SHA at release time (see .goreleaser.yml brews).
+# To test locally, use the instructions in homebrew/README.md.
+
 class Openpass < Formula
   desc "Modern CLI password manager with age encryption"
   homepage "https://github.com/danieljustus/OpenPass"
-  url "https://github.com/danieljustus/OpenPass.git", tag: "v1.0.0"
-  version "1.0.0"
+  # GoReleaser replaces these at release time:
+  url "https://github.com/danieljustus/OpenPass/archive/refs/tags/v{{ .Tag }}.tar.gz"
+  version "{{ .Version }}"
+  sha256 "{{ .Checksum }}"
+
   license "MIT"
 
   depends_on "go" => :build
@@ -11,6 +18,9 @@ class Openpass < Formula
     ldflags = %W[
       -s -w
       -X main.version=#{version}
+      -X main.commit={{ .FullCommit }}
+      -X main.date={{ .Date }}
+      -X main.builtBy=homebrew
     ]
 
     system "go", "build", *std_go_args(ldflags: ldflags), "."
@@ -24,15 +34,15 @@ class Openpass < Formula
   def caveats
     <<~EOS
       OpenPass has been installed!
-      
+
       To get started:
         openpass init                    # Initialize a new vault
         openpass set github.com/username # Add your first entry
         openpass get github.com/username # Retrieve it
-      
+
       For MCP server setup:
         openpass mcp-config <name>
-      
+
       Documentation: https://github.com/danieljustus/OpenPass#readme
     EOS
   end

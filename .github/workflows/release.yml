@@ -89,3 +89,114 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GOWORK: off
+
+  smoke-test-linux:
+    name: Smoke Test (Linux amd64)
+    runs-on: ubuntu-latest
+    needs: [release]
+    steps:
+      - name: Get release tag
+        id: tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Download Linux archive
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${TAG#v}"
+          curl -fLO "https://github.com/danieljustus/OpenPass/releases/download/${TAG}/openpass_${VERSION}_linux_amd64.tar.gz"
+          curl -fLO "https://github.com/danieljustus/OpenPass/releases/download/${TAG}/openpass_${VERSION}_checksums.txt"
+
+      - name: Verify checksum
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${TAG#v}"
+          sha256sum -c "openpass_${VERSION}_checksums.txt" --ignore-missing
+
+      - name: Extract and install
+        run: |
+          tar xzf openpass_*.tar.gz
+          sudo mv openpass_*/openpass /usr/local/bin/openpass
+          openpass version
+
+      - name: Smoke test - help output
+        run: openpass --help | head -5
+
+      - name: Smoke test - init vault
+        run: |
+          TMPDIR=$(mktemp -d)
+          OPENPASS_VAULT="$TMPDIR/test-vault" openpass init --non-interactive
+          rm -rf "$TMPDIR"
+
+  smoke-test-deb:
+    name: Smoke Test (deb package)
+    runs-on: ubuntu-latest
+    needs: [release]
+    steps:
+      - name: Get release tag
+        id: tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Download deb package
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${TAG#v}"
+          curl -fLO "https://github.com/danieljustus/OpenPass/releases/download/${TAG}/openpass_${VERSION}_linux_amd64.deb"
+          curl -fLO "https://github.com/danieljustus/OpenPass/releases/download/${TAG}/openpass_${VERSION}_checksums.txt"
+
+      - name: Verify checksum
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${TAG#v}"
+          sha256sum -c "openpass_${VERSION}_checksums.txt" --ignore-missing
+
+      - name: Install deb package
+        run: sudo dpkg -i openpass_*.deb
+
+      - name: Verify package installed
+        run: 'dpkg -s openpass | grep "Status: install ok installed"'
+
+      - name: Smoke test - version
+        run: openpass version
+
+      - name: Smoke test - init vault
+        run: |
+          TMPDIR=$(mktemp -d)
+          OPENPASS_VAULT="$TMPDIR/test-vault" openpass init --non-interactive
+          rm -rf "$TMPDIR"
+
+  smoke-test-macos:
+    name: Smoke Test (macOS amd64)
+    runs-on: macos-latest
+    needs: [release]
+    steps:
+      - name: Get release tag
+        id: tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Download macOS archive
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${TAG#v}"
+          curl -fLO "https://github.com/danieljustus/OpenPass/releases/download/${TAG}/openpass_${VERSION}_darwin_amd64.tar.gz"
+          curl -fLO "https://github.com/danieljustus/OpenPass/releases/download/${TAG}/openpass_${VERSION}_checksums.txt"
+
+      - name: Verify checksum
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${TAG#v}"
+          shasum -a 256 -c "openpass_${VERSION}_checksums.txt" --ignore-missing
+
+      - name: Extract and install
+        run: |
+          tar xzf openpass_*.tar.gz
+          sudo mv openpass_*/openpass /usr/local/bin/openpass
+          openpass version
+
+      - name: Smoke test - help output
+        run: openpass --help | head -5
+
+      - name: Smoke test - init vault
+        run: |
+          TMPDIR=$(mktemp -d)
+          OPENPASS_VAULT="$TMPDIR/test-vault" openpass init --non-interactive
+          rm -rf "$TMPDIR"

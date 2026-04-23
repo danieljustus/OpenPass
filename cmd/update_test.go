@@ -14,11 +14,18 @@ import (
 type stubUpdateChecker struct {
 	currentVersion string
 	err            error
+	forceUsed      bool
 	result         *updatepkg.Result
 }
 
 func (s *stubUpdateChecker) Check(_ context.Context, currentVersion string) (*updatepkg.Result, error) {
 	s.currentVersion = currentVersion
+	return s.result, s.err
+}
+
+func (s *stubUpdateChecker) CheckWithForce(_ context.Context, currentVersion string, force bool) (*updatepkg.Result, error) {
+	s.currentVersion = currentVersion
+	s.forceUsed = force
 	return s.result, s.err
 }
 
@@ -72,8 +79,9 @@ func TestUpdateCheckCommandReportsAvailableUpdate(t *testing.T) {
 	rootCmd.SetArgs([]string{"update", "check"})
 	t.Cleanup(func() { rootCmd.SetArgs(nil) })
 
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected Execute() to return an error for update available")
 	}
 
 	got := buf.String()
@@ -200,5 +208,158 @@ func TestUpdateCheckCommandDoesNotRequireVault(t *testing.T) {
 
 	if !strings.Contains(buf.String(), "stable release builds") {
 		t.Fatalf("unexpected output: %q", buf.String())
+	}
+}
+
+func TestUpdateCheckCommandJSONOutput(t *testing.T) {
+	buf := prepareRootCommandOutput(t)
+	setVersionInfoForTest(t, "1.0.0")
+
+	checker := &stubUpdateChecker{
+		result: &updatepkg.Result{
+			CurrentVersion:  "1.0.0",
+			LatestVersion:   "1.1.0",
+			ReleaseURL:      "https://github.com/danieljustus/OpenPass/releases/tag/v1.1.0",
+			Checkable:       true,
+			UpdateAvailable: true,
+		},
+	}
+	setUpdateCheckerForTest(t, checker)
+
+	rootCmd.SetArgs([]string{"update", "check", "--json"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected Execute() to return an error for update available with --json")
+	}
+
+	got := buf.String()
+	for _, want := range []string{
+		`"current_version": "1.0.0"`,
+		`"latest_version": "1.1.0"`,
+		`"release_url": "https://github.com/danieljustus/OpenPass/releases/tag/v1.1.0"`,
+		`"checkable": true`,
+		`"update_available": true`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("JSON output missing %q: %q", want, got)
+		}
+	}
+}
+
+func TestUpdateCheckCommandJSONOutputNoUpdate(t *testing.T) {
+	buf := prepareRootCommandOutput(t)
+	setVersionInfoForTest(t, "1.0.0")
+
+	checker := &stubUpdateChecker{
+		result: &updatepkg.Result{
+			CurrentVersion: "1.0.0",
+			LatestVersion:  "1.0.0",
+			Checkable:      true,
+		},
+	}
+	setUpdateCheckerForTest(t, checker)
+
+	rootCmd.SetArgs([]string{"update", "check", "--json"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	got := buf.String()
+	for _, want := range []string{
+		`"current_version": "1.0.0"`,
+		`"latest_version": "1.0.0"`,
+		`"checkable": true`,
+		`"update_available": false`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("JSON output missing %q: %q", want, got)
+		}
+	}
+}
+
+func TestUpdateCheckCommandQuietModeUpdateAvailable(t *testing.T) {
+	buf := prepareRootCommandOutput(t)
+	setVersionInfoForTest(t, "1.0.0")
+
+	checker := &stubUpdateChecker{
+		result: &updatepkg.Result{
+			CurrentVersion:  "1.0.0",
+			LatestVersion:   "1.1.0",
+			ReleaseURL:      "https://github.com/danieljustus/OpenPass/releases/tag/v1.1.0",
+			Checkable:       true,
+			UpdateAvailable: true,
+		},
+	}
+	setUpdateCheckerForTest(t, checker)
+
+	updateCheckCmd.SilenceUsage = true
+	updateCheckCmd.SilenceErrors = true
+
+	rootCmd.SetArgs([]string{"update", "check", "--quiet"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected Execute() to return an error for update available with --quiet")
+	}
+
+	got := buf.String()
+	if got != "" {
+		t.Fatalf("expected no output with --quiet, got: %q", got)
+	}
+}
+
+func TestUpdateCheckCommandQuietModeNoUpdate(t *testing.T) {
+	buf := prepareRootCommandOutput(t)
+	setVersionInfoForTest(t, "1.0.0")
+
+	checker := &stubUpdateChecker{
+		result: &updatepkg.Result{
+			CurrentVersion: "1.0.0",
+			LatestVersion:  "1.0.0",
+			Checkable:      true,
+		},
+	}
+	setUpdateCheckerForTest(t, checker)
+
+	rootCmd.SetArgs([]string{"update", "check", "--quiet"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	got := buf.String()
+	if got != "" {
+		t.Fatalf("expected no output with --quiet, got: %q", got)
+	}
+}
+
+func TestUpdateCheckCommandForceFlag(t *testing.T) {
+	prepareRootCommandOutput(t)
+	setVersionInfoForTest(t, "1.0.0")
+
+	checker := &stubUpdateChecker{
+		result: &updatepkg.Result{
+			CurrentVersion: "1.0.0",
+			LatestVersion:  "1.0.0",
+			Checkable:      true,
+		},
+	}
+	setUpdateCheckerForTest(t, checker)
+
+	rootCmd.SetArgs([]string{"update", "check", "--force"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	if !checker.forceUsed {
+		t.Fatal("expected --force flag to be passed to checker")
 	}
 }

@@ -1,0 +1,206 @@
+<#
+.SYNOPSIS
+    Installs OpenPass from GitHub releases.
+
+.DESCRIPTION
+    Downloads the latest (or specified) OpenPass release from GitHub,
+    verifies the SHA-256 checksum, and installs the binary.
+
+.PARAMETER Version
+    Specific version to install (default: latest).
+
+.PARAMETER InstallDir
+    Installation directory (default: $env:LOCALAPPDATA\Programs\OpenPass).
+
+.PARAMETER DryRun
+    Download and verify but do not install.
+
+.EXAMPLE
+    irm https://raw.githubusercontent.com/danieljustus/OpenPass/main/scripts/install.ps1 | iex
+    install.ps1 -Version 1.2.3
+    install.ps1 -InstallDir C:\Tools
+#>
+
+[CmdletBinding()]
+param(
+    [string]$Version,
+    [string]$InstallDir,
+    [switch]$DryRun
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+# ── Constants ────────────────────────────────────────────────────────────────
+
+$Repo        = 'danieljustus/OpenPass'
+$Binary      = 'openpass.exe'
+$Project     = 'OpenPass'
+$GitHubApi   = 'https://api.github.com'
+$GitHubDl    = "https://github.com/$Repo/releases/download"
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+function Write-Info  { param([string]$m) Write-Host "[INFO]  $m" -ForegroundColor Blue }
+function Write-Warn  { param([string]$m) Write-Host "[WARN]  $m" -ForegroundColor Yellow }
+function Write-Err   { param([string]$m) Write-Host "[ERROR] $m" -ForegroundColor Red }
+
+# ── Platform detection ───────────────────────────────────────────────────────
+
+function Get-Architecture {
+    $arch = if ([Environment]::Is64BitOperatingSystem) {
+        if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }
+    } else {
+        throw 'OpenPass requires a 64-bit operating system.'
+    }
+    return $arch
+}
+
+# ── Version resolution ───────────────────────────────────────────────────────
+
+function Get-LatestVersion {
+    Write-Info 'Fetching latest release version...'
+    $url = "$GitHubApi/repos/$Repo/releases/latest"
+    $headers = @{
+        Accept        = 'application/json'
+        'User-Agent'  = 'openpass-installer'
+    }
+    $response = Invoke-RestMethod -Uri $url -Headers $headers -UseBasicParsing
+    if (-not $response.tag_name) {
+        throw 'Could not determine latest release version.'
+    }
+    return $response.tag_name
+}
+
+# ── SHA-256 verification ─────────────────────────────────────────────────────
+
+function Test-Checksum {
+    param(
+        [string]$FilePath,
+        [string]$ChecksumsPath,
+        [string]$FileName
+    )
+
+    $expected = (Get-Content $ChecksumsPath | Where-Object { $_ -match [regex]::Escape($FileName) } |
+                 ForEach-Object { ($_ -split '\s+')[0] })
+    if (-not $expected) {
+        throw "Checksum for $FileName not found in checksums file."
+    }
+
+    $actual = (Get-FileHash -Path $FilePath -Algorithm SHA256).Hash.ToLower()
+    if ($expected.ToLower() -ne $actual) {
+        throw "Checksum verification failed for $FileName.`n  Expected: $expected`n  Got:      $actual"
+    }
+    Write-Info "Checksum verified for $FileName."
+}
+
+# ── Main ─────────────────────────────────────────────────────────────────────
+
+function Install-OpenPass {
+    # Resolve version.
+    if (-not $Version) {
+        $resolvedVersion = Get-LatestVersion
+    } else {
+        $resolvedVersion = $Version
+    }
+    $versionNoV = $resolvedVersion -replace '^v', ''
+    Write-Info "Installing OpenPass $resolvedVersion..."
+
+    # Detect architecture.
+    $arch = Get-Architecture
+    Write-Info "Detected platform: windows/$arch"
+
+    # Build download URLs.
+    $archiveName = "${Project}_${versionNoV}_windows_${arch}"
+    $archiveFile = "$archiveName.zip"
+    $checksumsFile = "${Project}_${versionNoV}_checksums.txt"
+
+    $archiveUrl = "$GitHubDl/$resolvedVersion/$archiveFile"
+    $checksumsUrl = "$GitHubDl/$resolvedVersion/$checksumsFile"
+
+    # Create temp workspace.
+    $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) "openpass-install-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+    New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
+    try {
+        # Download checksums.
+        Write-Info 'Downloading checksums...'
+        $checksumsPath = Join-Path $tmpDir $checksumsFile
+        Invoke-WebRequest -Uri $checksumsUrl -OutFile $checksumsPath -UseBasicParsing
+
+        # Download archive.
+        Write-Info "Downloading $archiveFile..."
+        $archivePath = Join-Path $tmpDir $archiveFile
+        Invoke-WebRequest -Uri $archiveUrl -OutFile $archivePath -UseBasicParsing
+
+        # Verify checksum.
+        Write-Info 'Verifying checksum...'
+        Test-Checksum -FilePath $archivePath -ChecksumsPath $checksumsPath -FileName $archiveFile
+
+        # Extract.
+        Write-Info 'Extracting archive...'
+        $extractDir = Join-Path $tmpDir 'extract'
+        Expand-Archive -Path $archivePath -DestinationPath $extractDir -Force
+
+        # Find binary.
+        $binaryPath = Get-ChildItem -Path $extractDir -Recurse -Filter $Binary | Select-Object -First 1
+        if (-not $binaryPath) {
+            throw "Binary '$Binary' not found in archive."
+        }
+
+        if ($DryRun) {
+            Write-Info "[DRY RUN] Would install $Binary to $InstallDir\$Binary"
+            Write-Info '[DRY RUN] Binary verified successfully. Skipping installation.'
+            return
+        }
+
+        # Install.
+        if (-not (Test-Path $InstallDir)) {
+            New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+        }
+        Copy-Item -Path $binaryPath.FullName -Destination (Join-Path $InstallDir $Binary) -Force
+        Write-Info "OpenPass $resolvedVersion installed to $InstallDir\$Binary"
+
+        # PATH guidance.
+        $currentPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+        if ($currentPath -notlike "*$InstallDir*") {
+            Write-Warn "$InstallDir is not in your PATH."
+            Write-Host ''
+            Write-Host 'Add it to your PATH with:'
+            Write-Host ''
+            Write-Host "  [Environment]::SetEnvironmentVariable('Path', `"`$env:Path;$InstallDir`, 'User')"
+            Write-Host ''
+            Write-Host 'Then restart your terminal.'
+        }
+
+        # Verify installation.
+        $installedVersion = & (Join-Path $InstallDir $Binary) version 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Info "Installed version: $installedVersion"
+        }
+
+        Write-Info 'Done!'
+    }
+    finally {
+        Remove-Item -Path $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# ── Entry point ──────────────────────────────────────────────────────────────
+
+if (-not $InstallDir) {
+    $InstallDir = if ($env:INSTALL_DIR) {
+        $env:INSTALL_DIR
+    } else {
+        Join-Path $env:LOCALAPPDATA 'Programs\OpenPass'
+    }
+}
+
+if (-not $DryRun -and $env:DRY_RUN -eq 'true') {
+    $DryRun = $true
+}
+
+if (-not $Version -and $env:VERSION) {
+    $Version = $env:VERSION
+}
+
+Install-OpenPass

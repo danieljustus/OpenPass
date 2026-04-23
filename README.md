@@ -28,17 +28,56 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating in ou
 
 ## Installation
 
+### Quick install (recommended)
+
+**macOS / Linux:**
+
+```bash
+curl -sSfL https://raw.githubusercontent.com/danieljustus/OpenPass/main/scripts/install.sh | sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/danieljustus/OpenPass/main/scripts/install.ps1 | iex
+```
+
+The installer downloads the release binary, verifies the SHA-256 checksum, and installs it.
+
+**Options:**
+
+| Flag / Env var | Default | Description |
+|----------------|---------|-------------|
+| `--version` / `VERSION` | latest | Install a specific version |
+| `--install-dir` / `INSTALL_DIR` | `/usr/local/bin` (Linux/macOS), `%LOCALAPPDATA%\Programs\OpenPass` (Windows) | Installation directory |
+| `--dry-run` / `DRY_RUN=true` | false | Download and verify without installing |
+
+Examples:
+
+```bash
+# Install a specific version
+curl -sSfL https://raw.githubusercontent.com/danieljustus/OpenPass/main/scripts/install.sh | sh -s -- --version 1.2.3
+
+# Install to a custom directory
+curl -sSfL https://raw.githubusercontent.com/danieljustus/OpenPass/main/scripts/install.sh | sh -s -- --install-dir ~/.local/bin
+
+# Dry run (verify only)
+curl -sSfL https://raw.githubusercontent.com/danieljustus/OpenPass/main/scripts/install.sh | sh -s -- --dry-run
+```
+
+### Manual download
+
 Download a prebuilt binary from the latest release:
 
 https://github.com/danieljustus/OpenPass/releases/latest
 
-Or install with Go:
+### Go
 
 ```bash
 go install github.com/danieljustus/OpenPass@latest
 ```
 
-Or build from source:
+### Build from source
 
 ```bash
 git clone https://github.com/danieljustus/OpenPass

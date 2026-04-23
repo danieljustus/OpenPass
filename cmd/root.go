@@ -79,8 +79,10 @@ var vault string
 var vaultFlag *pflag.Flag
 
 var rootCmd = &cobra.Command{
-	Use:   "openpass",
-	Short: "OpenPass is a Go CLI password manager",
+	Use:           "openpass",
+	Short:         "OpenPass is a Go CLI password manager",
+	SilenceUsage:  true,
+	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if !commandRequiresVault(cmd) {
 			return nil

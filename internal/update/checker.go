@@ -19,6 +19,7 @@ type httpDoer interface {
 type Checker struct {
 	HTTPClient       httpDoer
 	LatestReleaseURL string
+	Cache            *Cache
 }
 
 type Result struct {
@@ -50,13 +51,33 @@ func NewChecker(client httpDoer) *Checker {
 	return &Checker{
 		HTTPClient:       client,
 		LatestReleaseURL: DefaultLatestReleaseURL,
+		Cache:            NewCache(),
 	}
 }
 
 func (c *Checker) Check(ctx context.Context, currentVersion string) (*Result, error) {
+	return c.CheckWithForce(ctx, currentVersion, false)
+}
+
+func (c *Checker) CheckWithForce(ctx context.Context, currentVersion string, force bool) (*Result, error) {
 	current, ok := parseStableVersion(currentVersion)
 	if !ok {
 		return &Result{CurrentVersion: strings.TrimSpace(currentVersion)}, nil
+	}
+
+	if !force && c.Cache != nil {
+		if entry, err := c.Cache.Load(); err == nil && entry != nil {
+			latest, ok := parseStableVersion(entry.LatestVersion)
+			if ok {
+				return &Result{
+					CurrentVersion:  current.String(),
+					LatestVersion:   latest.String(),
+					ReleaseURL:      entry.ReleaseURL,
+					Checkable:       true,
+					UpdateAvailable: compareStableVersions(current, latest) < 0,
+				}, nil
+			}
+		}
 	}
 
 	release, err := c.fetchLatestRelease(ctx, currentVersion)
@@ -69,13 +90,23 @@ func (c *Checker) Check(ctx context.Context, currentVersion string) (*Result, er
 		return nil, fmt.Errorf("latest release tag %q is not a stable semantic version", release.TagName)
 	}
 
-	return &Result{
+	result := &Result{
 		CurrentVersion:  current.String(),
 		LatestVersion:   latest.String(),
 		ReleaseURL:      strings.TrimSpace(release.HTMLURL),
 		Checkable:       true,
 		UpdateAvailable: compareStableVersions(current, latest) < 0,
-	}, nil
+	}
+
+	if c.Cache != nil {
+		_ = c.Cache.Save(&CacheEntry{
+			Timestamp:     time.Now(),
+			LatestVersion: result.LatestVersion,
+			ReleaseURL:    result.ReleaseURL,
+		})
+	}
+
+	return result, nil
 }
 
 func (c *Checker) fetchLatestRelease(ctx context.Context, currentVersion string) (*latestReleaseResponse, error) {
