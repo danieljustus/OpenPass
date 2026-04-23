@@ -140,22 +140,22 @@ var getCmd = &cobra.Command{
 				Modified: entry.Metadata.Updated.Format("2006-01-02 15:04"),
 				Fields:   entry.Data,
 			}
-		if secret, algorithm, digits, period, hasTOTP := vaultpkg.ExtractTOTP(entry.Data); hasTOTP {
-			totpCode, err := vaultcrypto.GenerateTOTP(secret, algorithm, digits, period)
-			if err == nil {
-				period := int64(totpCode.Period)
-				if period == 0 {
-					period = 30
-				}
-				now := time.Now().UTC()
-				remaining := period - (now.Unix() % period)
-				output.TOTP = &totpOutput{
-					Code:      totpCode.Code,
-					Period:    period,
-					Remaining: int(remaining),
+			if secret, algorithm, digits, period, hasTOTP := vaultpkg.ExtractTOTP(entry.Data); hasTOTP {
+				totpCode, err := vaultcrypto.GenerateTOTP(secret, algorithm, digits, period)
+				if err == nil {
+					period := int64(totpCode.Period)
+					if period == 0 {
+						period = 30
+					}
+					now := time.Now().UTC()
+					remaining := period - (now.Unix() % period)
+					output.TOTP = &totpOutput{
+						Code:      totpCode.Code,
+						Period:    period,
+						Remaining: int(remaining),
+					}
 				}
 			}
-		}
 			PrintJSON(output)
 			return nil
 		}
