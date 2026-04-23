@@ -28,6 +28,7 @@ func TestCommandRegistration(t *testing.T) {
 		"serve",
 		"set",
 		"unlock",
+		"update",
 		"version",
 	}
 
@@ -57,6 +58,20 @@ func TestSubcommandRegistration(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("recipients subcommand %q not registered", sub)
+		}
+	}
+
+	updateSubcommands := []string{"check"}
+	for _, sub := range updateSubcommands {
+		found := false
+		for _, c := range updateCmd.Commands() {
+			if c.Name() == sub {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("update subcommand %q not registered", sub)
 		}
 	}
 

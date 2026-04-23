@@ -132,6 +132,16 @@ openpass generate --length 32 --symbols
 openpass generate --store newaccount.password --length 20 --symbols
 ```
 
+### Check for updates
+
+```bash
+openpass update check
+```
+
+If you installed OpenPass via Homebrew, a system package, or `go install`,
+keep using that installation path to apply updates. `openpass update check`
+only reports whether a newer stable GitHub release exists.
+
 ### Edit an entry
 
 Opens the decrypted entry in `$EDITOR`:

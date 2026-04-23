@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"os"
 	"testing"
 )
 
@@ -53,5 +54,45 @@ func TestVersionOutputContainsExpectedFields(t *testing.T) {
 
 	if !bytes.Contains([]byte(got), []byte("built:")) {
 		t.Errorf("output missing 'built:' label, got %q", got)
+	}
+}
+
+func TestVersionCommandDoesNotRequireVault(t *testing.T) {
+	resetCommandTestState()
+	t.Cleanup(resetCommandTestState)
+
+	buf := new(bytes.Buffer)
+	rootCmd.SetOut(buf)
+	rootCmd.SetErr(buf)
+	rootCmd.SetArgs([]string{"version"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	originalHome := os.Getenv("HOME")
+	originalVaultEnv := os.Getenv("OPENPASS_VAULT")
+	originalVault := vault
+	originalChanged := vaultFlag.Changed
+	_ = os.Unsetenv("HOME")
+	_ = os.Unsetenv("OPENPASS_VAULT")
+	vault = "~/.openpass"
+	if vaultFlag != nil {
+		_ = vaultFlag.Value.Set(vault)
+		vaultFlag.Changed = false
+	}
+	t.Cleanup(func() {
+		_ = os.Setenv("HOME", originalHome)
+		_ = os.Setenv("OPENPASS_VAULT", originalVaultEnv)
+		vault = originalVault
+		if vaultFlag != nil {
+			_ = vaultFlag.Value.Set(originalVault)
+			vaultFlag.Changed = originalChanged
+		}
+	})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	if got := buf.String(); !bytes.Contains([]byte(got), []byte("openpass")) {
+		t.Fatalf("unexpected output: %q", got)
 	}
 }

@@ -368,9 +368,172 @@ Do NOT open public issues. Submit a private report via [GitHub Security Advisori
 
 ---
 
+## Token and Index Recovery
+
+### Accidental mcp-token Deletion
+
+If the `mcp-token` file is accidentally deleted, the MCP HTTP server will regenerate it on the next start.
+
+**Regeneration Procedure**:
+
+1. Stop the MCP server if running:
+   ```bash
+   # If running in background
+   pkill -f "openpass serve"
+   ```
+
+2. Remove the old token file (if partially corrupted):
+   ```bash
+   rm -f ~/.openpass/mcp-token
+   ```
+
+3. Restart the server to generate a new token:
+   ```bash
+   openpass serve --port 8080
+   ```
+
+4. Retrieve the new token:
+   ```bash
+   cat ~/.openpass/mcp-token
+   ```
+
+5. Update agent configurations with the new token:
+   ```bash
+   openpass mcp-config claude-code --http --include-token
+   ```
+
+**Impact**: All existing agent connections will be invalidated. Agents must be reconfigured with the new token.
+
+### Zero-Downtime Token Rotation
+
+For production environments requiring continuous availability:
+
+**Preparation**:
+1. Ensure you have access to regenerate the token
+2. Prepare updated agent configurations in advance
+3. Schedule during low-usage period
+
+**Rotation Steps**:
+
+```bash
+# 1. Generate new token (server creates it automatically on restart)
+# Save the current token as backup
+cp ~/.openpass/mcp-token ~/.openpass/mcp-token.backup
+
+# 2. Stop the server gracefully
+pkill -f "openpass serve"
+
+# 3. Remove the old token
+rm ~/.openpass/mcp-token
+
+# 4. Start the server (generates new token)
+openpass serve --port 8080 &
+
+# 5. Wait for server to be ready
+sleep 2
+curl -s http://127.0.0.1:8080/health
+
+# 6. Get the new token
+NEW_TOKEN=$(cat ~/.openpass/mcp-token)
+echo "New token generated"
+
+# 7. Update all agent configurations
+openpass mcp-config claude-code --http --include-token
+# Repeat for each agent
+
+# 8. Verify new configuration works
+curl -H "Authorization: Bearer $NEW_TOKEN" \
+     -H "X-OpenPass-Agent: claude-code" \
+     http://127.0.0.1:8080/mcp
+
+# 9. Remove backup token after verification
+rm ~/.openpass/mcp-token.backup
+```
+
+**Note**: During rotation (steps 2-7), agents cannot connect. Keep this window minimal.
+
+### Corrupted .index File Recovery
+
+The `.index` file maintains a cache of vault entry metadata. If corrupted, vault operations may fail or return incorrect results.
+
+**Symptoms**:
+- `list_entries` returns incorrect or incomplete results
+- Operations fail with "index mismatch" errors
+- Vault appears empty but entries exist in `entries/` directory
+
+**Recovery Procedure**:
+
+1. Stop the MCP server:
+   ```bash
+   pkill -f "openpass serve"
+   ```
+
+2. Back up the corrupted index:
+   ```bash
+   cp ~/.openpass/.index ~/.openpass/.index.corrupted.$(date +%Y%m%d_%H%M%S)
+   ```
+
+3. Remove the corrupted index:
+   ```bash
+   rm ~/.openpass/.index
+   ```
+
+4. Rebuild the index by unlocking the vault:
+   ```bash
+   openpass unlock
+   openpass list
+   ```
+
+5. Verify all entries are accessible:
+   ```bash
+   openpass list | wc -l
+   ls ~/.openpass/entries/*.age | wc -l
+   # These counts should match (plus subdirectory entries)
+   ```
+
+6. Restart the MCP server:
+   ```bash
+   openpass serve --port 8080
+   ```
+
+### Prevention Recommendations
+
+1. **Regular Backups**: Include `mcp-token` in your vault backup strategy
+   ```bash
+   # Add to backup script
+cp ~/.openpass/mcp-token ~/backups/openpass/
+   ```
+
+2. **Version Control Exclusion**: Ensure `.index` and `mcp-token` are in `.gitignore`:
+   ```gitignore
+   # OpenPass runtime files
+   .index
+   mcp-token
+   .runtime-port
+   ```
+
+3. **Token Permissions**: Set restrictive permissions on the token file:
+   ```bash
+   chmod 600 ~/.openpass/mcp-token
+   ```
+
+4. **Monitor File Integrity**: Set up alerts for unexpected file changes:
+   ```bash
+   # Check file hash daily
+   md5 ~/.openpass/mcp-token >> ~/logs/mcp-token.hash
+   ```
+
+5. **Use Stdio Mode for Local Agents**: Stdio mode doesn't require token management:
+   ```bash
+   openpass serve --stdio --agent claude-code
+   ```
+
+---
+
 ## Related Documentation
 
 - [Agent Integration Guide](agent-integration.md) - MCP setup and configuration
 - [Runbook](runbook.md) - Operational procedures and incident response
 - [Error Tracking Strategy](error-tracking-strategy.md) - Error handling and reporting
+- [MCP API Documentation](mcp-api.md) - Complete MCP API reference
 - [README](../README.md) - General usage and installation

@@ -167,6 +167,161 @@ git push origin v1.x.x
 
 ---
 
+## MCP Token Operations
+
+### Token Lifecycle Management
+
+The MCP token (`mcp-token`) is auto-generated on first server start and stored in the vault directory. Proper token management is critical for security and availability.
+
+### Token Rotation Schedule
+
+| Environment | Rotation Frequency | Trigger |
+|-------------|-------------------|---------|
+| Production | Every 90 days | Scheduled maintenance |
+| Development | Every 180 days | Scheduled or ad-hoc |
+| After security incident | Immediate | Incident response |
+| After personnel changes | Immediate | Team changes |
+
+### Operational Token Rotation
+
+**Prerequisites**:
+- Access to vault directory
+- Ability to restart MCP server
+- Updated agent configurations ready
+
+**Step-by-Step Rotation**:
+
+```bash
+#!/bin/bash
+# token-rotate.sh - Production token rotation procedure
+
+set -euo pipefail
+
+VAULT_DIR="${OPENPASS_VAULT:-$HOME/.openpass}"
+SERVER_PORT="${MCP_PORT:-8080}"
+BACKUP_DIR="$VAULT_DIR/backups"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+
+# 1. Pre-rotation checks
+echo "=== Pre-Rotation Checks ==="
+if ! curl -sf http://127.0.0.1:$SERVER_PORT/health; then
+    echo "ERROR: Server not healthy, aborting rotation"
+    exit 1
+fi
+
+# 2. Backup current token
+mkdir -p "$BACKUP_DIR"
+cp "$VAULT_DIR/mcp-token" "$BACKUP_DIR/mcp-token.$TIMESTAMP"
+echo "Token backed up to $BACKUP_DIR/mcp-token.$TIMESTAMP"
+
+# 3. Stop server
+echo "=== Stopping Server ==="
+pkill -f "openpass serve" || true
+sleep 2
+
+# 4. Remove old token
+echo "=== Removing Old Token ==="
+rm -f "$VAULT_DIR/mcp-token"
+
+# 5. Start server (generates new token)
+echo "=== Starting Server ==="
+nohup openpass serve --port $SERVER_PORT > "$VAULT_DIR/mcp-server.log" 2>&1 &
+sleep 3
+
+# 6. Verify health
+echo "=== Verification ==="
+if curl -sf http://127.0.0.1:$SERVER_PORT/health; then
+    echo "Server healthy with new token"
+else
+    echo "ERROR: Server failed to start"
+    exit 1
+fi
+
+# 7. Display new token (for manual configuration update)
+echo "=== New Token ==="
+echo "Token file: $VAULT_DIR/mcp-token"
+echo "Token hash: $(md5 -q "$VAULT_DIR/mcp-token")"
+
+echo "=== Rotation Complete ==="
+echo "ACTION REQUIRED: Update all agent configurations with new token"
+```
+
+### Token Recovery After Accidental Deletion
+
+**Immediate Response**:
+
+1. Check if backup exists:
+   ```bash
+   ls -la ~/.openpass/backups/mcp-token.*
+   ```
+
+2. If backup exists, restore and verify:
+   ```bash
+   cp ~/.openpass/backups/mcp-token.latest ~/.openpass/mcp-token
+   chmod 600 ~/.openpass/mcp-token
+   ```
+
+3. If no backup, regenerate:
+   ```bash
+   # Stop server
+   pkill -f "openpass serve"
+   
+   # Remove corrupted/missing token
+   rm -f ~/.openpass/mcp-token
+   
+   # Restart (auto-generates new token)
+   openpass serve --port 8080
+   
+   # Get new token
+   cat ~/.openpass/mcp-token
+   ```
+
+4. Update all agent configurations with new token
+
+### .index File Rebuild Procedure
+
+The `.index` file caches vault entry metadata. Rebuild it when:
+- Index corruption is detected
+- Manual vault modifications bypass OpenPass
+- Performance issues with large vaults
+
+**Rebuild Steps**:
+
+```bash
+# 1. Stop MCP server
+pkill -f "openpass serve"
+
+# 2. Backup corrupted index
+cp ~/.openpass/.index ~/.openpass/.index.bak.$(date +%Y%m%d)
+
+# 3. Remove corrupted index
+rm ~/.openpass/.index
+
+# 4. Unlock vault and rebuild
+openpass unlock
+openpass list
+
+# 5. Verify integrity
+ENTRY_COUNT=$(openpass list | wc -l)
+FILE_COUNT=$(find ~/.openpass/entries -name "*.age" | wc -l)
+echo "Index entries: $ENTRY_COUNT, Files: $FILE_COUNT"
+
+# 6. Restart server
+openpass serve --port 8080
+```
+
+### Prevention Checklist
+
+- [ ] Token file permissions: `chmod 600 ~/.openpass/mcp-token`
+- [ ] Token excluded from version control (in `.gitignore`)
+- [ ] Automated backup of token file
+- [ ] Rotation schedule documented and followed
+- [ ] Index excluded from version control
+- [ ] Regular index integrity checks
+- [ ] Monitoring for unexpected token changes
+
+---
+
 ## Backup & Recovery
 
 ### Vault Backup Strategy
@@ -317,6 +472,389 @@ rsync -av --delete ~/.openpass/ /Volumes/Backup/openpass/
 # Weekly full backup to cloud storage
 rclone sync ~/.openpass/ backblaze:openpass-vaults/$(hostname)/
 ```
+
+---
+
+## MCP Server Operations
+
+This section covers operational procedures for managing the OpenPass MCP server in production environments.
+
+### Health Check Procedures
+
+#### Automated Health Checks
+
+Set up periodic health monitoring:
+
+```bash
+#!/bin/bash
+# health-check.sh - Run from cron every minute
+
+HEALTH_URL="http://127.0.0.1:8080/health"
+LOG_FILE="/var/log/openpass-health.log"
+ALERT_EMAIL="ops@example.com"
+
+if ! curl -sf "$HEALTH_URL" > /dev/null 2>&1; then
+    echo "$(date): CRITICAL - OpenPass MCP server unhealthy" >> "$LOG_FILE"
+    echo "OpenPass MCP server is down on $(hostname)" | mail -s "OpenPass Alert" "$ALERT_EMAIL"
+    
+    # Attempt automatic recovery
+    pkill -f "openpass serve"
+    sleep 2
+    nohup openpass serve --port 8080 > /dev/null 2>&1 &
+fi
+```
+
+#### Manual Health Verification
+
+```bash
+# 1. Basic health endpoint
+curl -s http://127.0.0.1:8080/health | jq .
+# Expected: {"status": "healthy", "timestamp": "...", "version": "x.y.z"}
+
+# 2. MCP tool health test
+curl -s -X POST http://127.0.0.1:8080/mcp \
+  -H "Authorization: Bearer $(cat ~/.openpass/mcp-token)" \
+  -H "X-OpenPass-Agent: default" \
+  -H "Content-Type: application/json" \
+  -d '{"tool": "health", "arguments": {}}'
+
+# 3. End-to-end test (list entries)
+curl -s -X POST http://127.0.0.1:8080/mcp \
+  -H "Authorization: Bearer $(cat ~/.openpass/mcp-token)" \
+  -H "X-OpenPass-Agent: default" \
+  -H "Content-Type: application/json" \
+  -d '{"tool": "list_entries", "arguments": {}}' | jq '.entries | length'
+# Expected: Number of vault entries (0 or more)
+```
+
+#### Expected Health Outputs
+
+| Check | Success | Failure |
+|-------|---------|---------|
+| HTTP Health | `{"status": "healthy"}` | Connection refused, timeout |
+| MCP Health | Same as HTTP | Error response or timeout |
+| List Test | JSON with entries array | Auth error, vault locked |
+
+### Agent Profile Misconfiguration Recovery
+
+#### Symptoms
+
+- Agent receives "access_denied" errors
+- Operations fail with "Agent not recognized"
+- Write operations rejected despite `canWrite: true`
+
+#### Diagnostic Steps
+
+1. Check agent profile exists:
+   ```bash
+   cat ~/.openpass/config.yaml | grep -A 5 "agents:"
+   ```
+
+2. Verify profile name matches:
+   ```bash
+   # In config.yaml
+   agents:
+     my-agent:
+       allowedPaths: ["*"]
+   
+   # MCP server must use same name
+   openpass serve --agent my-agent
+   ```
+
+3. Check profile permissions:
+   ```bash
+   cat ~/.openpass/config.yaml | yq '.agents.<agent-name>'
+   ```
+
+#### Recovery Procedures
+
+**Scenario 1: Profile Does Not Exist**
+
+```bash
+# Add the missing profile to config.yaml
+cat >> ~/.openpass/config.yaml << 'EOF'
+
+agents:
+  missing-agent:
+    allowedPaths: ["*"]
+    canWrite: true
+    approvalMode: none
+EOF
+
+# Restart server
+pkill -f "openpass serve"
+openpass serve --port 8080
+```
+
+**Scenario 2: Incorrect Permissions**
+
+```bash
+# Backup current config
+cp ~/.openpass/config.yaml ~/.openpass/config.yaml.bak
+
+# Edit to fix permissions
+# Change canWrite: false to true for write operations
+# Update allowedPaths to include required paths
+
+# Validate config
+openpass --vault ~/.openpass list
+
+# Restart server
+pkill -f "openpass serve"
+openpass serve --port 8080
+```
+
+**Scenario 3: Path Restriction Too Strict**
+
+```bash
+# Current (too restrictive):
+# allowedPaths: ["work/production/*"]
+
+# Fixed (allows required access):
+# allowedPaths: ["work/*", "personal/*"]
+```
+
+### Rate Limiter Overflow Handling
+
+#### Understanding Rate Limits
+
+| Operation Type | Limit | Window |
+|----------------|-------|--------|
+| Read operations | 100 | 60 seconds |
+| Write operations | 20 | 60 seconds |
+| Password generation | 50 | 60 seconds |
+
+#### Symptoms of Rate Limiting
+
+```json
+{
+  "error": {
+    "code": "rate_limited",
+    "message": "Rate limit exceeded. Retry after 30 seconds.",
+    "details": {
+      "retry_after": 30
+    }
+  }
+}
+```
+
+#### Immediate Response
+
+1. **Identify the source**:
+   ```bash
+   # Check logs for agent activity
+   grep "rate_limit" /var/log/openpass.log | tail -20
+   ```
+
+2. **Implement exponential backoff** (for automated clients):
+   ```python
+   import time
+   
+   def call_with_backoff(func, max_retries=5):
+       for i in range(max_retries):
+           try:
+               return func()
+           except RateLimitError as e:
+               wait = min(2 ** i, 60)  # Exponential backoff, max 60s
+               time.sleep(wait)
+       raise Exception("Max retries exceeded")
+   ```
+
+3. **Temporary rate limit increase** (emergency only):
+   - No runtime adjustment available
+   - Restart server to reset counters
+   - Plan for longer-term solution
+
+#### Prevention Strategies
+
+1. **Implement caching**:
+   - Cache credentials for their TTL
+   - Use `get_entry_metadata` to check versions
+
+2. **Batch operations**:
+   - Minimize individual tool calls
+   - Cache `list_entries` results
+
+3. **Monitor usage patterns**:
+   ```bash
+   # Track request rates
+   tail -f /var/log/openpass.log | grep "mcp_request" | wc -l
+   ```
+
+### Emergency Shutdown Procedures
+
+#### Graceful Shutdown
+
+**For HTTP mode**:
+
+```bash
+# 1. Stop accepting new connections
+pkill -f "openpass serve"
+
+# 2. Verify shutdown
+if ! pgrep -f "openpass serve" > /dev/null; then
+    echo "MCP server stopped successfully"
+else
+    echo "Failed to stop server, forcing..."
+    pkill -9 -f "openpass serve"
+fi
+
+# 3. Verify no orphaned processes
+ps aux | grep openpass
+```
+
+**For Stdio mode**:
+
+```bash
+# Stdio server stops when parent process disconnects
+# To force stop a background stdio server:
+pkill -f "openpass serve --stdio"
+```
+
+#### Emergency Lockdown
+
+If security incident suspected:
+
+```bash
+#!/bin/bash
+# emergency-lockdown.sh
+
+echo "=== OPENPASS EMERGENCY LOCKDOWN ==="
+
+# 1. Stop MCP server
+pkill -f "openpass serve"
+echo "[1/4] MCP server stopped"
+
+# 2. Lock vault
+openpass lock
+echo "[2/4] Vault locked"
+
+# 3. Invalidate current token (rotate)
+mv ~/.openpass/mcp-token ~/.openpass/mcp-token.compromised.$(date +%Y%m%d_%H%M%S)
+echo "[3/4] Token invalidated (backup created)"
+
+# 4. Disable auto-start (if using LaunchAgent/systemd)
+# macOS LaunchAgent
+launchctl unload ~/Library/LaunchAgents/com.example.openpass-mcp.plist 2>/dev/null || true
+echo "[4/4] Auto-start disabled"
+
+echo ""
+echo "EMERGENCY LOCKDOWN COMPLETE"
+echo "Actions required:"
+echo "- Investigate security incident"
+echo "- Generate new token when safe"
+echo "- Review access logs"
+echo "- Restart server after verification"
+```
+
+#### Post-Incident Restart
+
+After incident resolution:
+
+```bash
+# 1. Verify vault integrity
+openpass unlock
+openpass list
+
+# 2. Generate new token (if rotated)
+rm -f ~/.openpass/mcp-token
+openpass serve --port 8080 &
+sleep 2
+NEW_TOKEN=$(cat ~/.openpass/mcp-token)
+
+# 3. Update all agent configurations
+openpass mcp-config claude-code --http --include-token
+
+# 4. Verify health
+curl -H "Authorization: Bearer $NEW_TOKEN" \
+     -H "X-OpenPass-Agent: claude-code" \
+     http://127.0.0.1:8080/health
+
+# 5. Enable auto-start if previously disabled
+launchctl load ~/Library/LaunchAgents/com.example.openpass-mcp.plist
+```
+
+### Token Invalidation Procedures
+
+#### Planned Invalidation
+
+For planned token changes (rotation, personnel changes):
+
+```bash
+# 1. Notify users of upcoming change
+# 2. Schedule during low-usage window
+# 3. Follow token rotation procedure (see MCP Token Operations)
+# 4. Update all configurations
+# 5. Verify all agents reconnect successfully
+```
+
+#### Emergency Invalidation
+
+If token compromise suspected:
+
+```bash
+# Immediate actions (within 5 minutes)
+
+# 1. Stop server
+pkill -f "openpass serve"
+
+# 2. Backup and remove compromised token
+mv ~/.openpass/mcp-token ~/.openpass/mcp-token.compromised.$(date +%Y%m%d_%H%M%S)
+
+# 3. Start server with new token
+openpass serve --port 8080 &
+
+# 4. Verify new token generated
+cat ~/.openpass/mcp-token
+
+# 5. Update critical agent configs immediately
+# (Other agents can wait for scheduled maintenance)
+```
+
+### Escalation Procedures
+
+| Severity | Response Time | Actions | Escalation |
+|----------|--------------|---------|------------|
+| **P1 - Critical** | 15 min | Full lockdown, revoke tokens, preserve logs | Security team, on-call engineer |
+| **P2 - High** | 1 hour | Partial restrictions, token rotation | Engineering lead |
+| **P3 - Medium** | 4 hours | Monitoring increase, planned remediation | Operations team |
+| **P4 - Low** | 24 hours | Document, schedule fix | Next sprint |
+
+**Escalation Triggers**:
+- Unauthorized access detected in logs
+- Token used from unexpected IP/location
+- Multiple failed auth attempts
+- Vault corruption detected
+- Rate limiting affecting critical operations
+
+### Monitoring and Alerting
+
+#### Key Metrics
+
+Monitor these metrics for operational health:
+
+```bash
+# Request rate
+curl -s http://127.0.0.1:8080/metrics | grep "openpass_mcp_requests_total"
+
+# Error rate
+curl -s http://127.0.0.1:8080/metrics | grep "openpass_mcp_requests_total{status=\"error\"}"
+
+# Auth denials
+curl -s http://127.0.0.1:8080/metrics | grep "openpass_mcp_auth_denials_total"
+
+# Vault operations
+curl -s http://127.0.0.1:8080/metrics | grep "openpass_vault_operations_total"
+```
+
+#### Alert Thresholds
+
+| Metric | Warning | Critical |
+|--------|---------|----------|
+| Error rate | > 1% | > 5% |
+| Auth denials/min | > 10 | > 50 |
+| Request latency (p95) | > 500ms | > 2000ms |
+| Vault operations failures | > 0 | > 5 |
 
 ---
 

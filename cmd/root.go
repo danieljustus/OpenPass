@@ -19,6 +19,8 @@ import (
 
 var osExit = os.Exit
 
+const requiresVaultAnnotation = "openpass/requires-vault"
+
 var readPasswordFunc func(int) ([]byte, error) = term.ReadPassword
 
 func readHiddenInput(prompt string, reader *bufio.Reader) (string, error) {
@@ -79,10 +81,12 @@ var vaultFlag *pflag.Flag
 var rootCmd = &cobra.Command{
 	Use:   "openpass",
 	Short: "OpenPass is a Go CLI password manager",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		if _, err := vaultPath(); err != nil {
-			cobra.CheckErr(err)
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if !commandRequiresVault(cmd) {
+			return nil
 		}
+		_, err := vaultPath()
+		return err
 	},
 }
 
@@ -177,4 +181,16 @@ func configuredSessionTTL(v *vaultpkg.Vault, override time.Duration) time.Durati
 		return v.Config.SessionTimeout
 	}
 	return defaultSessionTTL()
+}
+
+func commandRequiresVault(cmd *cobra.Command) bool {
+	for current := cmd; current != nil; current = current.Parent() {
+		if current.Annotations == nil {
+			continue
+		}
+		if value, ok := current.Annotations[requiresVaultAnnotation]; ok {
+			return value != "false"
+		}
+	}
+	return true
 }
