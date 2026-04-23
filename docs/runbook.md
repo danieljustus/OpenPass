@@ -1,7 +1,7 @@
 # OpenPass Launch & Incident Response Runbook
 
 **Maintainer**: OpenPass Team
-**Security Contact**: security@openpass.dev
+**Security Contact**: https://github.com/danieljustus/OpenPass/security/advisories/new
 **Repository**: https://github.com/danieljustus/OpenPass
 
 ## Table of Contents
@@ -324,7 +324,7 @@ rclone sync ~/.openpass/ backblaze:openpass-vaults/$(hostname)/
 
 ### Reporting Process
 
-1. **Receive report** via security@openpass.dev or GitHub Security Advisories
+1. **Receive report** via [GitHub Security Advisories](https://github.com/danieljustus/OpenPass/security/advisories/new)
 2. **Acknowledge within 48 hours**
 3. **Assess severity and impact**
 4. **Develop mitigation**
@@ -448,7 +448,7 @@ rm -rf /tmp/test-vault
 
 | Purpose | Contact |
 |---------|---------|
-| Security Issues | security@openpass.dev |
+| Security Issues | [GitHub Security Advisories](https://github.com/danieljustus/OpenPass/security/advisories/new) |
 | General Issues | [GitHub Issues](https://github.com/danieljustus/OpenPass/issues) |
 | Release Verification | See post-release checklist above |
 

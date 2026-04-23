@@ -364,7 +364,7 @@ Please complete this checklist before opening a GitHub issue:
 8. Output of diagnostic commands above
 
 **For security issues:**
-Do NOT open public issues. Email security@openpass.dev with details.
+Do NOT open public issues. Submit a private report via [GitHub Security Advisories](https://github.com/danieljustus/OpenPass/security/advisories/new).
 
 ---
 

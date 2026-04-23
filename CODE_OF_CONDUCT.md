@@ -39,7 +39,7 @@ Project maintainers are obligated to maintain confidentiality with regard to the
 If you experience or witness unacceptable behavior, please report it to:
 
 **OpenPass Security Team**
-- Email: security@openpass.dev
+- GitHub Security Advisories: https://github.com/danieljustus/OpenPass/security/advisories/new
 
 For security vulnerabilities, please follow the process outlined in [SECURITY.md](SECURITY.md).
 

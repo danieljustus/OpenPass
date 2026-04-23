@@ -16,19 +16,26 @@ OpenPass does **NOT** use external error tracking services (Sentry, Datadog, Cra
 
 ### Local Error Bundles (Opt-In)
 
-When users encounter errors, they can generate a local error bundle for self-diagnosis or sharing with maintainers:
+When users encounter errors, they can gather diagnostic information manually for self-diagnosis or sharing with maintainers:
 
 ```bash
-openpass doctor --export-bundle /tmp/openpass-debug.tar.gz
+# Basic diagnostics
+openpass --version
+openpass list
+
+# Check vault permissions
+ls -la ~/.openpass/
+ls -la ~/.openpass/entries/
+
+# Check config (review for secrets before sharing)
+cat ~/.openpass/config.yaml
 ```
 
-The bundle contains:
+When reporting issues, include:
 - OpenPass version and Go version
 - OS/platform information
-- Redacted config (secrets stripped)
-- Last 100 audit log entries (path patterns only, no field values)
-- Stack trace (if available)
-- Exit code and error category
+- Error message and exit code
+- Steps to reproduce
 
 ### Redaction Rules
 
@@ -65,7 +72,7 @@ All error reports MUST redact the following before any export:
 ```
 Error: failed to decrypt entry
 Category: crypto_error (exit code 3)
-Suggestion: This may indicate vault corruption. Try 'openpass doctor' for diagnostics.
+Suggestion: This may indicate vault corruption. Check vault permissions and try listing entries.
 ```
 
 ### MCP Error Responses
@@ -78,7 +85,7 @@ MCP errors include sanitized error data:
     "code": "CRYPTO_ERROR",
     "message": "decryption failed",
     "category": 3,
-    "suggestion": "Verify vault integrity with 'openpass doctor'"
+    "suggestion": "Check vault permissions and verify entry files exist"
   }
 }
 ```
@@ -88,6 +95,6 @@ MCP errors include sanitized error data:
 - [x] Error category enum defined
 - [x] Exit codes documented
 - [x] MCP error response format defined
-- [ ] Local error bundle command (`openpass doctor --export-bundle`)
+- [ ] Local error bundle command (future enhancement)
 - [ ] Redaction utilities for error reports
 - [ ] Audit log export with redaction

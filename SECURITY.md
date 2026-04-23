@@ -24,7 +24,7 @@ We take security vulnerabilities seriously. If you discover a security issue, pl
 ### Reporting Process
 
 1. **Do NOT** open a public GitHub issue for security vulnerabilities
-2. Email the maintainers directly at: **security@openpass.dev**
+2. Submit a private vulnerability report via [GitHub Security Advisories](https://github.com/danieljustus/OpenPass/security/advisories/new)
 3. Include the following in your report:
    - Description of the vulnerability
    - Steps to reproduce the issue
@@ -260,7 +260,7 @@ As a password manager handling highly sensitive credentials, we believe telemetr
 All data remains on your device:
 - **Vault contents**: Your passwords, TOTP secrets, and notes are never transmitted
 - **Audit logs**: Stored locally in `~/.openpass/audit-*.log` with rotation and retention limits
-- **Error information**: If you run `openpass doctor`, diagnostics stay on your machine
+- **Error information**: Diagnostic commands like `openpass --version` and `openpass list` stay on your machine
 - **Session data**: Cached via OS keyring, never transmitted
 
 ### Audit Logs
@@ -282,7 +282,7 @@ For more details on error tracking strategy, see [docs/error-tracking-strategy.m
 
 ## Contact
 
-- **Email**: security@openpass.dev
-- **GitHub**: https://github.com/danieljustus/OpenPass/security/advisories
+- **GitHub Security Advisories**: https://github.com/danieljustus/OpenPass/security/advisories/new
+- **Public Security Advisories**: https://github.com/danieljustus/OpenPass/security/advisories
 
 For non-security issues, please use the [public issue tracker](https://github.com/danieljustus/OpenPass/issues).

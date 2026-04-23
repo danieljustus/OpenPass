@@ -100,7 +100,7 @@ This command generates a new 32-byte random token and writes it to the
 mcp-token file in your vault directory. Any MCP clients using the old token
 will need to be updated with the new token.
 
-After rotating, run 'openpass mcp-config <agent> --http' to see the new token.`,
+After rotating, run 'openpass mcp-config [agent] --http' to see the new token.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vDir, err := vaultPath()
