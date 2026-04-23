@@ -129,8 +129,7 @@ release:
     ```
 
 brews:
-  - id: openpass
-    name: openpass
+  - name: openpass
     repository:
       owner: danieljustus
       name: homebrew-tap
