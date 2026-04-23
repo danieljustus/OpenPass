@@ -124,6 +124,34 @@ Most editors support EditorConfig natively or via plugin. See [editorconfig.org]
 - Prefix error messages with lowercase context: `"vault: failed to open"`
 - Use `fmt.Errorf` with `%w` for error wrapping
 
+### File Handle Management
+
+Always use `defer` to close file handles immediately after opening:
+
+```go
+// Correct: defer close immediately after error check
+file, err := os.Open(path)
+if err != nil {
+    return err
+}
+defer func() { _ = file.Close() }()
+
+// For long-lived resources (e.g., loggers), store the handle in a struct
+// and provide a Close() method for cleanup:
+type Logger struct {
+    file *os.File
+}
+
+func (l *Logger) Close() error {
+    if l.file != nil {
+        return l.file.Close()
+    }
+    return nil
+}
+```
+
+This ensures file handles are closed even on early returns or panics.
+
 ### Output Streams
 
 OpenPass follows standard Unix conventions for output streams:

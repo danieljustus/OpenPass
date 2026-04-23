@@ -125,6 +125,21 @@ type Match struct {
 	Fields []string
 }
 
+// searchIdentity holds the cached decryption identity for search operations.
+//
+// DESIGN DECISION: Global State vs Per-Vault Context
+//
+// This is intentionally global state because:
+//   1. OpenPass operates with a single active vault per process
+//   2. The identity is session-scoped (tied to unlock duration), not vault-scoped
+//   3. RWMutex provides thread-safe access verified by `go test -race`
+//   4. Per-vault caching would add complexity without clear benefit for single-vault usage
+//
+// Tradeoffs accepted:
+//   - Parallel vault access in tests requires careful sequencing
+//   - Multiple vaults in same process share cache (invalid for OpenPass use case)
+//
+// Future: If multi-vault support is needed, add vaultDir key to a map[VaultDir]*Identity.
 var (
 	searchIdentityMu sync.RWMutex
 	searchIdentity   *age.X25519Identity

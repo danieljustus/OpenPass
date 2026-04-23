@@ -224,21 +224,48 @@ func runHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault
 	// Per-agent protocol handler cache: one handler per agent name, created on first request.
 	// Each handler holds its own MCP server and audit log file handle.
 	handlerCache := make(map[string]*mcp.ProtocolHandler)
-	var cacheMu sync.Mutex
+	var cacheMu sync.RWMutex
 
 	handlerForAgent := func(agentName string) (*mcp.ProtocolHandler, error) {
-		cacheMu.Lock()
-		defer cacheMu.Unlock()
+		cacheMu.RLock()
 		if h, ok := handlerCache[agentName]; ok {
+			cacheMu.RUnlock()
 			return h, nil
 		}
-		mcpServer, err := mcpFactory.New(v, agentName, "http")
-		if err != nil {
-			return nil, err
+		cacheMu.RUnlock()
+
+		type result struct {
+			handler *mcp.ProtocolHandler
+			err     error
 		}
-		h := mcp.NewProtocolHandler("openpass", "1.0.0", mcpServer)
-		handlerCache[agentName] = h
-		return h, nil
+		resultChan := make(chan result, 1)
+
+		go func() {
+			mcpServer, err := mcpFactory.New(v, agentName, "http")
+			if err != nil {
+				resultChan <- result{err: err}
+				return
+			}
+			h := mcp.NewProtocolHandler("openpass", "1.0.0", mcpServer)
+
+			cacheMu.Lock()
+			if existing, ok := handlerCache[agentName]; ok {
+				_ = h.Close()
+				cacheMu.Unlock()
+				resultChan <- result{handler: existing}
+				return
+			}
+			handlerCache[agentName] = h
+			cacheMu.Unlock()
+			resultChan <- result{handler: h}
+		}()
+
+		select {
+		case res := <-resultChan:
+			return res.handler, res.err
+		case <-time.After(10 * time.Second):
+			return nil, fmt.Errorf("handler creation timeout for agent %q: creation took longer than 10s", agentName)
+		}
 	}
 
 	mux := http.NewServeMux()

@@ -56,7 +56,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -175,7 +174,7 @@ func LoadPassphrase(vaultDir string) (string, error) {
 	}
 
 	if sess.TTL <= 0 {
-		return "", errors.New("session expired")
+		return "", fmt.Errorf("session expired for vault %s: TTL is zero or negative", vaultDir)
 	}
 
 	lastActivity := sess.LastAccess
@@ -184,7 +183,7 @@ func LoadPassphrase(vaultDir string) (string, error) {
 	}
 	if time.Since(lastActivity) > time.Duration(sess.TTL) {
 		_ = ClearSession(vaultDir)
-		return "", errors.New("session expired")
+		return "", fmt.Errorf("session expired for vault %s: last activity %v exceeded TTL %v", vaultDir, lastActivity.Format(time.RFC3339), time.Duration(sess.TTL))
 	}
 
 	passphrase, resolveErr := resolvePassphrase(&sess, vaultDir)
@@ -224,7 +223,7 @@ func resolvePassphrase(sess *storedSession, vaultDir string) (string, error) {
 		return plain, nil
 	}
 
-	return "", errors.New("session expired")
+	return "", fmt.Errorf("session expired for vault %s: no passphrase data available", vaultDir)
 }
 
 func ClearSession(vaultDir string) error {

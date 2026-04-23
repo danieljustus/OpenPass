@@ -51,12 +51,58 @@ func BenchmarkFind_50kEntries_FieldSearch(b *testing.B) {
 	benchmarkFindFieldSearch(b, 50000)
 }
 
-func BenchmarkFind_10kEntries_Concurrent(b *testing.B) {
+// BenchmarkFindConcurrent_* benchmarks with varying worker counts and vault sizes
+func BenchmarkFindConcurrent_100_Entries_1_Worker(b *testing.B) {
+	benchmarkFindConcurrent(b, 100, 1)
+}
+
+func BenchmarkFindConcurrent_100_Entries_2_Workers(b *testing.B) {
+	benchmarkFindConcurrent(b, 100, 2)
+}
+
+func BenchmarkFindConcurrent_100_Entries_4_Workers(b *testing.B) {
+	benchmarkFindConcurrent(b, 100, 4)
+}
+
+func BenchmarkFindConcurrent_100_Entries_8_Workers(b *testing.B) {
+	benchmarkFindConcurrent(b, 100, 8)
+}
+
+func BenchmarkFindConcurrent_1k_Entries_1_Worker(b *testing.B) {
+	benchmarkFindConcurrent(b, 1000, 1)
+}
+
+func BenchmarkFindConcurrent_1k_Entries_2_Workers(b *testing.B) {
+	benchmarkFindConcurrent(b, 1000, 2)
+}
+
+func BenchmarkFindConcurrent_1k_Entries_4_Workers(b *testing.B) {
+	benchmarkFindConcurrent(b, 1000, 4)
+}
+
+func BenchmarkFindConcurrent_1k_Entries_8_Workers(b *testing.B) {
+	benchmarkFindConcurrent(b, 1000, 8)
+}
+
+func BenchmarkFindConcurrent_10k_Entries_1_Worker(b *testing.B) {
+	benchmarkFindConcurrent(b, 10000, 1)
+}
+
+func BenchmarkFindConcurrent_10k_Entries_2_Workers(b *testing.B) {
+	benchmarkFindConcurrent(b, 10000, 2)
+}
+
+func BenchmarkFindConcurrent_10k_Entries_4_Workers(b *testing.B) {
 	benchmarkFindConcurrent(b, 10000, 4)
 }
 
-func BenchmarkFind_1kEntries_Concurrent(b *testing.B) {
-	benchmarkFindConcurrent(b, 1000, 4)
+func BenchmarkFindConcurrent_10k_Entries_8_Workers(b *testing.B) {
+	benchmarkFindConcurrent(b, 10000, 8)
+}
+
+// BenchmarkFindConcurrent_10k_Entries_DefaultWorkers uses default worker count (4)
+func BenchmarkFindConcurrent_10k_Entries_DefaultWorkers(b *testing.B) {
+	benchmarkFindConcurrent(b, 10000, 0)
 }
 
 func benchmarkList(b *testing.B, numEntries int) {
