@@ -388,7 +388,7 @@ func runHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault
 			_ = h.Close()
 		}
 		cacheMu.Unlock()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		shutdownCtx, cancel := context.WithTimeout(ctx, shutdownTimeout)
 		defer cancel()
 		_ = server.Shutdown(shutdownCtx)
 	}()

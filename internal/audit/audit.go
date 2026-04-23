@@ -192,10 +192,12 @@ func (l *Logger) LogEntry(entry LogEntry) {
 		return
 	}
 	data = append(data, '\n')
-	//nolint:errcheck // Best effort logging - if write fails, we can't do much
-	_, _ = l.file.Write(data)
-	//nolint:errcheck // Best effort sync - if sync fails, data may still be written by OS
-	_ = l.file.Sync()
+	if _, err := l.file.Write(data); err != nil {
+		fmt.Fprintf(os.Stderr, "audit log write failed: %v\n", err)
+	}
+	if err := l.file.Sync(); err != nil {
+		fmt.Fprintf(os.Stderr, "audit log sync failed: %v\n", err)
+	}
 }
 
 func (l *Logger) rotateIfNeeded() error {

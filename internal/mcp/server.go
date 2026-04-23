@@ -88,8 +88,9 @@ func (s *Server) Build() *mcpServer {
 
 // ServeStdio runs the MCP server using stdio transport.
 func (s *Server) ServeStdio(ctx context.Context) error {
-	_ = ctx
-	return ServeStdio(s.Build())
+	transport := NewStdioTransport()
+	handler := NewProtocolHandler("OpenPass", "1.0.0", s)
+	return transport.Start(ctx, handler.HandleMessage)
 }
 
 func (s *Server) authorize(path string, write bool, approved bool) error {
