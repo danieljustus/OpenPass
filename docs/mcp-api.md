@@ -41,6 +41,7 @@ OpenPass exposes a Model Context Protocol (MCP) server that allows AI agents to 
 | `set_entry_field` | Store or update a field | **Yes** |
 | `delete_entry` | Delete an entry | **Yes** |
 | `openpass_delete` | Deprecated alias for delete_entry | **Yes** |
+| `secure_input` | Prompt user for sensitive data via TTY | **Yes** |
 
 ---
 
@@ -427,6 +428,49 @@ Generate a Time-based One-Time Password (TOTP) code from a stored TOTP secret.
 ```
 
 **Security Note**: This tool only returns the generated code, not the underlying TOTP secret. Use `redactFields` in agent configuration to prevent access to raw secrets while still allowing code generation.
+
+---
+
+### secure_input
+
+Prompt the user for sensitive data via an interactive TTY and store it without exposing the value to the agent. Only available in stdio mode with a TTY.
+
+**Request**:
+
+```json
+{
+  "tool": "secure_input",
+  "arguments": {
+    "path": "new-service",
+    "field": "password",
+    "description": "Enter the password for new-service"
+  }
+}
+```
+
+**Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `path` | string | Yes | Entry path to store the value |
+| `field` | string | Yes | Field name to store the value under |
+| `description` | string | No | Optional description shown to the user in the prompt |
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "path": "new-service",
+  "field": "password"
+}
+```
+
+**Notes**:
+- Only available in stdio mode when a TTY is present
+- The agent never sees the value being stored
+- Requires `canWrite: true` in agent profile
+- Triggers automatic git commit (if enabled)
 
 ---
 

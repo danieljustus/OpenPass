@@ -218,8 +218,16 @@ func runHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault
 		return fmt.Errorf("load token: %w", err)
 	}
 
-	rateLimiter := mcp.NewRateLimiter(60, time.Minute)
-	stopCleanup := rateLimiter.StartCleanup(ctx, 5*time.Minute)
+	rateLimit := 60
+	if v != nil && v.Config != nil && v.Config.MCP != nil && v.Config.MCP.RateLimit >= 0 {
+		rateLimit = v.Config.MCP.RateLimit
+	}
+	var rateLimiter *mcp.RateLimiter
+	var stopCleanup func()
+	if rateLimit > 0 {
+		rateLimiter = mcp.NewRateLimiter(rateLimit, time.Minute)
+		stopCleanup = rateLimiter.StartCleanup(ctx, 5*time.Minute)
+	}
 
 	// Per-agent protocol handler cache: one handler per agent name, created on first request.
 	// Each handler holds its own MCP server and audit log file handle.
@@ -343,7 +351,11 @@ func runHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	})
-	mux.Handle("/mcp", mcp.RateLimiterMiddleware(rateLimiter, mcp.OriginValidationMiddleware(addr, mcp.BearerAuthMiddleware(token, mcp.AgentHeaderMiddleware(mcpHandler)))))
+	mcpChain := mcp.OriginValidationMiddleware(addr, mcp.BearerAuthMiddleware(token, mcp.AgentHeaderMiddleware(mcpHandler)))
+	if rateLimiter != nil {
+		mcpChain = mcp.RateLimiterMiddleware(rateLimiter, mcpChain)
+	}
+	mux.Handle("/mcp", mcpChain)
 
 	readHeaderTimeout := 5 * time.Second
 	readTimeout := 10 * time.Second
@@ -381,7 +393,9 @@ func runHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault
 		if stopCleanup != nil {
 			stopCleanup()
 		}
-		_ = rateLimiter.Close()
+		if rateLimiter != nil {
+			_ = rateLimiter.Close()
+		}
 		// Close all cached agent protocol handlers (closes audit log file handles)
 		cacheMu.Lock()
 		for _, h := range handlerCache {

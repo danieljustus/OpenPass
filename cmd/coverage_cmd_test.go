@@ -874,7 +874,11 @@ func TestCmdGet_TOTPDisplay(t *testing.T) {
 	_ = vaultpkg.WriteEntry(vaultDir, "totp-display", entry, identity.Identity)
 	setPassEnv(t, passphrase)
 	defer setupVaultFlag(t, vaultDir)()
-	out := execWithStdout("--vault", vaultDir, "get", "totp-display")
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "get", "totp-display"})
+	defer rootCmd.SetArgs(nil)
+	out := captureStderr(func() {
+		_ = rootCmd.Execute()
+	})
 	if !strings.Contains(out, "TOTP Code") {
 		t.Errorf("expected TOTP Code in output, got: %s", out)
 	}

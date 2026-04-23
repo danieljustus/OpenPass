@@ -73,6 +73,13 @@ mcp:
   # Default timeout for interactive approval prompts (approvalMode: prompt).
   # Can be overridden per agent profile via approvalTimeout.
   # approval_timeout: 30s
+  # Rate limit for MCP HTTP requests (requests per minute). Set to 0 to disable.
+  # rate_limit: 60
+
+# Update check configuration.
+update:
+  # Cache TTL for update check results. Set to 0 to disable caching.
+  # cache_ttl: 24h
 
 # Clipboard behavior.
 clipboard:

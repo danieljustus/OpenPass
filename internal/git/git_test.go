@@ -79,7 +79,7 @@ func TestCreateGitignorePreservesExistingAndAppendsMissingEntries(t *testing.T) 
 	if !strings.HasPrefix(updated, customContent) {
 		t.Error("CreateGitignore should preserve existing .gitignore content")
 	}
-	for _, entry := range []string{"mcp-token", ".runtime-port", ".index"} {
+	for _, entry := range []string{"mcp-token", ".runtime-port"} {
 		if !strings.Contains(updated, entry) {
 			t.Errorf("expected .gitignore to contain %q", entry)
 		}
@@ -204,7 +204,6 @@ func TestAutoCommitDoesNotCommitRuntimeArtifacts(t *testing.T) {
 	writeFile(t, dir, "vault.txt", []byte("secret"))
 	writeFile(t, dir, "mcp-token", []byte("do-not-commit-token"))
 	writeFile(t, dir, ".runtime-port", []byte("12345"))
-	writeFile(t, dir, ".index", []byte(`{"entries":["vault"]}`))
 
 	if err := AutoCommit(dir, "add vault file"); err != nil {
 		t.Fatalf("AutoCommit() error = %v", err)
@@ -226,7 +225,7 @@ func TestAutoCommitDoesNotCommitRuntimeArtifacts(t *testing.T) {
 	if _, err := commit.File("vault.txt"); err != nil {
 		t.Fatalf("expected vault.txt in commit: %v", err)
 	}
-	for _, path := range []string{"mcp-token", ".runtime-port", ".index"} {
+	for _, path := range []string{"mcp-token", ".runtime-port"} {
 		if _, err := commit.File(path); err == nil {
 			t.Fatalf("runtime artifact %s was committed", path)
 		}

@@ -15,9 +15,7 @@ import (
 	"github.com/danieljustus/OpenPass/internal/pathutil"
 )
 
-// Entry represents a vault entry with flexible data storage.
-// This is the legacy format that uses map[string]any for data storage.
-// For a more structured approach, use EntryV2.
+// Entry represents a vault entry with flexible data storage using map[string]any.
 type Entry struct {
 	Data     map[string]any `json:"data"`
 	Metadata EntryMetadata  `json:"meta"`
@@ -350,49 +348,39 @@ func mergeMaps(dst, src map[string]any) {
 	}
 }
 
-// ==================== EntryV2 Functions ====================
-
-// ReadEntryV2 reads an entry and converts it to EntryV2 format
-// If the stored entry is in legacy format, it will be converted
-func ReadEntryV2(vaultDir, path string, identity *age.X25519Identity) (*EntryV2, error) {
-	entry, err := ReadEntry(vaultDir, path, identity)
-	if err != nil {
-		return nil, err
+// ExtractTOTP extracts TOTP configuration from entry data.
+// Returns the secret, algorithm, digits, period, and a boolean indicating
+// whether a valid TOTP configuration was found.
+func ExtractTOTP(data map[string]any) (secret, algorithm string, digits, period int, hasTOTP bool) {
+	totpData, ok := data["totp"].(map[string]any)
+	if !ok {
+		return "", "", 0, 0, false
 	}
-	return EntryV2FromLegacy(entry), nil
+
+	secretVal, ok := totpData["secret"].(string)
+	if !ok || secretVal == "" {
+		return "", "", 0, 0, false
+	}
+
+	algorithm = "SHA1"
+	if v, ok := totpData["algorithm"].(string); ok && v != "" {
+		algorithm = v
+	}
+
+	digits = 6
+	if v, ok := totpData["digits"].(float64); ok {
+		digits = int(v)
+	}
+
+	period = 30
+	if v, ok := totpData["period"].(float64); ok {
+		period = int(v)
+	}
+
+	return secretVal, algorithm, digits, period, true
 }
 
-// WriteEntryV2 writes an EntryV2 to the vault
-func WriteEntryV2(vaultDir, path string, entry *EntryV2, identity *age.X25519Identity) error {
-	if entry == nil {
-		return errors.New("nil entry")
-	}
-
-	// Convert to legacy format for storage
-	legacy := entry.ToLegacyEntry()
-	return WriteEntry(vaultDir, path, legacy, identity)
-}
-
-// MergeEntryV2 merges partial data into an existing EntryV2
-func MergeEntryV2(vaultDir, path string, mergeFn func(*EntryV2) error, identity *age.X25519Identity) (*EntryV2, error) {
-	entry, err := ReadEntryV2(vaultDir, path, identity)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := mergeFn(entry); err != nil {
-		return nil, err
-	}
-
-	if err := WriteEntryV2(vaultDir, path, entry, identity); err != nil {
-		return nil, err
-	}
-
-	return ReadEntryV2(vaultDir, path, identity)
-}
-
-// GetField retrieves a field value from an entry, supporting both
-// legacy map-based data and structured EntryV2 fields
+// GetField retrieves a field value from the entry's data map.
 func (e *Entry) GetField(name string) (any, bool) {
 	if e.Data == nil {
 		return nil, false

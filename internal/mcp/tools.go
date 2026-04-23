@@ -309,18 +309,13 @@ func (s *Server) handleGenerateTOTP(ctx context.Context, req CallToolRequest) (*
 		return nil, err
 	}
 
-	entryV2 := vault.EntryV2FromLegacy(entry)
-	if entryV2.TOTP == nil || entryV2.TOTP.Secret == "" {
+	secret, algorithm, digits, period, hasTOTP := vault.ExtractTOTP(entry.Data)
+	if !hasTOTP {
 		s.logAudit("totp", path, false)
 		return nil, fmt.Errorf("entry %q does not have TOTP configuration", path)
 	}
 
-	totpCode, err := crypto.GenerateTOTP(
-		entryV2.TOTP.Secret,
-		entryV2.TOTP.Algorithm,
-		entryV2.TOTP.Digits,
-		entryV2.TOTP.Period,
-	)
+	totpCode, err := crypto.GenerateTOTP(secret, algorithm, digits, period)
 	if err != nil {
 		s.logAudit("totp", path, false)
 		return nil, fmt.Errorf("failed to generate TOTP code: %w", err)

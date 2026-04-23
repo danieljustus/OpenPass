@@ -4,9 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
 
+	configpkg "github.com/danieljustus/OpenPass/internal/config"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	updatepkg "github.com/danieljustus/OpenPass/internal/update"
 )
@@ -16,8 +20,25 @@ type updateChecker interface {
 	CheckWithForce(ctx context.Context, currentVersion string, force bool) (*updatepkg.Result, error)
 }
 
+func updateCacheTTL() time.Duration {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return updatepkg.DefaultCacheTTL
+	}
+	cfg, err := configpkg.Load(filepath.Join(home, ".openpass", "config.yaml"))
+	if err != nil {
+		return updatepkg.DefaultCacheTTL
+	}
+	if cfg.Update != nil && cfg.Update.CacheTTL > 0 {
+		return cfg.Update.CacheTTL
+	}
+	return updatepkg.DefaultCacheTTL
+}
+
 var updateCheckerFactory = func() updateChecker {
-	return updatepkg.NewChecker(nil)
+	checker := updatepkg.NewChecker(nil)
+	checker.Cache = updatepkg.NewCacheWithTTL("", updateCacheTTL())
+	return checker
 }
 
 var (

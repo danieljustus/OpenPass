@@ -61,8 +61,6 @@ identity.age
 # Ignore OpenPass runtime artifacts
 mcp-token
 .runtime-port
-.index
-.index.*
 # Ignore OS files
 .DS_Store
 Thumbs.db
@@ -77,7 +75,6 @@ Thumbs.db
 var protectedRuntimePaths = []string{
 	"mcp-token",
 	".runtime-port",
-	".index",
 }
 
 type Commit struct {

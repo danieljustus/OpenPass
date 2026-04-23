@@ -178,7 +178,7 @@ If sensitive runtime artifacts like `mcp-token` or `.runtime-port` were accident
 ```bash
 cd ~/.openpass
 # Remove from git index but keep local file
-git rm --cached mcp-token .runtime-port .index
+git rm --cached mcp-token .runtime-port
 # Commit the removal
 git commit -m "Remove sensitive runtime artifacts from tracking"
 # Push changes
@@ -452,50 +452,6 @@ rm ~/.openpass/mcp-token.backup
 
 **Note**: During rotation (steps 2-7), agents cannot connect. Keep this window minimal.
 
-### Corrupted .index File Recovery
-
-The `.index` file maintains a cache of vault entry metadata. If corrupted, vault operations may fail or return incorrect results.
-
-**Symptoms**:
-- `list_entries` returns incorrect or incomplete results
-- Operations fail with "index mismatch" errors
-- Vault appears empty but entries exist in `entries/` directory
-
-**Recovery Procedure**:
-
-1. Stop the MCP server:
-   ```bash
-   pkill -f "openpass serve"
-   ```
-
-2. Back up the corrupted index:
-   ```bash
-   cp ~/.openpass/.index ~/.openpass/.index.corrupted.$(date +%Y%m%d_%H%M%S)
-   ```
-
-3. Remove the corrupted index:
-   ```bash
-   rm ~/.openpass/.index
-   ```
-
-4. Rebuild the index by unlocking the vault:
-   ```bash
-   openpass unlock
-   openpass list
-   ```
-
-5. Verify all entries are accessible:
-   ```bash
-   openpass list | wc -l
-   ls ~/.openpass/entries/*.age | wc -l
-   # These counts should match (plus subdirectory entries)
-   ```
-
-6. Restart the MCP server:
-   ```bash
-   openpass serve --port 8080
-   ```
-
 ### Prevention Recommendations
 
 1. **Regular Backups**: Include `mcp-token` in your vault backup strategy
@@ -504,10 +460,9 @@ The `.index` file maintains a cache of vault entry metadata. If corrupted, vault
 cp ~/.openpass/mcp-token ~/backups/openpass/
    ```
 
-2. **Version Control Exclusion**: Ensure `.index` and `mcp-token` are in `.gitignore`:
+2. **Version Control Exclusion**: Ensure runtime files are in `.gitignore`:
    ```gitignore
    # OpenPass runtime files
-   .index
    mcp-token
    .runtime-port
    ```

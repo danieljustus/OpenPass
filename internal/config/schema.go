@@ -35,6 +35,12 @@ type MCPConfig struct {
 	WriteTimeout      time.Duration `yaml:"write_timeout,omitempty"`
 	ShutdownTimeout   time.Duration `yaml:"shutdown_timeout,omitempty"`
 	ApprovalTimeout   time.Duration `yaml:"approval_timeout,omitempty"`
+	RateLimit         int           `yaml:"rate_limit,omitempty"` // requests per minute, 0 = disabled
+}
+
+// UpdateConfig holds update check-related configuration.
+type UpdateConfig struct {
+	CacheTTL time.Duration `yaml:"cache_ttl,omitempty"`
 }
 
 // ClipboardConfig holds clipboard-related configuration.
@@ -70,6 +76,14 @@ func defaultMCPConfig() MCPConfig {
 		WriteTimeout:      10 * time.Second,
 		ShutdownTimeout:   5 * time.Second,
 		ApprovalTimeout:   30 * time.Second,
+		RateLimit:         60,
+	}
+}
+
+// defaultUpdateConfig returns the default update check configuration.
+func defaultUpdateConfig() UpdateConfig {
+	return UpdateConfig{
+		CacheTTL: 24 * time.Hour,
 	}
 }
 
@@ -109,6 +123,13 @@ type fileMCPConfig struct {
 	WriteTimeout      *time.Duration `yaml:"write_timeout,omitempty"`
 	ShutdownTimeout   *time.Duration `yaml:"shutdown_timeout,omitempty"`
 	ApprovalTimeout   *time.Duration `yaml:"approval_timeout,omitempty"`
+	RateLimit         *int           `yaml:"rate_limit,omitempty"`
+}
+
+// fileUpdateConfig is the file-based update configuration with pointer fields
+// for optional YAML unmarshaling.
+type fileUpdateConfig struct {
+	CacheTTL *time.Duration `yaml:"cache_ttl,omitempty"`
 }
 
 // fileClipboardConfig is the file-based clipboard configuration with pointer fields
@@ -191,6 +212,22 @@ func MergeFileMCPConfig(fileCfg *fileMCPConfig, defaults MCPConfig) MCPConfig {
 	}
 	if fileCfg.ApprovalTimeout != nil {
 		result.ApprovalTimeout = *fileCfg.ApprovalTimeout
+	}
+	if fileCfg.RateLimit != nil {
+		result.RateLimit = *fileCfg.RateLimit
+	}
+	return result
+}
+
+// MergeFileUpdateConfig merges file config with defaults, returning the final
+// UpdateConfig. If fileCfg is nil, defaults are returned unchanged.
+func MergeFileUpdateConfig(fileCfg *fileUpdateConfig, defaults UpdateConfig) UpdateConfig {
+	if fileCfg == nil {
+		return defaults
+	}
+	result := defaults
+	if fileCfg.CacheTTL != nil {
+		result.CacheTTL = *fileCfg.CacheTTL
 	}
 	return result
 }

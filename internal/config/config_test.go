@@ -615,6 +615,72 @@ func mustHomeDir(t *testing.T) string {
 	return home
 }
 
+func TestLoadParsesRateLimitAndUpdateCacheTTL(t *testing.T) {
+	t.Parallel()
+
+	content := []byte(`
+mcp:
+  rate_limit: 120
+update:
+  cache_ttl: 12h
+`)
+	path := writeTempFile(t, content)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.MCP == nil {
+		t.Fatal("MCP config is nil")
+	}
+	if cfg.MCP.RateLimit != 120 {
+		t.Errorf("MCP.RateLimit = %d, want 120", cfg.MCP.RateLimit)
+	}
+	if cfg.Update == nil {
+		t.Fatal("Update config is nil")
+	}
+	if cfg.Update.CacheTTL != 12*time.Hour {
+		t.Errorf("Update.CacheTTL = %v, want 12h", cfg.Update.CacheTTL)
+	}
+}
+
+func TestLoadDefaultsForRateLimitAndUpdateCacheTTL(t *testing.T) {
+	t.Parallel()
+
+	path := writeTempFile(t, []byte("{}\n"))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	// When no MCP section is present, cfg.MCP is nil and callers use defaults
+	if cfg.MCP != nil {
+		t.Errorf("MCP config should be nil when not specified, got %+v", cfg.MCP)
+	}
+	// When no Update section is present, cfg.Update is nil and callers use defaults
+	if cfg.Update != nil {
+		t.Errorf("Update config should be nil when not specified, got %+v", cfg.Update)
+	}
+
+	// Verify defaults are used when section is explicitly empty
+	path2 := writeTempFile(t, []byte("mcp:\n  bind: 127.0.0.1\nupdate:\n  cache_ttl: 0s\n"))
+	cfg2, err := Load(path2)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg2.MCP == nil {
+		t.Fatal("MCP config is nil")
+	}
+	if cfg2.MCP.RateLimit != 60 {
+		t.Errorf("MCP.RateLimit default = %d, want 60", cfg2.MCP.RateLimit)
+	}
+	if cfg2.Update == nil {
+		t.Fatal("Update config is nil")
+	}
+	if cfg2.Update.CacheTTL != 0 {
+		t.Errorf("Update.CacheTTL = %v, want 0", cfg2.Update.CacheTTL)
+	}
+}
+
 func writeTempFile(t *testing.T, content []byte) string {
 	t.Helper()
 

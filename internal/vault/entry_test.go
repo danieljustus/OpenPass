@@ -336,16 +336,6 @@ func TestMergeEntryRecursiveMerge(t *testing.T) {
 	}
 }
 
-func TestReadEntryV2WithNonexistentEntry(t *testing.T) {
-	vaultDir := t.TempDir()
-	id := testutil.TempIdentity(t)
-
-	_, err := ReadEntryV2(vaultDir, "nonexistent", id)
-	if err == nil {
-		t.Fatal("expected error for nonexistent entry")
-	}
-}
-
 func TestGetEntryMetadataReturnsMetadataWithoutFullDecryption(t *testing.T) {
 	vaultDir := t.TempDir()
 	id := testutil.TempIdentity(t)

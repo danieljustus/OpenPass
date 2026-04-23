@@ -407,6 +407,7 @@ The MCP server exposes:
 - `delete_entry` — Delete an entry (if agent has write permissions)
 - `openpass_delete` — Deprecated alias for `delete_entry`
 - `generate_totp` — Generate a TOTP code without exposing the stored secret
+- `secure_input` — Prompt user for sensitive data via interactive TTY (stdio mode only)
 
 ## Security Notes
 

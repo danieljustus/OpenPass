@@ -140,28 +140,22 @@ var getCmd = &cobra.Command{
 				Modified: entry.Metadata.Updated.Format("2006-01-02 15:04"),
 				Fields:   entry.Data,
 			}
-			entryV2 := vaultpkg.EntryV2FromLegacy(entry)
-			if entryV2.TOTP != nil && entryV2.TOTP.Secret != "" {
-				totpCode, err := vaultcrypto.GenerateTOTP(
-					entryV2.TOTP.Secret,
-					entryV2.TOTP.Algorithm,
-					entryV2.TOTP.Digits,
-					entryV2.TOTP.Period,
-				)
-				if err == nil {
-					period := int64(totpCode.Period)
-					if period == 0 {
-						period = 30
-					}
-					now := time.Now().UTC()
-					remaining := period - (now.Unix() % period)
-					output.TOTP = &totpOutput{
-						Code:      totpCode.Code,
-						Period:    period,
-						Remaining: int(remaining),
-					}
+		if secret, algorithm, digits, period, hasTOTP := vaultpkg.ExtractTOTP(entry.Data); hasTOTP {
+			totpCode, err := vaultcrypto.GenerateTOTP(secret, algorithm, digits, period)
+			if err == nil {
+				period := int64(totpCode.Period)
+				if period == 0 {
+					period = 30
+				}
+				now := time.Now().UTC()
+				remaining := period - (now.Unix() % period)
+				output.TOTP = &totpOutput{
+					Code:      totpCode.Code,
+					Period:    period,
+					Remaining: int(remaining),
 				}
 			}
+		}
 			PrintJSON(output)
 			return nil
 		}
@@ -180,14 +174,8 @@ var getCmd = &cobra.Command{
 			fmt.Printf("%s: %v\n", k, entry.Data[k])
 		}
 
-		entryV2 := vaultpkg.EntryV2FromLegacy(entry)
-		if entryV2.TOTP != nil && entryV2.TOTP.Secret != "" {
-			totpCode, err := vaultcrypto.GenerateTOTP(
-				entryV2.TOTP.Secret,
-				entryV2.TOTP.Algorithm,
-				entryV2.TOTP.Digits,
-				entryV2.TOTP.Period,
-			)
+		if secret, algorithm, digits, period, hasTOTP := vaultpkg.ExtractTOTP(entry.Data); hasTOTP {
+			totpCode, err := vaultcrypto.GenerateTOTP(secret, algorithm, digits, period)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "\n[Warning: could not generate TOTP code: %v]\n", err)
 			} else {
@@ -199,7 +187,7 @@ var getCmd = &cobra.Command{
 				remaining := period - (now.Unix() % period)
 
 				fmt.Println()
-				fmt.Printf("TOTP Code: %s (expires in %ds)\n", totpCode.Code, remaining)
+				fmt.Fprintf(os.Stderr, "TOTP Code: %s (expires in %ds)\n", totpCode.Code, remaining)
 			}
 		}
 

@@ -46,8 +46,8 @@ var initCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("cannot read passphrase: %w", err)
 		}
-		if len(passphrase) < 8 {
-			return fmt.Errorf("passphrase must be at least 8 characters")
+		if len(passphrase) < 12 {
+			return fmt.Errorf("passphrase must be at least 12 characters")
 		}
 
 		cfg := config.Default()

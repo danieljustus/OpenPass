@@ -278,35 +278,19 @@ echo "ACTION REQUIRED: Update all agent configurations with new token"
 
 4. Update all agent configurations with new token
 
-### .index File Rebuild Procedure
+### Vault Integrity Check
 
-The `.index` file caches vault entry metadata. Rebuild it when:
-- Index corruption is detected
-- Manual vault modifications bypass OpenPass
-- Performance issues with large vaults
-
-**Rebuild Steps**:
+Verify that all entries are accessible:
 
 ```bash
-# 1. Stop MCP server
-pkill -f "openpass serve"
-
-# 2. Backup corrupted index
-cp ~/.openpass/.index ~/.openpass/.index.bak.$(date +%Y%m%d)
-
-# 3. Remove corrupted index
-rm ~/.openpass/.index
-
-# 4. Unlock vault and rebuild
-openpass unlock
-openpass list
-
-# 5. Verify integrity
+# 1. List all entries
 ENTRY_COUNT=$(openpass list | wc -l)
-FILE_COUNT=$(find ~/.openpass/entries -name "*.age" | wc -l)
-echo "Index entries: $ENTRY_COUNT, Files: $FILE_COUNT"
 
-# 6. Restart server
+# 2. Count entry files
+FILE_COUNT=$(find ~/.openpass/entries -name "*.age" | wc -l)
+
+# 3. Compare
+echo "Listed entries: $ENTRY_COUNT, Files: $FILE_COUNT"
 openpass serve --port 8080
 ```
 

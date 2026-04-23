@@ -25,11 +25,25 @@ type Config struct {
 	Vault          *VaultConfig            `yaml:"vault,omitempty"`
 	Git            *GitConfig              `yaml:"git,omitempty"`
 	MCP            *MCPConfig              `yaml:"mcp,omitempty"`
+	Update         *UpdateConfig           `yaml:"update,omitempty"`
 	Clipboard      *ClipboardConfig        `yaml:"clipboard,omitempty"`
 	VaultDir       string                  `yaml:"vaultDir"`
 	DefaultAgent   string                  `yaml:"defaultAgent"`
 	SessionTimeout time.Duration           `yaml:"sessionTimeout"`
 	UseTouchID     bool                    `yaml:"useTouchID"`
+}
+
+type fileConfig struct {
+	Agents         map[string]fileAgentProfile `yaml:"agents,omitempty"`
+	Vault          *fileVaultConfig            `yaml:"vault,omitempty"`
+	Git            *fileGitConfig              `yaml:"git,omitempty"`
+	MCP            *fileMCPConfig              `yaml:"mcp,omitempty"`
+	Update         *fileUpdateConfig           `yaml:"update,omitempty"`
+	Clipboard      *fileClipboardConfig        `yaml:"clipboard,omitempty"`
+	VaultDir       string                      `yaml:"vaultDir,omitempty"`
+	DefaultAgent   string                      `yaml:"defaultAgent,omitempty"`
+	SessionTimeout time.Duration               `yaml:"sessionTimeout,omitempty"`
+	UseTouchID     bool                        `yaml:"useTouchID,omitempty"`
 }
 
 type AgentProfile struct {
@@ -40,18 +54,6 @@ type AgentProfile struct {
 	CanWrite        bool          `yaml:"canWrite"`
 	RequireApproval bool          `yaml:"requireApproval"`
 	ApprovalTimeout time.Duration `yaml:"approvalTimeout,omitempty"`
-}
-
-type fileConfig struct {
-	Agents         map[string]fileAgentProfile `yaml:"agents,omitempty"`
-	Vault          *fileVaultConfig            `yaml:"vault,omitempty"`
-	Git            *fileGitConfig              `yaml:"git,omitempty"`
-	MCP            *fileMCPConfig              `yaml:"mcp,omitempty"`
-	Clipboard      *fileClipboardConfig        `yaml:"clipboard,omitempty"`
-	VaultDir       string                      `yaml:"vaultDir,omitempty"`
-	DefaultAgent   string                      `yaml:"defaultAgent,omitempty"`
-	SessionTimeout time.Duration               `yaml:"sessionTimeout,omitempty"`
-	UseTouchID     bool                        `yaml:"useTouchID,omitempty"`
 }
 
 type fileAgentProfile struct {
@@ -188,6 +190,11 @@ func Load(path string) (*Config, error) {
 		merged := MergeFileMCPConfig(raw.MCP, defaults)
 		cfg.MCP = &merged
 	}
+	if raw.Update != nil {
+		defaults := defaultUpdateConfig()
+		merged := MergeFileUpdateConfig(raw.Update, defaults)
+		cfg.Update = &merged
+	}
 	if raw.Clipboard != nil {
 		defaults := defaultClipboardConfig()
 		merged := MergeFileClipboardConfig(raw.Clipboard, defaults)
@@ -248,6 +255,7 @@ func (c *Config) Save() error {
 		mcpBind := c.MCP.Bind
 		mcpStdio := c.MCP.Stdio
 		mcpTokenFile := c.MCP.HTTPTokenFile
+		mcpRateLimit := c.MCP.RateLimit
 		raw.MCP = &fileMCPConfig{
 			Port:              &mcpPort,
 			Bind:              &mcpBind,
@@ -258,6 +266,13 @@ func (c *Config) Save() error {
 			WriteTimeout:      &c.MCP.WriteTimeout,
 			ShutdownTimeout:   &c.MCP.ShutdownTimeout,
 			ApprovalTimeout:   &c.MCP.ApprovalTimeout,
+			RateLimit:         &mcpRateLimit,
+		}
+	}
+
+	if c.Update != nil {
+		raw.Update = &fileUpdateConfig{
+			CacheTTL: &c.Update.CacheTTL,
 		}
 	}
 
