@@ -339,9 +339,7 @@ For full details, see [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## Getting Help
 
-- **Questions**: Open a discussion in GitHub Discussions
-- **Chat**: Join the project community channels
-- **Issues**: Use GitHub Issues for bugs and feature requests
+- **Issues**: Use [GitHub Issues](https://github.com/danieljustus/OpenPass/issues) for bugs, feature requests, and questions
 
 ## License
 
