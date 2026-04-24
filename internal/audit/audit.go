@@ -3,6 +3,7 @@ package audit
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -60,7 +61,7 @@ func parseAuditConfig() AuditConfig {
 	}
 
 	if val := os.Getenv(envMaxSizeMB); val != "" {
-		if mb, err := strconv.ParseInt(val, 10, 64); err == nil && mb > 0 {
+		if mb, err := strconv.ParseInt(val, 10, 64); err == nil && mb >= 0 {
 			cfg.MaxFileSize = mb * 1024 * 1024
 		}
 	}
@@ -367,10 +368,9 @@ func (l *Logger) HealthCheck() (*HealthStatus, error) {
 			if !entry.OK {
 				status.ErrorCount++
 			}
-			if status.LastEntryTime == "" {
-				status.LastEntryTime = entry.Timestamp
-				status.LastEntryOK = &entry.OK
-			}
+			status.LastEntryTime = entry.Timestamp
+			ok := entry.OK
+			status.LastEntryOK = &ok
 		}
 	}
 
@@ -400,10 +400,14 @@ func (l *Logger) lastNEntries(n int) ([]LogEntry, error) {
 		return nil, nil
 	}
 
-	var entries []LogEntry
-	reader := io.NewSectionReader(l.file, 0, fileSize)
+	// Read file content into memory for parsing (avoids bad file descriptor with O_APPEND)
+	data, err := os.ReadFile(l.path)
+	if err != nil {
+		return nil, err
+	}
 
-	scanner := bufio.NewScanner(reader)
+	var entries []LogEntry
+	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Split(scanLines)
 
 	for scanner.Scan() {

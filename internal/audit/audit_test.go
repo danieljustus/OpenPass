@@ -758,3 +758,720 @@ func TestNoLogLossDuringRotation(t *testing.T) {
 
 	defer func() { _ = logger.Close() }()
 }
+
+func TestHealthCheckNilLogger(t *testing.T) {
+	var l *Logger
+	status, err := l.HealthCheck()
+	if err == nil {
+		t.Fatal("expected error for nil logger")
+	}
+	if status.OK {
+		t.Fatal("expected OK=false for nil logger")
+	}
+}
+
+func TestHealthCheckNilFile(t *testing.T) {
+	l := &Logger{file: nil}
+	status, err := l.HealthCheck()
+	if err == nil {
+		t.Fatal("expected error for nil file")
+	}
+	if status.OK {
+		t.Fatal("expected OK=false for nil file")
+	}
+}
+
+func TestHealthCheckHealthy(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	logger, err := New("health-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = logger.Close() }()
+
+	// Write some entries
+	logger.LogEntry(LogEntry{Agent: "health-test", Action: "get", OK: true})
+	logger.LogEntry(LogEntry{Agent: "health-test", Action: "set", OK: false, Reason: "denied"})
+
+	status, err := logger.HealthCheck()
+	if err != nil {
+		t.Fatalf("HealthCheck() error = %v", err)
+	}
+	if !status.OK {
+		t.Fatal("expected OK=true")
+	}
+	if status.Agent != "health-test" {
+		t.Fatalf("agent = %s, want health-test", status.Agent)
+	}
+	if !status.WriteAccessible {
+		t.Fatal("expected WriteAccessible=true")
+	}
+	if status.LogFileSize == 0 {
+		t.Fatal("expected non-zero LogFileSize")
+	}
+	if status.ErrorCount != 1 {
+		t.Fatalf("ErrorCount = %d, want 1", status.ErrorCount)
+	}
+	if status.LastEntryTime == "" {
+		t.Fatal("expected non-empty LastEntryTime")
+	}
+	if status.LastEntryOK == nil || *status.LastEntryOK {
+		t.Fatal("expected LastEntryOK=false (last entry was error)")
+	}
+}
+
+func TestHealthCheckEmptyLog(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	logger, err := New("empty-health-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = logger.Close() }()
+
+	status, err := logger.HealthCheck()
+	if err != nil {
+		t.Fatalf("HealthCheck() error = %v", err)
+	}
+	if !status.OK {
+		t.Fatal("expected OK=true for empty log")
+	}
+	if status.ErrorCount != 0 {
+		t.Fatalf("ErrorCount = %d, want 0", status.ErrorCount)
+	}
+	if status.LastEntryTime != "" {
+		t.Fatal("expected empty LastEntryTime for empty log")
+	}
+}
+
+func TestHealthCheckNeedsRotationBySize(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("OPENPASS_AUDIT_MAX_SIZE_MB", "0") // Very small
+
+	ReloadConfig()
+	defer ReloadConfig()
+
+	logger, err := New("rotation-health-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = logger.Close() }()
+
+	logger.LogEntry(LogEntry{Agent: "test", Action: "test", OK: true})
+
+	status, err := logger.HealthCheck()
+	if err != nil {
+		t.Fatalf("HealthCheck() error = %v", err)
+	}
+	if !status.NeedsRotation {
+		t.Fatal("expected NeedsRotation=true for oversized file")
+	}
+}
+
+func TestGetErrorsFiltersErrors(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	logger, err := New("errors-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = logger.Close() }()
+
+	// Write mix of ok and error entries
+	logger.LogEntry(LogEntry{Agent: "test", Action: "get", OK: true})
+	logger.LogEntry(LogEntry{Agent: "test", Action: "set", OK: false, Reason: "denied"})
+	logger.LogEntry(LogEntry{Agent: "test", Action: "list", OK: true})
+	logger.LogEntry(LogEntry{Agent: "test", Action: "delete", OK: false, Reason: "not_found"})
+
+	errors, err := logger.GetErrors(100)
+	if err != nil {
+		t.Fatalf("GetErrors() error = %v", err)
+	}
+	if len(errors) != 2 {
+		t.Fatalf("GetErrors() returned %d errors, want 2", len(errors))
+	}
+	if errors[0].Action != "set" {
+		t.Fatalf("errors[0].Action = %s, want set", errors[0].Action)
+	}
+	if errors[0].Reason != "denied" {
+		t.Fatalf("errors[0].Reason = %s, want denied", errors[0].Reason)
+	}
+	if errors[1].Action != "delete" {
+		t.Fatalf("errors[1].Action = %s, want delete", errors[1].Action)
+	}
+}
+
+func TestGetErrorsNoErrors(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	logger, err := New("no-errors-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = logger.Close() }()
+
+	logger.LogEntry(LogEntry{Agent: "test", Action: "get", OK: true})
+
+	errors, err := logger.GetErrors(100)
+	if err != nil {
+		t.Fatalf("GetErrors() error = %v", err)
+	}
+	if len(errors) != 0 {
+		t.Fatalf("GetErrors() returned %d errors, want 0", len(errors))
+	}
+}
+
+func TestGetErrorsLimit(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	logger, err := New("limit-errors-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = logger.Close() }()
+
+	// Write 10 error entries
+	for i := 0; i < 10; i++ {
+		logger.LogEntry(LogEntry{Agent: "test", Action: fmt.Sprintf("action%d", i), OK: false, Reason: "error"})
+	}
+
+	errors, err := logger.GetErrors(5)
+	if err != nil {
+		t.Fatalf("GetErrors() error = %v", err)
+	}
+	if len(errors) != 5 {
+		t.Fatalf("GetErrors() returned %d errors, want 5", len(errors))
+	}
+}
+
+func TestGetErrorsNilLogger(t *testing.T) {
+	var l *Logger
+	_, err := l.GetErrors(100)
+	if err == nil {
+		t.Fatal("expected error for nil logger")
+	}
+}
+
+func TestLastNEntriesEmptyFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	logger, err := New("empty-entries-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = logger.Close() }()
+
+	entries, err := logger.lastNEntries(10)
+	if err != nil {
+		t.Fatalf("lastNEntries() error = %v", err)
+	}
+	if entries != nil {
+		t.Fatalf("expected nil entries for empty file, got %d", len(entries))
+	}
+}
+
+func TestLastNEntriesNilLogger(t *testing.T) {
+	var l *Logger
+	_, err := l.lastNEntries(10)
+	if err == nil {
+		t.Fatal("expected error for nil logger")
+	}
+}
+
+func TestLastNEntriesNilFile(t *testing.T) {
+	l := &Logger{file: nil}
+	_, err := l.lastNEntries(10)
+	if err == nil {
+		t.Fatal("expected error for nil file")
+	}
+}
+
+func TestLastNEntriesReturnsCorrectCount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	logger, err := New("count-entries-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = logger.Close() }()
+
+	// Write 10 entries
+	for i := 0; i < 10; i++ {
+		logger.LogEntry(LogEntry{Agent: "test", Action: fmt.Sprintf("action%d", i), OK: true})
+	}
+
+	entries, err := logger.lastNEntries(5)
+	if err != nil {
+		t.Fatalf("lastNEntries() error = %v", err)
+	}
+	if len(entries) != 5 {
+		t.Fatalf("lastNEntries() returned %d entries, want 5", len(entries))
+	}
+	// Should return the last 5 entries
+	if entries[0].Action != "action5" {
+		t.Fatalf("entries[0].Action = %s, want action5", entries[0].Action)
+	}
+	if entries[4].Action != "action9" {
+		t.Fatalf("entries[4].Action = %s, want action9", entries[4].Action)
+	}
+}
+
+func TestLastNEntriesMoreThanAvailable(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	logger, err := New("more-entries-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = logger.Close() }()
+
+	// Write 3 entries
+	for i := 0; i < 3; i++ {
+		logger.LogEntry(LogEntry{Agent: "test", Action: fmt.Sprintf("action%d", i), OK: true})
+	}
+
+	entries, err := logger.lastNEntries(100)
+	if err != nil {
+		t.Fatalf("lastNEntries() error = %v", err)
+	}
+	if len(entries) != 3 {
+		t.Fatalf("lastNEntries() returned %d entries, want 3", len(entries))
+	}
+}
+
+func TestLastNEntriesSkipsMalformedLines(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	logger, err := New("malformed-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = logger.Close() }()
+
+	// Write valid entry
+	logger.LogEntry(LogEntry{Agent: "test", Action: "valid", OK: true})
+
+	// Manually append malformed line
+	auditDir := filepath.Join(home, ".openpass")
+	logFile := filepath.Join(auditDir, "audit-malformed-test.log")
+	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatalf("OpenFile() error = %v", err)
+	}
+	fmt.Fprintln(f, "not valid json{{{")
+	fmt.Fprintln(f, "")
+	f.Close()
+
+	// Write another valid entry
+	logger.LogEntry(LogEntry{Agent: "test", Action: "valid2", OK: true})
+
+	entries, err := logger.lastNEntries(100)
+	if err != nil {
+		t.Fatalf("lastNEntries() error = %v", err)
+	}
+	// Should only return valid entries
+	if len(entries) != 2 {
+		t.Fatalf("lastNEntries() returned %d entries, want 2", len(entries))
+	}
+}
+
+func TestScanLinesEmptyAtEOF(t *testing.T) {
+	advance, token, err := scanLines(nil, true)
+	if err != nil {
+		t.Fatalf("scanLines() error = %v", err)
+	}
+	if advance != 0 || token != nil {
+		t.Fatalf("scanLines(nil, true) = (%d, %v), want (0, nil)", advance, token)
+	}
+}
+
+func TestScanLinesWithNewline(t *testing.T) {
+	data := []byte("hello\nworld")
+	advance, token, err := scanLines(data, false)
+	if err != nil {
+		t.Fatalf("scanLines() error = %v", err)
+	}
+	if advance != 6 {
+		t.Fatalf("advance = %d, want 6", advance)
+	}
+	if string(token) != "hello" {
+		t.Fatalf("token = %s, want hello", token)
+	}
+}
+
+func TestScanLinesAtEOFNoNewline(t *testing.T) {
+	data := []byte("hello world")
+	advance, token, err := scanLines(data, true)
+	if err != nil {
+		t.Fatalf("scanLines() error = %v", err)
+	}
+	if advance != 11 {
+		t.Fatalf("advance = %d, want 11", advance)
+	}
+	if string(token) != "hello world" {
+		t.Fatalf("token = %s, want hello world", token)
+	}
+}
+
+func TestScanLinesNoNewlineNotEOF(t *testing.T) {
+	data := []byte("hello")
+	advance, token, err := scanLines(data, false)
+	if err != nil {
+		t.Fatalf("scanLines() error = %v", err)
+	}
+	if advance != 0 {
+		t.Fatalf("advance = %d, want 0", advance)
+	}
+	if token != nil {
+		t.Fatalf("token = %v, want nil", token)
+	}
+}
+
+func TestRotateIfNeededNilLogger(t *testing.T) {
+	var l *Logger
+	err := l.rotateIfNeeded()
+	if err != nil {
+		t.Fatalf("rotateIfNeeded() on nil logger should not error, got %v", err)
+	}
+}
+
+func TestRotateIfNeededNilFile(t *testing.T) {
+	l := &Logger{file: nil}
+	err := l.rotateIfNeeded()
+	if err != nil {
+		t.Fatalf("rotateIfNeeded() on nil file should not error, got %v", err)
+	}
+}
+
+func TestEnforceRetentionNilLogger(t *testing.T) {
+	var l *Logger
+	err := l.EnforceRetention()
+	if err == nil {
+		t.Fatal("expected error for nil logger")
+	}
+	if !strings.Contains(err.Error(), "logger is nil") {
+		t.Fatalf("expected 'logger is nil' in error, got: %v", err)
+	}
+}
+
+func TestLogEntryAutoFillsEmptyTimestamp(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	logger, err := New("autofill-ts-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = logger.Close() }()
+
+	before := time.Now().UTC().Truncate(time.Second)
+	logger.LogEntry(LogEntry{
+		Agent:  "test",
+		Action: "get",
+		OK:     true,
+	})
+	after := time.Now().UTC().Truncate(time.Second).Add(time.Second)
+
+	content, err := os.ReadFile(filepath.Join(home, ".openpass", "audit-autofill-ts-test.log"))
+	if err != nil {
+		t.Fatalf("ReadFile error = %v", err)
+	}
+
+	var entry LogEntry
+	if err := json.Unmarshal([]byte(strings.TrimSpace(string(content))), &entry); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	ts, err := time.Parse(time.RFC3339, entry.Timestamp)
+	if err != nil {
+		t.Fatalf("failed to parse timestamp: %v", err)
+	}
+	if ts.Before(before) || ts.After(after) {
+		t.Fatalf("timestamp %v not in range [%v, %v]", ts, before, after)
+	}
+}
+
+func TestNewRejectsDotDotInMiddle(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	_, err := New("agent..name")
+	if err == nil {
+		t.Fatal("expected error for agent name containing ..")
+	}
+}
+
+func TestHealthCheckMultipleErrors(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	logger, err := New("multi-error-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = logger.Close() }()
+
+	// Write 5 error entries and 3 ok entries
+	for i := 0; i < 5; i++ {
+		logger.LogEntry(LogEntry{Agent: "test", Action: fmt.Sprintf("err%d", i), OK: false, Reason: "fail"})
+	}
+	for i := 0; i < 3; i++ {
+		logger.LogEntry(LogEntry{Agent: "test", Action: fmt.Sprintf("ok%d", i), OK: true})
+	}
+
+	status, err := logger.HealthCheck()
+	if err != nil {
+		t.Fatalf("HealthCheck() error = %v", err)
+	}
+	if status.ErrorCount != 5 {
+		t.Fatalf("ErrorCount = %d, want 5", status.ErrorCount)
+	}
+}
+
+func TestGetErrorsAllOk(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	logger, err := New("all-ok-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = logger.Close() }()
+
+	for i := 0; i < 5; i++ {
+		logger.LogEntry(LogEntry{Agent: "test", Action: "get", OK: true})
+	}
+
+	errors, err := logger.GetErrors(100)
+	if err != nil {
+		t.Fatalf("GetErrors() error = %v", err)
+	}
+	if len(errors) != 0 {
+		t.Fatalf("GetErrors() returned %d errors, want 0", len(errors))
+	}
+}
+
+func TestGetErrorsAllErrors(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	logger, err := New("all-errors-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = logger.Close() }()
+
+	for i := 0; i < 5; i++ {
+		logger.LogEntry(LogEntry{Agent: "test", Action: fmt.Sprintf("action%d", i), OK: false, Reason: "fail"})
+	}
+
+	errors, err := logger.GetErrors(100)
+	if err != nil {
+		t.Fatalf("GetErrors() error = %v", err)
+	}
+	if len(errors) != 5 {
+		t.Fatalf("GetErrors() returned %d errors, want 5", len(errors))
+	}
+	for i, e := range errors {
+		if e.OK {
+			t.Fatalf("errors[%d].OK = true, want false", i)
+		}
+		if e.Reason != "fail" {
+			t.Fatalf("errors[%d].Reason = %s, want fail", i, e.Reason)
+		}
+	}
+}
+
+func TestLastNEntriesLargeFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	logger, err := New("large-entries-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = logger.Close() }()
+
+	// Write 200 entries
+	for i := 0; i < 200; i++ {
+		logger.LogEntry(LogEntry{Agent: "test", Action: fmt.Sprintf("action%d", i), OK: true})
+	}
+
+	entries, err := logger.lastNEntries(50)
+	if err != nil {
+		t.Fatalf("lastNEntries() error = %v", err)
+	}
+	if len(entries) != 50 {
+		t.Fatalf("lastNEntries() returned %d entries, want 50", len(entries))
+	}
+	// Verify we got the last 50
+	if entries[0].Action != "action150" {
+		t.Fatalf("entries[0].Action = %s, want action150", entries[0].Action)
+	}
+	if entries[49].Action != "action199" {
+		t.Fatalf("entries[49].Action = %s, want action199", entries[49].Action)
+	}
+}
+
+func TestConfigEnvVarZeroMaxBackups(t *testing.T) {
+	t.Setenv("OPENPASS_AUDIT_MAX_BACKUPS", "0")
+	ReloadConfig()
+	defer ReloadConfig()
+
+	if config.MaxBackups != 0 {
+		t.Fatalf("MaxBackups = %d, want 0", config.MaxBackups)
+	}
+}
+
+func TestConfigEnvVarZeroMaxAgeDays(t *testing.T) {
+	t.Setenv("OPENPASS_AUDIT_MAX_AGE_DAYS", "0")
+	ReloadConfig()
+	defer ReloadConfig()
+
+	if config.MaxAgeDays != 0 {
+		t.Fatalf("MaxAgeDays = %d, want 0", config.MaxAgeDays)
+	}
+}
+
+func TestConfigEnvVarNegativeIgnored(t *testing.T) {
+	t.Setenv("OPENPASS_AUDIT_MAX_SIZE_MB", "-10")
+	t.Setenv("OPENPASS_AUDIT_MAX_BACKUPS", "-5")
+	t.Setenv("OPENPASS_AUDIT_MAX_AGE_DAYS", "-1")
+	ReloadConfig()
+	defer ReloadConfig()
+
+	// Negative values should be ignored, defaults used
+	if config.MaxFileSize != 100*1024*1024 {
+		t.Fatalf("MaxFileSize = %d, want default 100MB", config.MaxFileSize)
+	}
+	if config.MaxBackups != 5 {
+		t.Fatalf("MaxBackups = %d, want default 5", config.MaxBackups)
+	}
+	if config.MaxAgeDays != 30 {
+		t.Fatalf("MaxAgeDays = %d, want default 30", config.MaxAgeDays)
+	}
+}
+
+func TestLogEntryAllFields(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	logger, err := New("all-fields-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = logger.Close() }()
+
+	logger.LogEntry(LogEntry{
+		Timestamp: "2024-06-15T12:00:00Z",
+		Agent:     "test-agent",
+		Action:    "get",
+		Path:      "secret/key",
+		Field:     "password",
+		Transport: "stdio",
+		Reason:    "access_granted",
+		DurMs:     123,
+		OK:        true,
+	})
+
+	content, err := os.ReadFile(filepath.Join(home, ".openpass", "audit-all-fields-test.log"))
+	if err != nil {
+		t.Fatalf("ReadFile error = %v", err)
+	}
+
+	var entry LogEntry
+	if err := json.Unmarshal([]byte(strings.TrimSpace(string(content))), &entry); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	if entry.Timestamp != "2024-06-15T12:00:00Z" {
+		t.Fatalf("Timestamp = %s, want 2024-06-15T12:00:00Z", entry.Timestamp)
+	}
+	if entry.Agent != "test-agent" {
+		t.Fatalf("Agent = %s, want test-agent", entry.Agent)
+	}
+	if entry.Action != "get" {
+		t.Fatalf("Action = %s, want get", entry.Action)
+	}
+	if entry.Path != "secret/key" {
+		t.Fatalf("Path = %s, want secret/key", entry.Path)
+	}
+	if entry.Field != "password" {
+		t.Fatalf("Field = %s, want password", entry.Field)
+	}
+	if entry.Transport != "stdio" {
+		t.Fatalf("Transport = %s, want stdio", entry.Transport)
+	}
+	if entry.Reason != "access_granted" {
+		t.Fatalf("Reason = %s, want access_granted", entry.Reason)
+	}
+	if entry.DurMs != 123 {
+		t.Fatalf("DurMs = %d, want 123", entry.DurMs)
+	}
+	if !entry.OK {
+		t.Fatal("OK = false, want true")
+	}
+}
+
+func TestNewValidAgentNames(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	validNames := []string{"claude", "my-agent", "agent_1", "Agent123"}
+	for _, name := range validNames {
+		t.Run(name, func(t *testing.T) {
+			logger, err := New(name)
+			if err != nil {
+				t.Fatalf("New(%q) error = %v", name, err)
+			}
+			defer func() { _ = logger.Close() }()
+
+			expectedFile := filepath.Join(home, ".openpass", fmt.Sprintf("audit-%s.log", name))
+			if _, err := os.Stat(expectedFile); os.IsNotExist(err) {
+				t.Fatalf("log file not created for agent %q", name)
+			}
+		})
+	}
+}
+
+func TestHealthCheckIncludesRotatedSize(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	logger, err := New("rotated-size-test")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer func() { _ = logger.Close() }()
+
+	// Write some data
+	logger.LogEntry(LogEntry{Agent: "test", Action: "get", OK: true})
+
+	// Create a rotated file manually
+	auditDir := filepath.Join(home, ".openpass")
+	rotatedFile := filepath.Join(auditDir, "audit-rotated-size-test.log.rotated.20240101-000000")
+	if err := os.WriteFile(rotatedFile, []byte(strings.Repeat("x", 1000)), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	status, err := logger.HealthCheck()
+	if err != nil {
+		t.Fatalf("HealthCheck() error = %v", err)
+	}
+
+	// TotalAuditSize should include both current and rotated files
+	if status.TotalAuditSize < 1000 {
+		t.Fatalf("TotalAuditSize = %d, want >= 1000", status.TotalAuditSize)
+	}
+}
