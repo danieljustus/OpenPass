@@ -263,6 +263,112 @@ func TestCachePathAndTTLAccessors(t *testing.T) {
 	}
 }
 
+func TestCacheZeroOrNegativeTTL(t *testing.T) {
+	tmpDir := t.TempDir()
+	cachePath := filepath.Join(tmpDir, "update-cache.json")
+
+	cache := NewCacheWithTTL(cachePath, 0)
+	if cache.TTL() != DefaultCacheTTL {
+		t.Fatalf("TTL with 0 = %v, want %v", cache.TTL(), DefaultCacheTTL)
+	}
+
+	cache = NewCacheWithTTL(cachePath, -1*time.Hour)
+	if cache.TTL() != DefaultCacheTTL {
+		t.Fatalf("TTL with negative = %v, want %v", cache.TTL(), DefaultCacheTTL)
+	}
+}
+
+func TestCacheLoadReadError(t *testing.T) {
+	tmpDir := t.TempDir()
+	cachePath := filepath.Join(tmpDir, "update-cache.json")
+
+	if err := os.Mkdir(cachePath, 0o700); err != nil {
+		t.Fatalf("Mkdir() error = %v", err)
+	}
+
+	cache := NewCacheWithTTL(cachePath, 24*time.Hour)
+
+	loaded, err := cache.Load()
+	if err == nil {
+		t.Fatal("Load() with directory as path should error")
+	}
+	if loaded != nil {
+		t.Fatal("Load() should return nil on error")
+	}
+}
+
+func TestCacheSaveNilEntry(t *testing.T) {
+	tmpDir := t.TempDir()
+	cachePath := filepath.Join(tmpDir, "update-cache.json")
+
+	cache := NewCacheWithTTL(cachePath, 24*time.Hour)
+
+	if err := cache.Save(nil); err != nil {
+		t.Fatalf("Save(nil) error = %v", err)
+	}
+
+	if _, err := os.Stat(cachePath); !os.IsNotExist(err) {
+		t.Fatal("Save(nil) should not create a file")
+	}
+}
+
+func TestCacheSaveWriteError(t *testing.T) {
+	tmpDir := t.TempDir()
+	cachePath := filepath.Join(tmpDir, "readonly", "update-cache.json")
+
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0o500); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	defer func() {
+		_ = os.Chmod(filepath.Dir(cachePath), 0o700)
+	}()
+
+	cache := NewCacheWithTTL(cachePath, 24*time.Hour)
+
+	err := cache.Save(&CacheEntry{
+		Timestamp:     time.Now(),
+		LatestVersion: "1.0.0",
+		ReleaseURL:    "https://example.com",
+	})
+	if err == nil {
+		t.Fatal("Save() with read-only dir should error")
+	}
+}
+
+func TestCacheInvalidateNonExistent(t *testing.T) {
+	tmpDir := t.TempDir()
+	cachePath := filepath.Join(tmpDir, "update-cache.json")
+
+	cache := NewCacheWithTTL(cachePath, 24*time.Hour)
+
+	if err := cache.Invalidate(); err != nil {
+		t.Fatalf("Invalidate() on non-existent file error = %v", err)
+	}
+}
+
+func TestCacheInvalidateError(t *testing.T) {
+	tmpDir := t.TempDir()
+	cachePath := filepath.Join(tmpDir, "update-cache.json")
+
+	if err := os.WriteFile(cachePath, []byte("test"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	if err := os.Chmod(tmpDir, 0o500); err != nil {
+		t.Fatalf("Chmod() error = %v", err)
+	}
+	defer func() {
+		_ = os.Chmod(tmpDir, 0o700)
+	}()
+
+	cache := NewCacheWithTTL(cachePath, 24*time.Hour)
+
+	err := cache.Invalidate()
+	if err == nil {
+		t.Fatal("Invalidate() with read-only dir should error")
+	}
+}
+
 func TestCacheZeroLengthFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	cachePath := filepath.Join(tmpDir, "update-cache.json")

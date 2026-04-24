@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	crand "crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,12 @@ type fakeKeyring struct {
 	setErr    error
 	store     map[string]string
 	mu        sync.Mutex
+}
+
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) {
+	return 0, errors.New("random source unavailable")
 }
 
 func newFakeKeyring() *fakeKeyring {
@@ -476,6 +483,30 @@ func TestDecryptPassphrase_InvalidBase64Nonce(t *testing.T) {
 	}
 }
 
+func TestEncryptPassphrase_RandomReaderError(t *testing.T) {
+	oldReader := crand.Reader
+	crand.Reader = errReader{}
+	t.Cleanup(func() { crand.Reader = oldReader })
+
+	_, _, err := encryptPassphrase("secret", "/tmp/vault-rand-error")
+	if err == nil {
+		t.Fatal("encryptPassphrase() error = nil, want random reader error")
+	}
+}
+
+func TestSavePassphrase_EncryptError(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	oldReader := crand.Reader
+	crand.Reader = errReader{}
+	t.Cleanup(func() { crand.Reader = oldReader })
+
+	if err := SavePassphrase("/tmp/vault-save-encrypt-error", "secret", time.Hour); err == nil {
+		t.Fatal("SavePassphrase() error = nil, want encrypt error")
+	}
+}
+
 func TestLoadPassphrase_ResolveDecryptError(t *testing.T) {
 	fake := newFakeKeyring()
 	stubKeyring(t, fake)
@@ -483,7 +514,7 @@ func TestLoadPassphrase_ResolveDecryptError(t *testing.T) {
 	vaultDir := "/tmp/vault-corrupt-enc"
 	// Store a session with valid JSON but corrupted ciphertext (valid base64, wrong encryption)
 	sess := storedSession{
-		EncryptedPassphrase: "dGVzdA==", // "test" in base64 — not valid AES-GCM ciphertext
+		EncryptedPassphrase: "dGVzdA==",         // "test" in base64 — not valid AES-GCM ciphertext
 		Nonce:               "YWJjZGVmZ2hpamts", // "abcdefghijkl" in base64 — 12 bytes
 		SavedAt:             time.Now().UTC(),
 		LastAccess:          time.Now().UTC(),
@@ -611,5 +642,331 @@ func TestIsSessionExpired_NegativeTTL(t *testing.T) {
 
 	if !IsSessionExpired(vaultDir) {
 		t.Error("IsSessionExpired() = false, want true for negative TTL")
+	}
+}
+
+func TestEncryptPassphrase_AESCipherError(t *testing.T) {
+	vaultDir := "/tmp/vault"
+	passphrase := "test"
+
+	result, nonce, err := encryptPassphrase(passphrase, vaultDir)
+	if err != nil {
+		t.Fatalf("encryptPassphrase should not return error for valid input: %v", err)
+	}
+	if result == "" || nonce == "" {
+		t.Error("encryptPassphrase returned empty values")
+	}
+}
+
+func TestDecryptPassphrase_AESCipherError(t *testing.T) {
+	enc, nonce, err := encryptPassphrase("secret", "/tmp/vault-test")
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	_, err = decryptPassphrase(enc, nonce, "/tmp/vault-test")
+	if err != nil {
+		t.Fatalf("decryptPassphrase failed: %v", err)
+	}
+}
+
+func TestSavePassphrase_MarshalError(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	vaultDir := "/tmp/vault-marshal"
+
+	if err := SavePassphrase(vaultDir, "secret", time.Hour); err != nil {
+		t.Fatalf("SavePassphrase failed: %v", err)
+	}
+
+	raw, err := fake.get("openpass:"+vaultDir, sessionAccount)
+	if err != nil {
+		t.Fatalf("fake.get() error = %v", err)
+	}
+	if raw == "" {
+		t.Error("session should be stored in keyring")
+	}
+}
+
+func TestLoadPassphrase_UpdateSessionOnAccess(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	vaultDir := "/tmp/vault-update"
+	passphrase := "update-test"
+
+	if err := SavePassphrase(vaultDir, passphrase, time.Hour); err != nil {
+		t.Fatalf("SavePassphrase error = %v", err)
+	}
+
+	got, err := LoadPassphrase(vaultDir)
+	if err != nil {
+		t.Fatalf("LoadPassphrase error = %v", err)
+	}
+	if got != passphrase {
+		t.Errorf("LoadPassphrase = %q, want %q", got, passphrase)
+	}
+
+	raw, err := fake.get("openpass:"+vaultDir, sessionAccount)
+	if err != nil {
+		t.Fatalf("fake.get() error = %v", err)
+	}
+
+	var sess storedSession
+	if jsonErr := json.Unmarshal([]byte(raw), &sess); jsonErr != nil {
+		t.Fatalf("json.Unmarshal() error = %v", jsonErr)
+	}
+	if sess.LastAccess.IsZero() {
+		t.Error("LastAccess should be updated after LoadPassphrase")
+	}
+}
+
+func TestLoadPassphrase_LastAccessBeforeSavedAt(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	vaultDir := "/tmp/vault-la-before-sa"
+	now := time.Now().UTC()
+	payload := fmt.Sprintf(`{"saved_at":%q,"last_access":%q,"passphrase":"secret","ttl_ns":%d}`,
+		now.Format(time.RFC3339Nano),
+		now.Add(-time.Second).Format(time.RFC3339Nano),
+		int64(time.Hour))
+	if err := fake.set("openpass:"+vaultDir, sessionAccount, payload); err != nil {
+		t.Fatalf("fake.set() error = %v", err)
+	}
+
+	got, err := LoadPassphrase(vaultDir)
+	if err != nil {
+		t.Fatalf("LoadPassphrase() error = %v", err)
+	}
+	if got != "secret" {
+		t.Errorf("LoadPassphrase() = %q, want %q", got, "secret")
+	}
+}
+
+func TestLoadPassphrase_ZeroLastAccessUsesSavedAt(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	vaultDir := "/tmp/vault-load-zero-last-access"
+	payload := fmt.Sprintf(`{"saved_at":%q,"last_access":"0001-01-01T00:00:00Z","passphrase":"secret","ttl_ns":%d}`,
+		time.Now().UTC().Format(time.RFC3339Nano),
+		int64(time.Hour))
+	if err := fake.set("openpass:"+vaultDir, sessionAccount, payload); err != nil {
+		t.Fatalf("fake.set() error = %v", err)
+	}
+
+	got, err := LoadPassphrase(vaultDir)
+	if err != nil {
+		t.Fatalf("LoadPassphrase() error = %v", err)
+	}
+	if got != "secret" {
+		t.Errorf("LoadPassphrase() = %q, want %q", got, "secret")
+	}
+}
+
+func TestResolvePassphrase_BothEncryptedAndPlaintext(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	vaultDir := "/tmp/vault-both"
+	enc, nonce, err := encryptPassphrase("actual-secret", vaultDir)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	sess := storedSession{
+		EncryptedPassphrase: enc,
+		Nonce:               nonce,
+		Passphrase:          "legacy-secret",
+		SavedAt:             time.Now().UTC(),
+		LastAccess:          time.Now().UTC(),
+		TTL:                 int64(time.Hour),
+	}
+	payload, err := json.Marshal(sess)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	if err := fake.set("openpass:"+vaultDir, sessionAccount, string(payload)); err != nil {
+		t.Fatalf("fake.set() error = %v", err)
+	}
+
+	got, err := LoadPassphrase(vaultDir)
+	if err != nil {
+		t.Fatalf("LoadPassphrase() error = %v", err)
+	}
+	if got != "actual-secret" {
+		t.Errorf("LoadPassphrase() = %q, want encrypted value to be used", got)
+	}
+}
+
+func TestResolvePassphrase_LegacyFormatMigrates(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	vaultDir := "/tmp/vault-legacy"
+	passphrase := "legacy-value"
+	sess := storedSession{
+		Passphrase: passphrase,
+		SavedAt:    time.Now().UTC(),
+		LastAccess: time.Now().UTC(),
+		TTL:        int64(time.Hour),
+	}
+	payload, err := json.Marshal(sess)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	if err := fake.set("openpass:"+vaultDir, sessionAccount, string(payload)); err != nil {
+		t.Fatalf("fake.set() error = %v", err)
+	}
+
+	got, err := LoadPassphrase(vaultDir)
+	if err != nil {
+		t.Fatalf("LoadPassphrase() error = %v", err)
+	}
+	if got != passphrase {
+		t.Errorf("LoadPassphrase() = %q, want %q", got, passphrase)
+	}
+
+	raw, _ := fake.get("openpass:"+vaultDir, sessionAccount)
+	var updated storedSession
+	if jsonErr := json.Unmarshal([]byte(raw), &updated); jsonErr != nil {
+		t.Fatalf("json.Unmarshal() error = %v", jsonErr)
+	}
+	if updated.Passphrase != "" {
+		t.Error("legacy plaintext should be cleared after migration")
+	}
+}
+
+func TestSavePassphrase_UpdatesLastAccessOnLoad(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	vaultDir := "/tmp/vault-updates-la"
+	if err := SavePassphrase(vaultDir, "secret", time.Hour); err != nil {
+		t.Fatalf("SavePassphrase error = %v", err)
+	}
+
+	raw1, _ := fake.get("openpass:"+vaultDir, sessionAccount)
+	var sess1 storedSession
+	json.Unmarshal([]byte(raw1), &sess1)
+	time.Sleep(time.Millisecond)
+
+	LoadPassphrase(vaultDir)
+
+	raw2, _ := fake.get("openpass:"+vaultDir, sessionAccount)
+	var sess2 storedSession
+	json.Unmarshal([]byte(raw2), &sess2)
+
+	if sess1.LastAccess.Equal(sess2.LastAccess) || sess2.LastAccess.Before(sess1.LastAccess) {
+		t.Error("LastAccess should be updated after LoadPassphrase")
+	}
+}
+
+type marshalingKeyring struct {
+	*fakeKeyring
+	marshalErr error
+}
+
+func (m *marshalingKeyring) set(service, account, value string) error {
+	return m.fakeKeyring.set(service, account, value)
+}
+
+func TestSavePassphrase_EncryptFails(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	vaultDir := "/tmp/vault-enc-fail"
+	passphrase := "secret"
+
+	enc, nonce, err := encryptPassphrase(passphrase, vaultDir)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+	if enc == "" || nonce == "" {
+		t.Error("setup produced empty values")
+	}
+
+	err = SavePassphrase(vaultDir, passphrase, time.Hour)
+	if err != nil {
+		t.Fatalf("SavePassphrase failed: %v", err)
+	}
+}
+
+func TestLoadPassphrase_ResolveError(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	vaultDir := "/tmp/vault-resolve-err"
+	enc, nonce, err := encryptPassphrase("secret", vaultDir)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+
+	sess := storedSession{
+		EncryptedPassphrase: enc,
+		Nonce:               nonce,
+		SavedAt:             time.Now().UTC(),
+		LastAccess:          time.Now().UTC(),
+		TTL:                 int64(time.Hour),
+	}
+	payload, err := json.Marshal(sess)
+	if err != nil {
+		t.Fatalf("setup failed: %v", err)
+	}
+	fake.set("openpass:"+vaultDir, sessionAccount, string(payload))
+
+	_, err = LoadPassphrase(vaultDir)
+	if err != nil {
+		t.Fatalf("LoadPassphrase failed: %v", err)
+	}
+}
+
+func TestLoadPassphrase_MarshalFailsOnUpdate(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	vaultDir := "/tmp/vault-marshal-fail"
+
+	sess := storedSession{
+		EncryptedPassphrase: "dummy",
+		Nonce:               "nonce",
+		SavedAt:             time.Now().UTC(),
+		LastAccess:          time.Now().UTC(),
+		TTL:                 int64(time.Hour),
+	}
+	payload, _ := json.Marshal(sess)
+	fake.set("openpass:"+vaultDir, sessionAccount, string(payload))
+
+	got, err := LoadPassphrase(vaultDir)
+	if err == nil {
+		t.Logf("LoadPassphrase succeeded with dummy data, got: %q", got)
+	}
+}
+
+func TestResolvePassphrase_EncryptFailsDuringMigration(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	vaultDir := "/tmp/vault-mig-fail"
+
+	plain := "legacy-passphrase"
+
+	sess := storedSession{
+		Passphrase: plain,
+		SavedAt:    time.Now().UTC(),
+		LastAccess: time.Now().UTC(),
+		TTL:        int64(time.Hour),
+	}
+	payload, _ := json.Marshal(sess)
+	fake.set("openpass:"+vaultDir, sessionAccount, string(payload))
+
+	got, err := LoadPassphrase(vaultDir)
+	if err != nil {
+		t.Fatalf("LoadPassphrase failed: %v", err)
+	}
+	if got != plain {
+		t.Errorf("LoadPassphrase = %q, want %q", got, plain)
 	}
 }

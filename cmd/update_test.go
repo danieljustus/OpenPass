@@ -5,8 +5,12 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"gopkg.in/yaml.v3"
 
 	updatepkg "github.com/danieljustus/OpenPass/internal/update"
 )
@@ -361,5 +365,95 @@ func TestUpdateCheckCommandForceFlag(t *testing.T) {
 
 	if !checker.forceUsed {
 		t.Fatal("expected --force flag to be passed to checker")
+	}
+}
+
+func TestUpdateCacheTTL_UserHomeDirError(t *testing.T) {
+	origHome := os.Getenv("HOME")
+	origUserProfile := os.Getenv("USERPROFILE")
+	_ = os.Unsetenv("HOME")
+	_ = os.Unsetenv("USERPROFILE")
+	defer func() {
+		_ = os.Setenv("HOME", origHome)
+		_ = os.Setenv("USERPROFILE", origUserProfile)
+	}()
+
+	ttl := updateCacheTTL()
+	if ttl != updatepkg.DefaultCacheTTL {
+		t.Fatalf("updateCacheTTL() = %v, want %v", ttl, updatepkg.DefaultCacheTTL)
+	}
+}
+
+func TestUpdateCacheTTL_ConfigLoadError(t *testing.T) {
+	tmpDir := t.TempDir()
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() {
+		home, _ := os.UserHomeDir()
+		_ = os.Setenv("HOME", home)
+	}()
+
+	// Ensure .openpass directory doesn't exist so config load fails
+	_ = os.RemoveAll(filepath.Join(tmpDir, ".openpass"))
+
+	ttl := updateCacheTTL()
+	if ttl != updatepkg.DefaultCacheTTL {
+		t.Fatalf("updateCacheTTL() = %v, want %v", ttl, updatepkg.DefaultCacheTTL)
+	}
+}
+
+func TestUpdateCacheTTL_CustomCacheTTL(t *testing.T) {
+	tmpDir := t.TempDir()
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() {
+		home, _ := os.UserHomeDir()
+		_ = os.Setenv("HOME", home)
+	}()
+
+	openpassDir := filepath.Join(tmpDir, ".openpass")
+	if err := os.MkdirAll(openpassDir, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	customTTL := 2 * time.Hour
+	cfg := map[string]any{
+		"update": map[string]any{
+			"cache_ttl": customTTL.String(),
+		},
+	}
+	data, _ := yaml.Marshal(cfg)
+	if err := os.WriteFile(filepath.Join(openpassDir, "config.yaml"), data, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	ttl := updateCacheTTL()
+	if ttl != customTTL {
+		t.Fatalf("updateCacheTTL() = %v, want %v", ttl, customTTL)
+	}
+}
+
+func TestUpdateCacheTTL_DefaultWhenNoUpdateConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() {
+		home, _ := os.UserHomeDir()
+		_ = os.Setenv("HOME", home)
+	}()
+
+	openpassDir := filepath.Join(tmpDir, ".openpass")
+	if err := os.MkdirAll(openpassDir, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	cfg := map[string]any{
+		"vault_dir": "/tmp/vault",
+	}
+	data, _ := yaml.Marshal(cfg)
+	if err := os.WriteFile(filepath.Join(openpassDir, "config.yaml"), data, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	ttl := updateCacheTTL()
+	if ttl != updatepkg.DefaultCacheTTL {
+		t.Fatalf("updateCacheTTL() = %v, want %v", ttl, updatepkg.DefaultCacheTTL)
 	}
 }

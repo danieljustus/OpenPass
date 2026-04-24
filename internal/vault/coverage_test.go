@@ -2,7 +2,10 @@ package vault
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
+
+	"filippo.io/age"
 
 	"github.com/danieljustus/OpenPass/internal/config"
 	"github.com/danieljustus/OpenPass/internal/testutil"
@@ -184,17 +187,508 @@ func TestReadEntryCorruptedFile(t *testing.T) {
 	id := testutil.TempIdentity(t)
 
 	entryDir := vaultDir + "/entries/test"
-	if err := os.MkdirAll(entryDir, 0o700); err != nil {
-		t.Fatalf("MkdirAll() error = %v", err)
-	}
-	if err := os.WriteFile(entryDir+"/entry.age", []byte("this is not valid age ciphertext"), 0o600); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
+	os.MkdirAll(entryDir, 0o700)
+	os.WriteFile(entryDir+"/entry.age", []byte("this is not valid age ciphertext"), 0o600)
 
 	_, err := ReadEntry(vaultDir, "test/entry", id)
 	if err == nil {
 		t.Fatal("ReadEntry() with corrupted file = nil, want decrypt error")
 	}
+}
+
+// TestCollectFieldMatchesNilMap covers nil map handling in CollectFieldMatches.
+func TestCollectFieldMatchesNilMap(t *testing.T) {
+	matches := make(map[string]struct{})
+	CollectFieldMatches(matches, "prefix", nil, "search")
+	if len(matches) != 0 {
+		t.Errorf("expected no matches for nil, got %v", matches)
+	}
+}
+
+// TestCollectFieldMatchesEmptyMap covers empty map handling.
+func TestCollectFieldMatchesEmptyMap(t *testing.T) {
+	matches := make(map[string]struct{})
+	CollectFieldMatches(matches, "prefix", map[string]any{}, "search")
+	if len(matches) != 0 {
+		t.Errorf("expected no matches for empty map, got %v", matches)
+	}
+}
+
+// TestCollectFieldMatchesArrayWithNil covers array with nil elements.
+func TestCollectFieldMatchesArrayWithNil(t *testing.T) {
+	matches := make(map[string]struct{})
+	CollectFieldMatches(matches, "arr", []any{nil, "valid"}, "valid")
+	if _, ok := matches["arr[1]"]; !ok {
+		t.Errorf("expected arr[1] to match, got %v", matches)
+	}
+}
+
+// TestCollectFieldMatchesDeeplyNested covers deeply nested structure.
+func TestCollectFieldMatchesDeeplyNested(t *testing.T) {
+	matches := make(map[string]struct{})
+	CollectFieldMatches(matches, "", map[string]any{
+		"level1": map[string]any{
+			"level2": map[string]any{
+				"level3": "secret123",
+			},
+		},
+	}, "secret")
+	if _, ok := matches["level1.level2.level3"]; !ok {
+		t.Errorf("expected nested path to match, got %v", matches)
+	}
+}
+
+// TestFindReturnsEmptyForNoMatches covers Find with query that matches nothing.
+func TestFindReturnsEmptyForNoMatches(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+	rememberSearchIdentity(id)
+
+	mustWriteEntryCoverage(vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
+
+	got, err := Find(vaultDir, "nomatch")
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("Find() with no matches returned %d results, want 0", len(got))
+	}
+}
+
+// TestFindConcurrentReturnsEmptyForNoMatches covers FindConcurrent with query that matches nothing.
+func TestFindConcurrentReturnsEmptyForNoMatches(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+	rememberSearchIdentity(id)
+
+	mustWriteEntryCoverage(vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
+
+	got, err := FindConcurrent(vaultDir, "nomatch", 4)
+	if err != nil {
+		t.Fatalf("FindConcurrent() error = %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("FindConcurrent() with no matches returned %d results, want 0", len(got))
+	}
+}
+
+// TestFindWithUnicodeQuery covers Find with unicode query.
+func TestFindWithUnicodeQuery(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+	rememberSearchIdentity(id)
+
+	mustWriteEntryCoverage(vaultDir, id, "test/entry", map[string]interface{}{"data": "日本語テスト"})
+
+	got, err := Find(vaultDir, "日本語")
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("Find() with unicode query returned %d results, want 1", len(got))
+	}
+}
+
+// TestFindPathMatchesBeforeFieldSearch covers path matching that avoids decryption.
+func TestFindPathMatchesBeforeFieldSearch(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+	rememberSearchIdentity(id)
+
+	mustWriteEntryCoverage(vaultDir, id, "github.com/user", map[string]interface{}{
+		"username": "alice",
+		"password": "secret123",
+	})
+
+	got, err := Find(vaultDir, "github")
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("Find() returned %d results, want 1", len(got))
+	}
+	if !containsStringCoverage(got[0].Fields, "path") {
+		t.Errorf("expected path match, got fields %v", got[0].Fields)
+	}
+}
+
+// TestFindConcurrentPathMatchesBeforeFieldSearch covers path matching in concurrent search.
+func TestFindConcurrentPathMatchesBeforeFieldSearch(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+	rememberSearchIdentity(id)
+
+	mustWriteEntryCoverage(vaultDir, id, "github.com/user", map[string]interface{}{
+		"username": "alice",
+		"password": "secret123",
+	})
+
+	got, err := FindConcurrent(vaultDir, "github", 4)
+	if err != nil {
+		t.Fatalf("FindConcurrent() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("FindConcurrent() returned %d results, want 1", len(got))
+	}
+	if !containsStringCoverage(got[0].Fields, "path") {
+		t.Errorf("expected path match, got fields %v", got[0].Fields)
+	}
+}
+
+// TestInitWithEmptyDir tests Init with empty vaultDir.
+func TestInitWithEmptyDir(t *testing.T) {
+	identity := testutil.TempIdentity(t)
+	cfg := config.Default()
+	err := Init("", identity, cfg)
+	if err == nil {
+		t.Fatal("Init() with empty vaultDir = nil, want error")
+	}
+}
+
+// TestInitNilIdentity tests Init with nil identity.
+func TestInitNilIdentity(t *testing.T) {
+	cfg := config.Default()
+	err := Init(t.TempDir(), nil, cfg)
+	if err == nil {
+		t.Fatal("Init() with nil identity = nil, want error")
+	}
+}
+
+// TestInitNilConfig tests Init with nil config.
+func TestInitNilConfig(t *testing.T) {
+	identity := testutil.TempIdentity(t)
+	err := Init(t.TempDir(), identity, nil)
+	if err == nil {
+		t.Fatal("Init() with nil config = nil, want error")
+	}
+}
+
+// TestInitWriteFileError covers the os.WriteFile error path in Init.
+func TestInitWriteFileError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root; permissions test meaningless")
+	}
+	parent := t.TempDir()
+	os.Chmod(parent, 0o500)
+	defer os.Chmod(parent, 0o700)
+
+	identity := testutil.TempIdentity(t)
+	cfg := config.Default()
+	err := Init(parent+"/vault", identity, cfg)
+	if err == nil {
+		t.Fatal("Init() = nil, want error when parent is not writable")
+	}
+}
+
+// TestFindConcurrentListError covers List error path in FindConcurrent.
+func TestFindConcurrentListError(t *testing.T) {
+	searchIdentityMu.Lock()
+	searchIdentity = nil
+	searchIdentityMu.Unlock()
+
+	_, err := FindConcurrent("/nonexistent/path", "query", 4)
+	if err == nil {
+		t.Fatal("FindConcurrent() error = nil, want error for nonexistent vault")
+	}
+}
+
+// TestListFastNonExistentVault covers ListFast with nonexistent vault.
+func TestListFastNonExistentVault(t *testing.T) {
+	_, err := ListFast("/nonexistent/vault", "")
+	if err == nil {
+		t.Fatal("ListFast() error = nil, want error for nonexistent vault")
+	}
+}
+
+// TestListFastWithPrefixNonExistentVault covers ListFast with nonexistent vault and prefix.
+func TestListFastWithPrefixNonExistentVault(t *testing.T) {
+	_, err := ListFast("/nonexistent/vault", "prefix")
+	if err == nil {
+		t.Fatal("ListFast() error = nil, want error for nonexistent vault")
+	}
+}
+
+// TestAutoCommitNilConfig covers AutoCommit with nil config.
+func TestAutoCommitNilConfig(t *testing.T) {
+	vaultDir := t.TempDir()
+	identity := testutil.TempIdentity(t)
+	cfg := config.Default()
+	cfg.VaultDir = vaultDir
+	cfg.Git = nil
+
+	Init(vaultDir, identity, cfg)
+	v, _ := Open(vaultDir, identity)
+
+	err := v.AutoCommit("test")
+	if err != nil {
+		t.Fatalf("AutoCommit() with nil Git config error = %v", err)
+	}
+}
+
+// TestOpenWithPassphraseFileNotFound covers OpenWithPassphrase when identity file is missing.
+func TestOpenWithPassphraseFileNotFound(t *testing.T) {
+	vaultDir := t.TempDir()
+	_, err := OpenWithPassphrase(vaultDir, "passphrase")
+	if err == nil {
+		t.Fatal("OpenWithPassphrase() error = nil, want error when identity file is missing")
+	}
+}
+
+// TestFindNoPathMatchesDecryptsAll covers Find when no paths match and all entries need decryption.
+func TestFindNoPathMatchesDecryptsAll(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+	rememberSearchIdentity(id)
+
+	mustWriteEntryCoverage(vaultDir, id, "github.com/user", map[string]interface{}{
+		"username": "alice",
+		"password": "secret123",
+	})
+
+	got, err := Find(vaultDir, "secret")
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("Find() returned %d results, want 1", len(got))
+	}
+	if !containsStringCoverage(got[0].Fields, "password") {
+		t.Errorf("expected password match, got fields %v", got[0].Fields)
+	}
+}
+
+// TestFindMatchesMultipleEntries covers Find when multiple entries match.
+func TestFindMatchesMultipleEntries(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+	rememberSearchIdentity(id)
+
+	mustWriteEntryCoverage(vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
+	mustWriteEntryCoverage(vaultDir, id, "github.com/work", map[string]interface{}{"username": "bob"})
+	mustWriteEntryCoverage(vaultDir, id, "gitlab.com/user", map[string]interface{}{"username": "carol"})
+
+	got, err := Find(vaultDir, "github")
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("Find() returned %d results, want 2", len(got))
+	}
+}
+
+// TestFindConcurrentMatchesMultipleEntries covers FindConcurrent when multiple entries match.
+func TestFindConcurrentMatchesMultipleEntries(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+	rememberSearchIdentity(id)
+
+	mustWriteEntryCoverage(vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
+	mustWriteEntryCoverage(vaultDir, id, "github.com/work", map[string]interface{}{"username": "bob"})
+	mustWriteEntryCoverage(vaultDir, id, "gitlab.com/user", map[string]interface{}{"username": "carol"})
+
+	got, err := FindConcurrent(vaultDir, "github", 4)
+	if err != nil {
+		t.Fatalf("FindConcurrent() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("FindConcurrent() returned %d results, want 2", len(got))
+	}
+}
+
+func TestOpenMigrateGitignoreError(t *testing.T) {
+	vaultDir := t.TempDir()
+	identity := testutil.TempIdentity(t)
+	cfg := config.Default()
+	cfg.VaultDir = vaultDir
+	cfg.Git = &config.GitConfig{AutoPush: false}
+
+	Init(vaultDir, identity, cfg)
+	WriteEntry(vaultDir, "test", &Entry{Data: map[string]any{"k": "v"}}, identity)
+
+	os.MkdirAll(filepath.Join(vaultDir, ".git"), 0o700)
+
+	if _, err := Open(vaultDir, identity); err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+}
+
+func TestOpenCreatesGitignore(t *testing.T) {
+	vaultDir := t.TempDir()
+	identity := testutil.TempIdentity(t)
+	cfg := config.Default()
+	cfg.VaultDir = vaultDir
+	cfg.Git = &config.GitConfig{AutoPush: false}
+
+	Init(vaultDir, identity, cfg)
+
+	gitDir := filepath.Join(vaultDir, ".git")
+	os.MkdirAll(gitDir, 0o700)
+
+	_, err := Open(vaultDir, identity)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	gitignorePath := filepath.Join(vaultDir, ".gitignore")
+	if _, statErr := os.Stat(gitignorePath); statErr != nil {
+		t.Errorf(".gitignore not created: %v", statErr)
+	}
+}
+
+func TestGetEntryMetadataFileNotFound(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	_, err := GetEntryMetadata(vaultDir, "nonexistent/entry", id)
+	if err == nil {
+		t.Fatal("GetEntryMetadata() error = nil, want error for nonexistent entry")
+	}
+}
+
+func TestGetEntryMetadataCorruptedFile(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	entryDir := filepath.Join(vaultDir, "entries", "test")
+	os.MkdirAll(entryDir, 0o700)
+	os.WriteFile(filepath.Join(entryDir, "entry.age"), []byte("corrupt"), 0o600)
+
+	_, err := GetEntryMetadata(vaultDir, "test/entry", id)
+	if err == nil {
+		t.Fatal("GetEntryMetadata() error = nil, want decrypt error")
+	}
+}
+
+func TestDeleteEntryLegacyNotFound(t *testing.T) {
+	vaultDir := t.TempDir()
+	os.MkdirAll(filepath.Join(vaultDir, "entries"), 0o700)
+
+	err := DeleteEntry(vaultDir, "nonexistent")
+	if err == nil {
+		t.Fatal("DeleteEntry() error = nil, want error")
+	}
+}
+
+func TestWriteEntryToReadOnlyDir(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root; permissions test meaningless")
+	}
+	parent := t.TempDir()
+	os.Chmod(parent, 0o555)
+	defer os.Chmod(parent, 0o700)
+
+	identity := testutil.TempIdentity(t)
+	err := WriteEntry(parent, "test", &Entry{Data: map[string]any{"k": "v"}}, identity)
+	if err == nil {
+		t.Fatal("WriteEntry() = nil, want error")
+	}
+}
+
+func TestEntryUnmarshalInitializesNilData(t *testing.T) {
+	var entry Entry
+	if err := entry.UnmarshalJSON([]byte(`{"meta":{}}`)); err != nil {
+		t.Fatalf("UnmarshalJSON() error = %v", err)
+	}
+	if entry.Data == nil {
+		t.Fatal("Data = nil, want initialized map")
+	}
+}
+
+func TestEntryNilGuardsAndDefaults(t *testing.T) {
+	vaultDir := t.TempDir()
+	identity := testutil.TempIdentity(t)
+
+	if _, err := ReadEntry(vaultDir, "test", nil); err == nil {
+		t.Fatal("ReadEntry() nil identity error = nil")
+	}
+	if err := WriteEntry(vaultDir, "test", nil, identity); err == nil {
+		t.Fatal("WriteEntry() nil entry error = nil")
+	}
+	if err := WriteEntry(vaultDir, "test", &Entry{}, nil); err == nil {
+		t.Fatal("WriteEntry() nil identity error = nil")
+	}
+	if err := WriteEntry(vaultDir, "empty", &Entry{}, identity); err != nil {
+		t.Fatalf("WriteEntry() empty entry error = %v", err)
+	}
+	got, err := ReadEntry(vaultDir, "empty", identity)
+	if err != nil {
+		t.Fatalf("ReadEntry() empty entry error = %v", err)
+	}
+	if got.Data == nil {
+		t.Fatal("Data = nil, want initialized map")
+	}
+	if cloneEntry(nil) != nil {
+		t.Fatal("cloneEntry(nil) != nil")
+	}
+}
+
+func TestNormalizeConfigInitializesAgentAllowedPaths(t *testing.T) {
+	cfg := &config.Config{Agents: map[string]config.AgentProfile{"agent": {}}}
+	normalizeConfig(cfg)
+	profile := cfg.Agents["agent"]
+	if profile.Name != "agent" {
+		t.Fatalf("Name = %q, want agent", profile.Name)
+	}
+	if profile.AllowedPaths == nil {
+		t.Fatal("AllowedPaths = nil, want empty slice")
+	}
+}
+
+func TestRecipientsManagerRejectsTraversalVaultDir(t *testing.T) {
+	rm := NewRecipientsManager("../vault")
+	if _, err := rm.LoadRecipients(); err == nil {
+		t.Fatal("LoadRecipients() error = nil")
+	}
+	if _, err := rm.LoadRecipientStrings(); err == nil {
+		t.Fatal("LoadRecipientStrings() error = nil")
+	}
+	if err := rm.AddRecipient(testutil.TempIdentity(t).Recipient().String()); err == nil {
+		t.Fatal("AddRecipient() error = nil")
+	}
+	if err := rm.RemoveRecipient(testutil.TempIdentity(t).Recipient().String()); err == nil {
+		t.Fatal("RemoveRecipient() error = nil")
+	}
+	if _, err := rm.ListRecipients(); err == nil {
+		t.Fatal("ListRecipients() error = nil")
+	}
+}
+
+func TestWriteEntryWithRecipientsNilData(t *testing.T) {
+	vaultDir := t.TempDir()
+	identity := testutil.TempIdentity(t)
+
+	if err := WriteEntryWithRecipients(vaultDir, "empty", &Entry{}, identity); err != nil {
+		t.Fatalf("WriteEntryWithRecipients() error = %v", err)
+	}
+	got, err := ReadEntry(vaultDir, "empty", identity)
+	if err != nil {
+		t.Fatalf("ReadEntry() error = %v", err)
+	}
+	if got.Data == nil {
+		t.Fatal("Data = nil, want initialized map")
+	}
+}
+
+func TestAutoCommitUsesDefaultMessage(t *testing.T) {
+	v := &Vault{Dir: t.TempDir(), Config: &config.Config{}}
+	if err := v.AutoCommit(""); err != nil {
+		t.Fatalf("AutoCommit() error = %v", err)
+	}
+}
+
+func mustWriteEntryCoverage(vaultDir string, identity *age.X25519Identity, path string, data map[string]interface{}) {
+	if err := WriteEntry(vaultDir, path, &Entry{Data: data}, identity); err != nil {
+		panic(err)
+	}
+}
+
+func containsStringCoverage(values []string, want string) bool {
+	for _, v := range values {
+		if v == want {
+			return true
+		}
+	}
+	return false
 }
 
 // TestInitReadOnlyDirectory covers the write error when vault dir is not writable.

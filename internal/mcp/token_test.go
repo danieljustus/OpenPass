@@ -213,3 +213,22 @@ func TestRotateTokenGeneratesDifferentTokens(t *testing.T) {
 		t.Fatal("consecutive RotateToken calls should generate different tokens")
 	}
 }
+
+func TestRotateToken_RandError(t *testing.T) {
+	oldReader := randReader
+	randReader = &errorReader{}
+	defer func() { randReader = oldReader }()
+
+	_, err := RotateToken("/nonexistent/path")
+	if err == nil {
+		t.Fatal("expected error from rand.Reader failure")
+	}
+}
+
+func TestTokenFilePath(t *testing.T) {
+	result := TokenFilePath("/path/to/vault")
+	expected := filepath.Join("/path/to/vault", "mcp-token")
+	if result != expected {
+		t.Errorf("TokenFilePath() = %q, want %q", result, expected)
+	}
+}

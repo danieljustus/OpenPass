@@ -1252,3 +1252,41 @@ func TestRedactValue(t *testing.T) {
 		})
 	}
 }
+
+func TestRedactValue_NestedMap(t *testing.T) {
+	nestedValue := map[string]any{
+		"secret": "hidden",
+		"public": "visible",
+	}
+
+	result := redactValue("data", nestedValue, []string{"data.secret"})
+	resultMap, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("redactValue() returned %T, want map[string]any", result)
+	}
+	if resultMap["secret"] != "[REDACTED]" {
+		t.Errorf("data.secret = %v, want [REDACTED]", resultMap["secret"])
+	}
+	if resultMap["public"] != "visible" {
+		t.Errorf("data.public = %v, want visible", resultMap["public"])
+	}
+}
+
+func TestRedactValue_NestedMapWildcard(t *testing.T) {
+	nestedValue := map[string]any{
+		"secret": "hidden",
+		"public": "visible",
+	}
+
+	result := redactValue("data", nestedValue, []string{"data.*"})
+	resultMap, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("redactValue() returned %T, want map[string]any", result)
+	}
+	if resultMap["secret"] != "[REDACTED]" {
+		t.Errorf("data.secret = %v, want [REDACTED]", resultMap["secret"])
+	}
+	if resultMap["public"] != "[REDACTED]" {
+		t.Errorf("data.public = %v, want [REDACTED]", resultMap["public"])
+	}
+}

@@ -316,6 +316,42 @@ func TestStdioTransport_handleLine_HandlerReturnsNilResponse(t *testing.T) {
 	}
 }
 
+type failingWriter struct{}
+
+func (f *failingWriter) Write(_ []byte) (int, error) {
+	return 0, errors.New("write failed")
+}
+
+func TestStdioTransport_writeMessage_WriteError(t *testing.T) {
+	oldStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	os.Stderr = w
+
+	transport := NewStdioTransportWithIO(strings.NewReader(""), &failingWriter{})
+
+	msg := &Message{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage("1"),
+		Result:  json.RawMessage(`{"ok": true}`),
+	}
+
+	transport.writeMessage(msg)
+
+	_ = w.Close()
+	os.Stderr = oldStderr
+
+	var buf bytes.Buffer
+	_, _ = buf.ReadFrom(r)
+	stderrOutput := buf.String()
+
+	if !strings.Contains(stderrOutput, "failed to write message") {
+		t.Errorf("expected stderr to contain 'failed to write message', got %q", stderrOutput)
+	}
+}
+
 func TestStdioTransport_writeMessage_JSONMarshalError(t *testing.T) {
 	oldStderr := os.Stderr
 	r, w, err := os.Pipe()

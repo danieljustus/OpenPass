@@ -99,3 +99,31 @@ func TestNoopBiometricAuthenticator(t *testing.T) {
 		t.Errorf("expected ErrBiometricNotAvailable, got %v", err)
 	}
 }
+
+func TestBiometricErrorTypes(t *testing.T) {
+	if ErrBiometricNotAvailable == ErrBiometricFailed {
+		t.Error("ErrBiometricNotAvailable and ErrBiometricFailed should be distinct")
+	}
+}
+
+func TestDefaultBiometricAuthenticator_SeveralCalls(t *testing.T) {
+	biometricAuthenticator = nil
+	auth1 := DefaultBiometricAuthenticator()
+	auth2 := DefaultBiometricAuthenticator()
+	if auth1 != auth2 {
+		t.Error("DefaultBiometricAuthenticator should return same instance on repeated calls")
+	}
+}
+
+func TestSetBiometricAuthenticator_ReplacesPrevious(t *testing.T) {
+	mock1 := &mockBiometricAuthenticator{available: true, authErr: nil}
+	mock2 := &mockBiometricAuthenticator{available: false}
+	SetBiometricAuthenticator(mock1)
+	SetBiometricAuthenticator(mock2)
+	defer func() { biometricAuthenticator = nil }()
+
+	auth := DefaultBiometricAuthenticator()
+	if auth != mock2 {
+		t.Error("SetBiometricAuthenticator should replace previous authenticator")
+	}
+}

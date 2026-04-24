@@ -2,6 +2,8 @@ package update
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -464,5 +466,182 @@ func TestCheckerURLTrimming(t *testing.T) {
 	}
 	if result.LatestVersion != "1.2.0" {
 		t.Fatalf("LatestVersion = %q, want %q", result.LatestVersion, "1.2.0")
+	}
+}
+
+func TestCheckerReturnsHTTP404(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "not found", http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	checker := NewChecker(server.Client())
+	checker.LatestReleaseURL = server.URL
+	checker.Cache = nil
+
+	_, err := checker.Check(context.Background(), "1.0.0")
+	if err == nil {
+		t.Fatal("expected HTTP 404 error")
+	}
+	if !strings.Contains(err.Error(), "HTTP 404") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCheckerReturnsNetworkError(t *testing.T) {
+	checker := NewChecker(stubHTTPDoer{
+		do: func(req *http.Request) (*http.Response, error) {
+			return nil, fmt.Errorf("connection refused")
+		},
+	})
+	checker.LatestReleaseURL = "http://localhost:1"
+	checker.Cache = nil
+
+	_, err := checker.Check(context.Background(), "1.0.0")
+	if err == nil {
+		t.Fatal("expected network error")
+	}
+	if !strings.Contains(err.Error(), "request latest release") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCheckerEmptyLatestReleaseURLFallback(t *testing.T) {
+	checker := NewChecker(stubHTTPDoer{
+		do: func(req *http.Request) (*http.Response, error) {
+			if req.URL.String() != DefaultLatestReleaseURL {
+				t.Fatalf("expected URL %q, got %q", DefaultLatestReleaseURL, req.URL.String())
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`{"tag_name":"v1.0.0","html_url":"https://example.com"}`)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		},
+	})
+	checker.LatestReleaseURL = ""
+	checker.Cache = nil
+
+	_, err := checker.Check(context.Background(), "1.0.0")
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+}
+
+func TestParseStableVersionEmpty(t *testing.T) {
+	_, ok := parseStableVersion("")
+	if ok {
+		t.Fatal("parseStableVersion(\"\") should return ok=false")
+	}
+}
+
+func TestParseStableVersionWhitespaceOnly(t *testing.T) {
+	_, ok := parseStableVersion("   ")
+	if ok {
+		t.Fatal("parseStableVersion(\"   \") should return ok=false")
+	}
+}
+
+func TestParseStableVersionNegative(t *testing.T) {
+	_, ok := parseStableVersion("-1.0.0")
+	if ok {
+		t.Fatal("parseStableVersion(\"-1.0.0\") should return ok=false")
+	}
+}
+
+func TestParseStableVersionPrerelease(t *testing.T) {
+	_, ok := parseStableVersion("1.0.0-alpha")
+	if ok {
+		t.Fatal("parseStableVersion(\"1.0.0-alpha\") should return ok=false")
+	}
+}
+
+func TestParseStableVersionBuildMetadata(t *testing.T) {
+	_, ok := parseStableVersion("1.0.0+build")
+	if ok {
+		t.Fatal("parseStableVersion(\"1.0.0+build\") should return ok=false")
+	}
+}
+
+func TestParseStableVersionPrereleaseAndBuildMetadata(t *testing.T) {
+	_, ok := parseStableVersion("1.0.0-alpha+build")
+	if ok {
+		t.Fatal("parseStableVersion(\"1.0.0-alpha+build\") should return ok=false")
+	}
+}
+
+func TestParseStableVersionTooFewParts(t *testing.T) {
+	_, ok := parseStableVersion("1.0")
+	if ok {
+		t.Fatal("parseStableVersion(\"1.0\") should return ok=false")
+	}
+}
+
+func TestParseStableVersionTooManyParts(t *testing.T) {
+	_, ok := parseStableVersion("1.0.0.0")
+	if ok {
+		t.Fatal("parseStableVersion(\"1.0.0.0\") should return ok=false")
+	}
+}
+
+func TestParseStableVersionEmptyPart(t *testing.T) {
+	_, ok := parseStableVersion("1..0")
+	if ok {
+		t.Fatal("parseStableVersion(\"1..0\") should return ok=false")
+	}
+}
+
+func TestParseStableVersionNonNumeric(t *testing.T) {
+	_, ok := parseStableVersion("a.b.c")
+	if ok {
+		t.Fatal("parseStableVersion(\"a.b.c\") should return ok=false")
+	}
+}
+
+func TestCompareStableVersionsLeftGreater(t *testing.T) {
+	left, _ := parseStableVersion("2.0.0")
+	right, _ := parseStableVersion("1.9.9")
+	if compareStableVersions(left, right) != 1 {
+		t.Fatalf("expected 2.0.0 > 1.9.9")
+	}
+}
+
+func TestCompareStableVersionsRightGreaterMajor(t *testing.T) {
+	left, _ := parseStableVersion("1.0.0")
+	right, _ := parseStableVersion("2.0.0")
+	if compareStableVersions(left, right) != -1 {
+		t.Fatalf("expected 1.0.0 < 2.0.0")
+	}
+}
+
+func TestCompareStableVersionsRightGreaterMinor(t *testing.T) {
+	left, _ := parseStableVersion("1.1.0")
+	right, _ := parseStableVersion("1.2.0")
+	if compareStableVersions(left, right) != -1 {
+		t.Fatalf("expected 1.1.0 < 1.2.0")
+	}
+}
+
+func TestCompareStableVersionsRightGreaterPatch(t *testing.T) {
+	left, _ := parseStableVersion("1.0.1")
+	right, _ := parseStableVersion("1.0.2")
+	if compareStableVersions(left, right) != -1 {
+		t.Fatalf("expected 1.0.1 < 1.0.2")
+	}
+}
+
+func TestCompareStableVersionsLeftGreaterMinor(t *testing.T) {
+	left, _ := parseStableVersion("1.2.0")
+	right, _ := parseStableVersion("1.1.0")
+	if compareStableVersions(left, right) != 1 {
+		t.Fatalf("expected 1.2.0 > 1.1.0")
+	}
+}
+
+func TestCompareStableVersionsLeftGreaterPatch(t *testing.T) {
+	left, _ := parseStableVersion("1.0.2")
+	right, _ := parseStableVersion("1.0.1")
+	if compareStableVersions(left, right) != 1 {
+		t.Fatalf("expected 1.0.2 > 1.0.1")
 	}
 }

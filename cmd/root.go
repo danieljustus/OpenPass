@@ -22,6 +22,7 @@ var osExit = os.Exit
 const requiresVaultAnnotation = "openpass/requires-vault"
 
 var readPasswordFunc func(int) ([]byte, error) = term.ReadPassword
+var isTerminalFunc func(int) bool = term.IsTerminal
 
 func readHiddenInput(prompt string, reader *bufio.Reader) (string, error) {
 	fmt.Fprint(os.Stderr, prompt)
@@ -31,7 +32,7 @@ func readHiddenInput(prompt string, reader *bufio.Reader) (string, error) {
 		return "", fmt.Errorf("file descriptor %d exceeds int range", fdRaw)
 	}
 	fd := int(fdRaw)
-	if term.IsTerminal(fd) {
+	if isTerminalFunc(fd) {
 		passphrase, err := readPasswordFunc(fd)
 		fmt.Fprintln(os.Stderr)
 		if err != nil {

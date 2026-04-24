@@ -427,6 +427,9 @@ func TestSaveWithAllConfigSections(t *testing.T) {
 			Stdio:         true,
 			HTTPTokenFile: "/token/path",
 		},
+		Update: &UpdateConfig{
+			CacheTTL: 24 * time.Hour,
+		},
 		Clipboard: &ClipboardConfig{
 			AutoClearDuration: 60,
 		},
@@ -689,4 +692,758 @@ func writeTempFile(t *testing.T, content []byte) string {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	return path
+}
+
+// --- Validation Edge-Case Tests ---
+
+func TestValidateConfigPath_RejectsTraversal(t *testing.T) {
+	t.Parallel()
+
+	// These paths escape the expected directory via ..
+	badPaths := []string{
+		"../etc/passwd",
+		"foo/../../etc/passwd",
+		"foo/bar/../../../root/.ssh",
+		"./../../../etc",
+		"..",
+	}
+	for _, p := range badPaths {
+		err := validateConfigPath(p)
+		if err == nil {
+			t.Errorf("validateConfigPath(%q) = nil, want error", p)
+		}
+	}
+}
+
+func TestValidateConfigPath_AcceptsValidPaths(t *testing.T) {
+	t.Parallel()
+
+	validPaths := []string{
+		"config.yaml",
+		"subdir/config.yaml",
+		"./config.yaml",
+		"foo/bar.yaml",
+		"~/.openpass/config.yaml",
+	}
+	for _, p := range validPaths {
+		err := validateConfigPath(p)
+		if err != nil {
+			t.Errorf("validateConfigPath(%q) = %v, want nil", p, err)
+		}
+	}
+}
+
+func TestLoad_RejectsEmptyMCPBind(t *testing.T) {
+	t.Parallel()
+
+	// MCP bind is explicitly set to empty string, which should fail
+	yaml := `mcp:
+  bind: ""
+`
+	path := writeTempFile(t, []byte(yaml))
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("Load() with empty MCP bind should return error")
+	}
+}
+
+func TestLoad_RejectsMissingMCPBind(t *testing.T) {
+	t.Parallel()
+
+	// MCP section present but bind explicitly empty string
+	yaml := `mcp:
+  bind: ""
+`
+	path := writeTempFile(t, []byte(yaml))
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("Load() with empty MCP bind should return error")
+	}
+}
+
+func TestLoad_AcceptsZeroMCPBindBecauseDefault(t *testing.T) {
+	t.Parallel()
+
+	// MCP section with port only, bind defaults to 127.0.0.1 which is non-empty
+	yaml := `mcp:
+  port: 8080
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.MCP == nil {
+		t.Fatal("MCP should not be nil")
+	}
+	if cfg.MCP.Bind != "127.0.0.1" {
+		t.Errorf("MCP.Bind = %q, want 127.0.0.1", cfg.MCP.Bind)
+	}
+}
+
+func TestLoad_RejectsInvalidApprovalMode(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name  string
+		yaml  string
+	}{
+		{"invalid_mode", `agents:
+  test:
+    approvalMode: invalid_mode
+`},
+		{"random_string", `agents:
+  test:
+    approvalMode: something
+`},
+		{"numeric", `agents:
+  test:
+    approvalMode: 123
+`},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeTempFile(t, []byte(tc.yaml))
+			_, err := Load(path)
+			if err == nil {
+				t.Errorf("Load() with approvalMode %q = nil, want error", tc.name)
+			}
+		})
+	}
+}
+
+func TestLoad_AcceptsAllValidApprovalModes(t *testing.T) {
+	t.Parallel()
+
+	validModes := []string{"none", "deny", "prompt"}
+	for _, mode := range validModes {
+		yaml := "agents:\n  test:\n    approvalMode: " + mode + "\n"
+		path := writeTempFile(t, []byte(yaml))
+		cfg, err := Load(path)
+		if err != nil {
+			t.Errorf("Load() with approvalMode %q = error %v", mode, err)
+		} else if cfg.Agents["test"].ApprovalMode != mode {
+			t.Errorf("ApprovalMode = %q, want %q", cfg.Agents["test"].ApprovalMode, mode)
+		}
+	}
+}
+
+func TestLoad_RequireApprovalTrueMapsToPrompt(t *testing.T) {
+	t.Parallel()
+
+	yaml := `agents:
+  test:
+    requireApproval: true
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Agents["test"].ApprovalMode != "prompt" {
+		t.Errorf("ApprovalMode = %q, want prompt", cfg.Agents["test"].ApprovalMode)
+	}
+}
+
+func TestLoad_RequireApprovalFalseMapsToNone(t *testing.T) {
+	t.Parallel()
+
+	yaml := `agents:
+  test:
+    requireApproval: false
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Agents["test"].ApprovalMode != "none" {
+		t.Errorf("ApprovalMode = %q, want none", cfg.Agents["test"].ApprovalMode)
+	}
+}
+
+func TestLoad_ApprovalModePrecedenceOverRequireApproval(t *testing.T) {
+	t.Parallel()
+
+	yaml := `agents:
+  test:
+    requireApproval: true
+    approvalMode: deny
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Agents["test"].ApprovalMode != "deny" {
+		t.Errorf("ApprovalMode = %q, want deny (approvalMode should take precedence)", cfg.Agents["test"].ApprovalMode)
+	}
+}
+
+// --- Default Value Tests ---
+
+func TestDefault_ReturnsBuiltInAgentProfiles(t *testing.T) {
+	t.Parallel()
+
+	cfg := Default()
+
+	wantProfiles := []string{"default", "claude-code", "codex", "hermes", "openclaw", "opencode"}
+	for _, name := range wantProfiles {
+		if _, ok := cfg.Agents[name]; !ok {
+			t.Errorf("missing built-in profile: %s", name)
+		}
+	}
+}
+
+func TestDefault_SessionTimeoutHasDefault(t *testing.T) {
+	t.Parallel()
+
+	cfg := Default()
+	if cfg.SessionTimeout != defaultSessionTimeout {
+		t.Errorf("SessionTimeout = %v, want %v", cfg.SessionTimeout, defaultSessionTimeout)
+	}
+}
+
+func TestDefault_VaultDirIncludesHome(t *testing.T) {
+	t.Parallel()
+
+	cfg := Default()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("cannot determine home dir")
+	}
+	expectedPrefix := home + string(filepath.Separator)
+	if cfg.VaultDir[:len(expectedPrefix)] != expectedPrefix {
+		t.Errorf("VaultDir = %q, want prefix %q", cfg.VaultDir, expectedPrefix)
+	}
+}
+
+func TestLoad_MissingAgentProfileCreatesDefault(t *testing.T) {
+	t.Parallel()
+
+	// When a referenced defaultAgent doesn't exist in the file,
+	// Load should create it
+	yaml := `defaultAgent: nonexistent
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if _, ok := cfg.Agents["nonexistent"]; !ok {
+		t.Error("nonexistent agent should be auto-created")
+	}
+	if cfg.DefaultAgent != "nonexistent" {
+		t.Errorf("DefaultAgent = %q, want nonexistent", cfg.DefaultAgent)
+	}
+}
+
+func TestLoad_AgentsMapNeverNil(t *testing.T) {
+	t.Parallel()
+
+	// Even with empty config, Agents map should be initialized
+	path := writeTempFile(t, []byte("{}\n"))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Agents == nil {
+		t.Fatal("Agents should not be nil")
+	}
+	if len(cfg.Agents) == 0 {
+		t.Error("Agents should contain built-in profiles")
+	}
+}
+
+// --- File Permission/Error Tests ---
+
+func TestLoad_NonexistentDirectory(t *testing.T) {
+	t.Parallel()
+
+	// Path in a directory that doesn't exist
+	nonExistentPath := filepath.Join(t.TempDir(), "does", "not", "exist", "config.yaml")
+	_, err := Load(nonExistentPath)
+	if err == nil {
+		t.Fatal("Load() on nonexistent path should return error")
+	}
+}
+
+func TestSave_PermissionDeniedOnReadOnlyDir(t *testing.T) {
+	t.Skip("Skipping: root-owned temp dir not reliable on macOS")
+
+	// Create a read-only directory
+	home := t.TempDir()
+	readonlyDir := filepath.Join(home, "readonly")
+	if err := os.MkdirAll(readonlyDir, 0o444); err != nil {
+		t.Skip("cannot create readonly dir")
+	}
+	t.Setenv("HOME", home)
+
+	cfg := &Config{
+		VaultDir:       filepath.Join(readonlyDir, ".openpass"),
+		DefaultAgent:   "default",
+		SessionTimeout: defaultSessionTimeout,
+		Agents:         builtinAgentProfiles(),
+	}
+
+	err := cfg.Save()
+	if err == nil {
+		t.Fatal("Save() to read-only directory should fail")
+	}
+}
+
+func TestSave_FilePermissionDenied(t *testing.T) {
+	t.Skip("Skipping: root-owned temp dir not reliable on macOS")
+
+	home := t.TempDir()
+	readonlyDir := filepath.Join(home, ".openpass")
+	if err := os.MkdirAll(readonlyDir, 0o500); err != nil {
+		t.Skip("cannot create dir with restricted perms")
+	}
+	t.Setenv("HOME", home)
+
+	// Create a file inside that's read-only
+	configPath := filepath.Join(readonlyDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte("test: true\n"), 0o400); err != nil {
+		t.Skip("cannot create read-only file")
+	}
+
+	cfg := &Config{
+		VaultDir:       readonlyDir,
+		DefaultAgent:   "default",
+		SessionTimeout: defaultSessionTimeout,
+		Agents:         builtinAgentProfiles(),
+	}
+
+	err := cfg.Save()
+	if err == nil {
+		t.Fatal("Save() to read-only file should fail")
+	}
+}
+
+// --- Nested Config Structure Tests ---
+
+func TestLoad_MCPWithAllTimeoutFields(t *testing.T) {
+	t.Parallel()
+
+	yaml := `mcp:
+  port: 9090
+  bind: "0.0.0.0"
+  read_header_timeout: 3s
+  read_timeout: 15s
+  write_timeout: 20s
+  shutdown_timeout: 8s
+  approval_timeout: 45s
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.MCP == nil {
+		t.Fatal("MCP should not be nil")
+	}
+	if cfg.MCP.ReadHeaderTimeout != 3*time.Second {
+		t.Errorf("MCP.ReadHeaderTimeout = %v, want 3s", cfg.MCP.ReadHeaderTimeout)
+	}
+	if cfg.MCP.ReadTimeout != 15*time.Second {
+		t.Errorf("MCP.ReadTimeout = %v, want 15s", cfg.MCP.ReadTimeout)
+	}
+	if cfg.MCP.WriteTimeout != 20*time.Second {
+		t.Errorf("MCP.WriteTimeout = %v, want 20s", cfg.MCP.WriteTimeout)
+	}
+	if cfg.MCP.ShutdownTimeout != 8*time.Second {
+		t.Errorf("MCP.ShutdownTimeout = %v, want 8s", cfg.MCP.ShutdownTimeout)
+	}
+	if cfg.MCP.ApprovalTimeout != 45*time.Second {
+		t.Errorf("MCP.ApprovalTimeout = %v, want 45s", cfg.MCP.ApprovalTimeout)
+	}
+}
+
+func TestLoad_VaultWithAllFields(t *testing.T) {
+	t.Parallel()
+
+	yaml := `vault:
+  path: /custom/vault
+  default_recipients:
+    - age1recipient1
+    - age1recipient2
+  confirm_remove: true
+  useTouchID: true
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Vault == nil {
+		t.Fatal("Vault should not be nil")
+	}
+	if cfg.Vault.Path != "/custom/vault" {
+		t.Errorf("Vault.Path = %q, want /custom/vault", cfg.Vault.Path)
+	}
+	if len(cfg.Vault.DefaultRecipients) != 2 {
+		t.Errorf("Vault.DefaultRecipients len = %d, want 2", len(cfg.Vault.DefaultRecipients))
+	}
+	if !cfg.Vault.ConfirmRemove {
+		t.Error("Vault.ConfirmRemove should be true")
+	}
+	if !cfg.Vault.UseTouchID {
+		t.Error("Vault.UseTouchID should be true")
+	}
+}
+
+func TestLoad_GitWithAllFields(t *testing.T) {
+	t.Parallel()
+
+	yaml := `git:
+  auto_push: false
+  commit_template: "Custom: {{.Date}} {{.Message}}"
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Git == nil {
+		t.Fatal("Git should not be nil")
+	}
+	if cfg.Git.AutoPush {
+		t.Error("Git.AutoPush should be false")
+	}
+	if cfg.Git.CommitTemplate != "Custom: {{.Date}} {{.Message}}" {
+		t.Errorf("Git.CommitTemplate = %q", cfg.Git.CommitTemplate)
+	}
+}
+
+func TestLoad_UpdateWithCacheTTL(t *testing.T) {
+	t.Parallel()
+
+	yaml := `update:
+  cache_ttl: 48h
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Update == nil {
+		t.Fatal("Update should not be nil")
+	}
+	if cfg.Update.CacheTTL != 48*time.Hour {
+		t.Errorf("Update.CacheTTL = %v, want 48h", cfg.Update.CacheTTL)
+	}
+}
+
+func TestLoad_ClipboardWithAutoClearDuration(t *testing.T) {
+	t.Parallel()
+
+	yaml := `clipboard:
+  auto_clear_duration: 0
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Clipboard == nil {
+		t.Fatal("Clipboard should not be nil")
+	}
+	if cfg.Clipboard.AutoClearDuration != 0 {
+		t.Errorf("Clipboard.AutoClearDuration = %d, want 0 (disabled)", cfg.Clipboard.AutoClearDuration)
+	}
+}
+
+func TestLoad_AllSectionsTogether(t *testing.T) {
+	t.Parallel()
+
+	yaml := `vaultDir: /global/vault
+defaultAgent: claude-code
+sessionTimeout: 30m
+useTouchID: true
+agents:
+  claude-code:
+    allowedPaths:
+      - "work/*"
+      - "personal/*"
+    canWrite: true
+    approvalMode: none
+vault:
+  path: /global/vault
+  default_recipients:
+    - age1global
+git:
+  auto_push: true
+mcp:
+  port: 9090
+  bind: "0.0.0.0"
+update:
+  cache_ttl: 12h
+clipboard:
+  auto_clear_duration: 60
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if cfg.VaultDir != "/global/vault" {
+		t.Errorf("VaultDir = %q, want /global/vault", cfg.VaultDir)
+	}
+	if cfg.DefaultAgent != "claude-code" {
+		t.Errorf("DefaultAgent = %q, want claude-code", cfg.DefaultAgent)
+	}
+	if cfg.SessionTimeout != 30*time.Minute {
+		t.Errorf("SessionTimeout = %v, want 30m", cfg.SessionTimeout)
+	}
+	if !cfg.UseTouchID {
+		t.Error("UseTouchID should be true")
+	}
+
+	agent := cfg.Agents["claude-code"]
+	if len(agent.AllowedPaths) != 2 {
+		t.Errorf("AllowedPaths len = %d, want 2", len(agent.AllowedPaths))
+	}
+	if !agent.CanWrite {
+		t.Error("CanWrite should be true")
+	}
+
+	if cfg.Vault == nil || cfg.Vault.Path != "/global/vault" {
+		t.Error("Vault not properly loaded")
+	}
+	if cfg.Git == nil || !cfg.Git.AutoPush {
+		t.Error("Git not properly loaded")
+	}
+	if cfg.MCP == nil || cfg.MCP.Port != 9090 {
+		t.Error("MCP not properly loaded")
+	}
+	if cfg.Update == nil || cfg.Update.CacheTTL != 12*time.Hour {
+		t.Error("Update not properly loaded")
+	}
+	if cfg.Clipboard == nil || cfg.Clipboard.AutoClearDuration != 60 {
+		t.Error("Clipboard not properly loaded")
+	}
+}
+
+// --- MCP Deprecated Field Test ---
+
+func TestMergeFileMCPConfig_DeprecatedApprovalRequired(t *testing.T) {
+	t.Parallel()
+
+	defaults := defaultMCPConfig()
+	approvalRequired := true
+	fileCfg := &fileMCPConfig{
+		ApprovalRequired: &approvalRequired,
+	}
+	// Should not error, just print warning
+	result := MergeFileMCPConfig(fileCfg, defaults)
+	if result.ApprovalRequired {
+		t.Error("ApprovalRequired should not be set in result (deprecated, ignored)")
+	}
+}
+
+// --- Update Section Missing Field Test ---
+
+func TestMergeFileUpdateConfig_NilCacheTTL(t *testing.T) {
+	t.Parallel()
+
+	defaults := defaultUpdateConfig()
+	// File config with nil CacheTTL (section present but field omitted)
+	fileCfg := &fileUpdateConfig{
+		CacheTTL: nil,
+	}
+	result := MergeFileUpdateConfig(fileCfg, defaults)
+
+	// Should keep the default value
+	if result.CacheTTL != defaults.CacheTTL {
+		t.Errorf("CacheTTL = %v, want default %v", result.CacheTTL, defaults.CacheTTL)
+	}
+}
+
+// --- SessionTimeout Edge Cases ---
+
+func TestLoad_NegativeSessionTimeout_Ignored(t *testing.T) {
+	t.Parallel()
+
+	// Zero or negative session timeout in file should be ignored (kept at default)
+	yaml := `sessionTimeout: -5m
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	// Should still be default since -5m < 0 is ignored
+	if cfg.SessionTimeout != defaultSessionTimeout {
+		t.Errorf("SessionTimeout = %v, want %v (negative should be ignored)", cfg.SessionTimeout, defaultSessionTimeout)
+	}
+}
+
+func TestLoad_ZeroSessionTimeout_Ignored(t *testing.T) {
+	t.Parallel()
+
+	yaml := `sessionTimeout: 0s
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	// Zero should also be ignored (line 115: raw.SessionTimeout > 0)
+	if cfg.SessionTimeout != defaultSessionTimeout {
+		t.Errorf("SessionTimeout = %v, want %v (zero should be ignored)", cfg.SessionTimeout, defaultSessionTimeout)
+	}
+}
+
+// --- UseTouchID Tests ---
+
+func TestLoad_UseTouchIDTrue(t *testing.T) {
+	t.Parallel()
+
+	yaml := `useTouchID: true
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !cfg.UseTouchID {
+		t.Error("UseTouchID should be true")
+	}
+}
+
+func TestLoad_UseTouchIDFalse(t *testing.T) {
+	t.Parallel()
+
+	yaml := `useTouchID: false
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.UseTouchID {
+		t.Error("UseTouchID should be false")
+	}
+}
+
+// --- Agent AllowedPaths Tests ---
+
+func TestLoad_AgentAllowedPathsNil(t *testing.T) {
+	t.Parallel()
+
+	yaml := `agents:
+  test:
+    allowedPaths: ~
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	// When allowedPaths is null in YAML, it should become empty slice
+	agent := cfg.Agents["test"]
+	if agent.AllowedPaths == nil {
+		t.Error("AllowedPaths should not be nil (should be empty slice)")
+	}
+	if len(agent.AllowedPaths) != 0 {
+		t.Errorf("AllowedPaths len = %d, want 0", len(agent.AllowedPaths))
+	}
+}
+
+func TestLoad_AgentAllowedPathsMultiple(t *testing.T) {
+	t.Parallel()
+
+	yaml := `agents:
+  test:
+    allowedPaths:
+      - "work/*"
+      - "personal/*"
+      - "shared/*"
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	agent := cfg.Agents["test"]
+	if len(agent.AllowedPaths) != 3 {
+		t.Errorf("AllowedPaths len = %d, want 3", len(agent.AllowedPaths))
+	}
+}
+
+// --- DefaultConfigPath Tests ---
+
+func TestDefaultConfigPath_ReturnsExpectedPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	path, err := defaultConfigPath()
+	if err != nil {
+		t.Fatalf("defaultConfigPath() error = %v", err)
+	}
+
+	expected := filepath.Join(home, ".openpass", "config.yaml")
+	if path != expected {
+		t.Errorf("defaultConfigPath() = %q, want %q", path, expected)
+	}
+}
+
+// --- Empty Config File Tests ---
+
+func TestLoad_WhitespaceOnlyFile(t *testing.T) {
+	t.Parallel()
+
+	path := writeTempFile(t, []byte("   \n\t\n  \n"))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	// Should return defaults for everything
+	if cfg.VaultDir == "" {
+		t.Error("VaultDir should not be empty")
+	}
+	if cfg.DefaultAgent != "default" {
+		t.Errorf("DefaultAgent = %q, want default", cfg.DefaultAgent)
+	}
+}
+
+// --- MergeFileMCPConfig full timeout coverage ---
+
+func TestMergeFileMCPConfig_AllTimeouts(t *testing.T) {
+	t.Parallel()
+
+	defaults := defaultMCPConfig()
+	readHeaderTimeout := 3 * time.Second
+	readTimeout := 15 * time.Second
+	writeTimeout := 20 * time.Second
+	shutdownTimeout := 8 * time.Second
+	approvalTimeout := 45 * time.Second
+
+	fileCfg := &fileMCPConfig{
+		ReadHeaderTimeout: &readHeaderTimeout,
+		ReadTimeout:       &readTimeout,
+		WriteTimeout:      &writeTimeout,
+		ShutdownTimeout:   &shutdownTimeout,
+		ApprovalTimeout:   &approvalTimeout,
+	}
+	result := MergeFileMCPConfig(fileCfg, defaults)
+
+	if result.ReadHeaderTimeout != 3*time.Second {
+		t.Errorf("ReadHeaderTimeout = %v, want 3s", result.ReadHeaderTimeout)
+	}
+	if result.ReadTimeout != 15*time.Second {
+		t.Errorf("ReadTimeout = %v, want 15s", result.ReadTimeout)
+	}
+	if result.WriteTimeout != 20*time.Second {
+		t.Errorf("WriteTimeout = %v, want 20s", result.WriteTimeout)
+	}
+	if result.ShutdownTimeout != 8*time.Second {
+		t.Errorf("ShutdownTimeout = %v, want 8s", result.ShutdownTimeout)
+	}
+	if result.ApprovalTimeout != 45*time.Second {
+		t.Errorf("ApprovalTimeout = %v, want 45s", result.ApprovalTimeout)
+	}
 }

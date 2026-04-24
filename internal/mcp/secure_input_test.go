@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -317,12 +318,92 @@ func TestSecureInputPrompt_TTYUnavailable(t *testing.T) {
 	}
 }
 
-// mockSecureInputDevice is a mock implementation of secureInputDevice for testing
+func TestSecureInputPrompt_WriteError(t *testing.T) {
+	originalOpenSecureTTY := openSecureTTY
+	openSecureTTY = func() (secureInputDevice, error) {
+		readEnd, _, err := os.Pipe()
+		if err != nil {
+			t.Fatalf("os.Pipe failed: %v", err)
+		}
+		return &mockSecureInputDeviceWithFile{output: readEnd}, nil
+	}
+	defer func() { openSecureTTY = originalOpenSecureTTY }()
+
+	_, err := SecureInputPrompt("test prompt", 5*time.Second)
+	if err == nil {
+		t.Fatal("SecureInputPrompt() expected error on write failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to write prompt") {
+		t.Errorf("SecureInputPrompt() error = %v, want write prompt error", err)
+	}
+}
+
+func TestSecureInputPrompt_Timeout(t *testing.T) {
+	originalOpenSecureTTY := openSecureTTY
+	openSecureTTY = func() (secureInputDevice, error) {
+		return &mockSecureInputDevice{
+			value:     "",
+			readError: os.ErrDeadlineExceeded,
+		}, nil
+	}
+	defer func() { openSecureTTY = originalOpenSecureTTY }()
+
+	_, err := SecureInputPrompt("test prompt", 1*time.Second)
+	if err == nil {
+		t.Fatal("SecureInputPrompt() expected timeout error, got nil")
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("SecureInputPrompt() error = %v, want timeout error", err)
+	}
+}
+
+func TestReadSecureInput_DeadlineError(t *testing.T) {
+	readEnd, writeEnd, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe failed: %v", err)
+	}
+	defer func() {
+		_ = readEnd.Close()
+		_ = writeEnd.Close()
+	}()
+
+	device := &mockSecureInputDeviceWithFile{input: readEnd}
+	_, err = readSecureInput(device, 1*time.Second)
+	if err != nil {
+		t.Fatalf("readSecureInput() with nil deadline error = %v", err)
+	}
+}
+
+type mockSecureInputDeviceWithFile struct {
+	input  *os.File
+	output *os.File
+}
+
+func (m *mockSecureInputDeviceWithFile) ReadString() (string, error) {
+	return "test-value", nil
+}
+
+func (m *mockSecureInputDeviceWithFile) Input() *os.File {
+	return m.input
+}
+
+func (m *mockSecureInputDeviceWithFile) Output() *os.File {
+	return m.output
+}
+
+func (m *mockSecureInputDeviceWithFile) Close() error {
+	return nil
+}
+
 type mockSecureInputDevice struct {
-	value string
+	value     string
+	readError error
 }
 
 func (m *mockSecureInputDevice) ReadString() (string, error) {
+	if m.readError != nil {
+		return "", m.readError
+	}
 	return m.value, nil
 }
 

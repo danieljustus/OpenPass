@@ -156,6 +156,12 @@ func TestVaultGitAutoCommit_Integration(t *testing.T) {
 }
 
 func TestVaultSessionCaching_Integration(t *testing.T) {
+	probeDir := t.TempDir()
+	if err := session.SavePassphrase(probeDir, "probe", time.Second); err != nil {
+		t.Skipf("OS keyring not available in test environment: %v", err)
+	}
+	_ = session.ClearSession(probeDir)
+
 	vaultDir := t.TempDir()
 	passphrase := "session-test-passphrase"
 

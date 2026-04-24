@@ -767,3 +767,20 @@ func TestNewResponse_MarshalError(t *testing.T) {
 		t.Fatal("NewResponse expected error for unmarshalable result, got nil")
 	}
 }
+
+func TestCallToolResultPayload_Nil(t *testing.T) {
+	result := callToolResultPayload(nil)
+	if result == nil {
+		t.Fatal("callToolResultPayload(nil) returned nil")
+	}
+	content, ok := result["content"].([]map[string]any)
+	if !ok {
+		t.Fatal("expected content to be []map[string]any")
+	}
+	if len(content) != 1 {
+		t.Fatalf("expected 1 content item, got %d", len(content))
+	}
+	if content[0]["text"] != "" {
+		t.Errorf("expected empty text, got %q", content[0]["text"])
+	}
+}

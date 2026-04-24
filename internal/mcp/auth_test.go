@@ -451,3 +451,168 @@ func TestRateLimiterConcurrentAccess(t *testing.T) {
 		t.Fatalf("expected 100 allowed requests, got %d", allowedCount)
 	}
 }
+
+func TestOriginValidationMiddleware_AllowsEmptyOrigin(t *testing.T) {
+	handler := OriginValidationMiddleware("127.0.0.1:8080", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+}
+
+func TestOriginValidationMiddleware_AllowsSameOrigin(t *testing.T) {
+	handler := OriginValidationMiddleware("127.0.0.1:8080", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Host = "127.0.0.1:8080"
+	req.Header.Set("Origin", "http://127.0.0.1:8080")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+}
+
+func TestOriginValidationMiddleware_RejectsInvalidOrigin(t *testing.T) {
+	handler := OriginValidationMiddleware("127.0.0.1:8080", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Host = "127.0.0.1:8080"
+	req.Header.Set("Origin", "http://evil.com")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestOriginValidationMiddleware_AllowsLoopback(t *testing.T) {
+	handler := OriginValidationMiddleware("127.0.0.1:8080", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Host = "localhost:8080"
+	req.Header.Set("Origin", "http://127.0.0.1:8080")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+}
+
+func TestIsAllowedOrigin(t *testing.T) {
+	tests := []struct {
+		name        string
+		origin      string
+		requestHost string
+		serverAddr  string
+		expected    bool
+	}{
+		{"empty origin", "", "localhost:8080", "127.0.0.1:8080", false},
+		{"same host", "http://localhost:8080", "localhost:8080", "127.0.0.1:8080", true},
+		{"same as bind", "http://127.0.0.1:8080", "localhost:8080", "127.0.0.1:8080", true},
+		{"loopback to loopback", "http://127.0.0.1:8080", "127.0.0.1:8080", "127.0.0.1:8080", true},
+		{"localhost to loopback", "http://localhost:8080", "127.0.0.1:8080", "127.0.0.1:8080", true},
+		{"invalid origin", "not-a-url", "localhost:8080", "127.0.0.1:8080", false},
+		{"missing scheme", "localhost:8080", "localhost:8080", "127.0.0.1:8080", false},
+		{"external origin", "http://evil.com", "localhost:8080", "127.0.0.1:8080", false},
+		{"ipv6 loopback", "http://[::1]:8080", "[::1]:8080", "127.0.0.1:8080", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isAllowedOrigin(tt.origin, tt.requestHost, tt.serverAddr)
+			if result != tt.expected {
+				t.Errorf("isAllowedOrigin(%q, %q, %q) = %v, want %v", tt.origin, tt.requestHost, tt.serverAddr, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestStripPort(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"127.0.0.1:8080", "127.0.0.1"},
+		{"localhost:8080", "localhost"},
+		{"127.0.0.1", "127.0.0.1"},
+		{"localhost", "localhost"},
+		{"[::1]:8080", "::1"},
+		{"", ""},
+		{"  ", ""},
+		{"[2001:db8::1]:8080", "2001:db8::1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := stripPort(tt.input)
+			if result != tt.expected {
+				t.Errorf("stripPort(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsLoopbackHost(t *testing.T) {
+	tests := []struct {
+		host     string
+		expected bool
+	}{
+		{"localhost", true},
+		{"127.0.0.1", true},
+		{"[::1]", true},
+		{"::1", true},
+		{"192.168.1.1", false},
+		{"0.0.0.0", false},
+		{"", false},
+		{"example.com", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.host, func(t *testing.T) {
+			result := isLoopbackHost(tt.host)
+			if result != tt.expected {
+				t.Errorf("isLoopbackHost(%q) = %v, want %v", tt.host, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestLogAuthFailure_NilLogger(t *testing.T) {
+	original := authAuditLogger
+	authAuditLogger = nil
+	defer func() { authAuditLogger = original }()
+
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	logAuthFailure(req, "test", "detail")
+}
+
+func TestBearerAuthMissingBearerPrefix(t *testing.T) {
+	handler := BearerAuthMiddleware("secret-token", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Header.Set("Authorization", "Basic secret-token")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}

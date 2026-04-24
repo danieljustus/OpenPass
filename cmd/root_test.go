@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"bufio"
 	"errors"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -479,5 +481,140 @@ func TestUnlockVault_HiddenInput(t *testing.T) {
 	}
 	if v == nil {
 		t.Fatal("unlockVault returned nil vault")
+	}
+}
+
+func TestConfiguredSessionTTL_WithOverride(t *testing.T) {
+	override := 30 * time.Minute
+	ttl := configuredSessionTTL(nil, override)
+	if ttl != override {
+		t.Fatalf("configuredSessionTTL() = %v, want %v", ttl, override)
+	}
+}
+
+func TestConfiguredSessionTTL_WithVaultConfig(t *testing.T) {
+	vaultDir := t.TempDir()
+	passphrase := "test-passphrase"
+	cfg := config.Default()
+	cfg.SessionTimeout = 45 * time.Minute
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, cfg); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+
+	v, err := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
+	if err != nil {
+		t.Fatalf("open vault: %v", err)
+	}
+
+	ttl := configuredSessionTTL(v, 0)
+	if ttl != cfg.SessionTimeout {
+		t.Fatalf("configuredSessionTTL() = %v, want %v", ttl, cfg.SessionTimeout)
+	}
+}
+
+func TestConfiguredSessionTTL_NilVault(t *testing.T) {
+	ttl := configuredSessionTTL(nil, 0)
+	if ttl != defaultSessionTTL() {
+		t.Fatalf("configuredSessionTTL() = %v, want %v", ttl, defaultSessionTTL())
+	}
+}
+
+func TestConfiguredSessionTTL_VaultWithNilConfig(t *testing.T) {
+	v := &vaultpkg.Vault{}
+	ttl := configuredSessionTTL(v, 0)
+	if ttl != defaultSessionTTL() {
+		t.Fatalf("configuredSessionTTL() = %v, want %v", ttl, defaultSessionTTL())
+	}
+}
+
+func TestConfiguredSessionTTL_ZeroSessionTimeout(t *testing.T) {
+	vaultDir := t.TempDir()
+	passphrase := "test-passphrase"
+	cfg := config.Default()
+	cfg.SessionTimeout = 0
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, cfg); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+
+	v, err := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
+	if err != nil {
+		t.Fatalf("open vault: %v", err)
+	}
+
+	ttl := configuredSessionTTL(v, 0)
+	if ttl != defaultSessionTTL() {
+		t.Fatalf("configuredSessionTTL() = %v, want %v", ttl, defaultSessionTTL())
+	}
+}
+
+func TestReadHiddenInput_TerminalEOF(t *testing.T) {
+	oldReadPassword := readPasswordFunc
+	oldIsTerminal := isTerminalFunc
+	readPasswordFunc = func(int) ([]byte, error) {
+		return nil, io.EOF
+	}
+	isTerminalFunc = func(int) bool { return true }
+	defer func() {
+		readPasswordFunc = oldReadPassword
+		isTerminalFunc = oldIsTerminal
+	}()
+
+	_, err := readHiddenInput("Password: ", nil)
+	if err == nil {
+		t.Fatal("expected error for terminal EOF")
+	}
+	if !strings.Contains(err.Error(), "read Password") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestReadHiddenInput_TerminalInterrupt(t *testing.T) {
+	oldReadPassword := readPasswordFunc
+	oldIsTerminal := isTerminalFunc
+	readPasswordFunc = func(int) ([]byte, error) {
+		return nil, errors.New("interrupted")
+	}
+	isTerminalFunc = func(int) bool { return true }
+	defer func() {
+		readPasswordFunc = oldReadPassword
+		isTerminalFunc = oldIsTerminal
+	}()
+
+	_, err := readHiddenInput("Password: ", nil)
+	if err == nil {
+		t.Fatal("expected error for terminal interrupt")
+	}
+	if !strings.Contains(err.Error(), "read Password") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestReadHiddenInput_ReaderEOF(t *testing.T) {
+	reader := bufio.NewReader(strings.NewReader(""))
+	_, err := readHiddenInput("Password: ", reader)
+	if err == nil {
+		t.Fatal("expected error for reader EOF")
+	}
+	if !strings.Contains(err.Error(), "read Password") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestReadHiddenInput_StdinEOF(t *testing.T) {
+	oldStdin := os.Stdin
+	r, w, _ := os.Pipe()
+	os.Stdin = r
+	_ = w.Close()
+	defer func() {
+		os.Stdin = oldStdin
+		_ = r.Close()
+	}()
+
+	_, err := readHiddenInput("Password: ", nil)
+	if err == nil {
+		t.Fatal("expected error for stdin EOF")
+	}
+	if !strings.Contains(err.Error(), "read Password") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }

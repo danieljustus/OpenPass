@@ -227,6 +227,10 @@ make fmt
 
 # Run go vet
 make vet
+
+# Run gosec SAST scanner (blocking in CI)
+go install github.com/securego/gosec/v2/cmd/gosec@latest
+gosec ./...
 ```
 
 ### Writing Tests
