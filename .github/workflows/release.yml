@@ -104,19 +104,19 @@ jobs:
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
           VERSION="${TAG#v}"
-          curl -fLO "https://github.com/danieljustus/OpenPass/releases/download/${TAG}/openpass_${VERSION}_linux_amd64.tar.gz"
-          curl -fLO "https://github.com/danieljustus/OpenPass/releases/download/${TAG}/openpass_${VERSION}_checksums.txt"
+          curl -fLO "https://github.com/danieljustus/OpenPass/releases/download/${TAG}/OpenPass_${VERSION}_linux_amd64.tar.gz"
+          curl -fLO "https://github.com/danieljustus/OpenPass/releases/download/${TAG}/OpenPass_${VERSION}_checksums.txt"
 
       - name: Verify checksum
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
           VERSION="${TAG#v}"
-          sha256sum -c "openpass_${VERSION}_checksums.txt" --ignore-missing
+          sha256sum -c "OpenPass_${VERSION}_checksums.txt" --ignore-missing
 
       - name: Extract and install
         run: |
-          tar xzf openpass_*.tar.gz
-          sudo mv openpass_*/openpass /usr/local/bin/openpass
+          tar xzf OpenPass_*.tar.gz
+          sudo mv ./*/openpass /usr/local/bin/openpass
           openpass version
 
       - name: Smoke test - help output
@@ -125,7 +125,7 @@ jobs:
       - name: Smoke test - init vault
         run: |
           TMPDIR=$(mktemp -d)
-          OPENPASS_VAULT="$TMPDIR/test-vault" openpass init --non-interactive
+          printf '%s\n' "test-passphrase-123" | OPENPASS_VAULT="$TMPDIR/test-vault" openpass init
           rm -rf "$TMPDIR"
 
   smoke-test-deb:
@@ -142,13 +142,13 @@ jobs:
           TAG="${{ steps.tag.outputs.tag }}"
           VERSION="${TAG#v}"
           curl -fLO "https://github.com/danieljustus/OpenPass/releases/download/${TAG}/openpass_${VERSION}_linux_amd64.deb"
-          curl -fLO "https://github.com/danieljustus/OpenPass/releases/download/${TAG}/openpass_${VERSION}_checksums.txt"
+          curl -fLO "https://github.com/danieljustus/OpenPass/releases/download/${TAG}/OpenPass_${VERSION}_checksums.txt"
 
       - name: Verify checksum
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
           VERSION="${TAG#v}"
-          sha256sum -c "openpass_${VERSION}_checksums.txt" --ignore-missing
+          sha256sum -c "OpenPass_${VERSION}_checksums.txt" --ignore-missing
 
       - name: Install deb package
         run: sudo dpkg -i openpass_*.deb
@@ -162,7 +162,7 @@ jobs:
       - name: Smoke test - init vault
         run: |
           TMPDIR=$(mktemp -d)
-          OPENPASS_VAULT="$TMPDIR/test-vault" openpass init --non-interactive
+          printf '%s\n' "test-passphrase-123" | OPENPASS_VAULT="$TMPDIR/test-vault" openpass init
           rm -rf "$TMPDIR"
 
   smoke-test-macos:
@@ -178,19 +178,19 @@ jobs:
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
           VERSION="${TAG#v}"
-          curl -fLO "https://github.com/danieljustus/OpenPass/releases/download/${TAG}/openpass_${VERSION}_darwin_amd64.tar.gz"
-          curl -fLO "https://github.com/danieljustus/OpenPass/releases/download/${TAG}/openpass_${VERSION}_checksums.txt"
+          curl -fLO "https://github.com/danieljustus/OpenPass/releases/download/${TAG}/OpenPass_${VERSION}_darwin_amd64.tar.gz"
+          curl -fLO "https://github.com/danieljustus/OpenPass/releases/download/${TAG}/OpenPass_${VERSION}_checksums.txt"
 
       - name: Verify checksum
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
           VERSION="${TAG#v}"
-          shasum -a 256 -c "openpass_${VERSION}_checksums.txt" --ignore-missing
+          shasum -a 256 -c "OpenPass_${VERSION}_checksums.txt" --ignore-missing
 
       - name: Extract and install
         run: |
-          tar xzf openpass_*.tar.gz
-          sudo mv openpass_*/openpass /usr/local/bin/openpass
+          tar xzf OpenPass_*.tar.gz
+          sudo mv ./*/openpass /usr/local/bin/openpass
           openpass version
 
       - name: Smoke test - help output
@@ -199,5 +199,5 @@ jobs:
       - name: Smoke test - init vault
         run: |
           TMPDIR=$(mktemp -d)
-          OPENPASS_VAULT="$TMPDIR/test-vault" openpass init --non-interactive
+          printf '%s\n' "test-passphrase-123" | OPENPASS_VAULT="$TMPDIR/test-vault" openpass init
           rm -rf "$TMPDIR"
