@@ -33,4 +33,66 @@ Initial stable OpenPass release.
 - HTTP MCP binds to `127.0.0.1` by default and requires bearer token authentication
 - Release checksums are published for artifact verification
 
+## [v1.1.0] - 2026-04-23
+
+Major update with vault improvements, self-update mechanism, and enhanced MCP transport.
+
+### Added
+
+- Update check command (`openpass update check`) for detecting newer releases
+- Self-update mechanism for managing OpenPass installations
+- MCP server stdio transport support for local agent integration
+- Session management commands (`openpass unlock`, `openpass lock`) with configurable TTL
+- Release smoke tests for validating published artifacts
+- Installer scripts for cross-platform installation (`install.sh`, `install.ps1`)
+
+### Changed
+
+- Vault structure refactored to use `entries/` subdirectory for organized storage
+- Entry format updated to structured YAML with individual file encryption
+- Removed index cache in favor of direct filesystem operations
+- Improved handler concurrency for better performance
+- Enhanced context propagation throughout the codebase
+
+### Fixed
+
+- Audit error logging improved for better diagnostics
+
+## [v1.1.1] - 2026-04-24
+
+Documentation updates.
+
+### Changed
+
+- Updated documentation images and README content
+
+## [v1.1.2] - 2026-04-24
+
+Documentation fixes.
+
+### Changed
+
+- Additional documentation images and README updates (same commit as v1.1.1)
+
+## [v1.1.3] - 2026-04-24
+
+CI configuration fix.
+
+### Fixed
+
+- Skipped Homebrew tap publishing workflow until GitHub PAT is properly configured
+
+## [v1.1.4] - 2026-04-24
+
+CI fix for release validation.
+
+### Fixed
+
+- Fixed release smoke tests to properly validate published artifacts
+
 [v1.0.0]: https://github.com/danieljustus/OpenPass/releases/tag/v1.0.0
+[v1.1.0]: https://github.com/danieljustus/OpenPass/releases/tag/v1.1.0
+[v1.1.1]: https://github.com/danieljustus/OpenPass/releases/tag/v1.1.1
+[v1.1.2]: https://github.com/danieljustus/OpenPass/releases/tag/v1.1.2
+[v1.1.3]: https://github.com/danieljustus/OpenPass/releases/tag/v1.1.3
+[v1.1.4]: https://github.com/danieljustus/OpenPass/releases/tag/v1.1.4

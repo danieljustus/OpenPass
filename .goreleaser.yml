@@ -138,9 +138,6 @@ brews:
     homepage: "https://github.com/danieljustus/OpenPass"
     description: "Modern CLI password manager with age encryption"
     license: "MIT"
-    # Homebrew publishing needs a PAT that can write to danieljustus/homebrew-tap.
-    # Keep release publishing independent until that dedicated token is configured.
-    skip_upload: true
     install: |
       bin.install "openpass"
       generate_completions_from_executable(bin/"openpass", "completion")

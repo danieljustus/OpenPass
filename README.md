@@ -67,6 +67,13 @@ curl -sSfL https://raw.githubusercontent.com/danieljustus/OpenPass/main/scripts/
 curl -sSfL https://raw.githubusercontent.com/danieljustus/OpenPass/main/scripts/install.sh | sh -s -- --dry-run
 ```
 
+### Homebrew (macOS / Linux)
+
+```bash
+brew tap danieljustus/tap
+brew install openpass
+```
+
 ### Manual download
 
 Download a prebuilt binary from the latest release:
@@ -179,7 +186,7 @@ openpass generate --store newaccount.password --length 20 --symbols
 openpass update check
 ```
 
-If you installed OpenPass via Homebrew, a system package, or `go install`,
+If you installed OpenPass via Homebrew, run `brew upgrade openpass`. For system packages or `go install`,
 keep using that installation path to apply updates. `openpass update check`
 only reports whether a newer stable GitHub release exists.
 
