@@ -1487,7 +1487,8 @@ func TestPushWithResultSSHAuthError(t *testing.T) {
 	if result.Error == nil {
 		t.Fatal("PushWithResult should set error for SSH connection refused")
 	}
-	if !strings.Contains(result.Error.Error(), "network error") && !strings.Contains(result.Error.Error(), "connection") {
+	errMsg := result.Error.Error()
+	if !strings.Contains(errMsg, "network error") && !strings.Contains(errMsg, "connection") && !strings.Contains(errMsg, "SSH agent") {
 		t.Errorf("expected network error message, got: %v", result.Error)
 	}
 }

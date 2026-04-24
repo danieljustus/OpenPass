@@ -996,33 +996,62 @@ func TestLastNEntriesNilFile(t *testing.T) {
 }
 
 func TestLastNEntriesReturnsCorrectCount(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	tests := []struct {
+		name       string
+		numEntries int
+		requestN   int
+		wantLen    int
+		wantFirst  string
+		wantLast   string
+	}{
+		{
+			name:       "small file",
+			numEntries: 10,
+			requestN:   5,
+			wantLen:    5,
+			wantFirst:  "action5",
+			wantLast:   "action9",
+		},
+		{
+			name:       "large file",
+			numEntries: 200,
+			requestN:   50,
+			wantLen:    50,
+			wantFirst:  "action150",
+			wantLast:   "action199",
+		},
+	}
 
-	logger, err := New("count-entries-test")
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
-	defer func() { _ = logger.Close() }()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
 
-	// Write 10 entries
-	for i := 0; i < 10; i++ {
-		logger.LogEntry(LogEntry{Agent: "test", Action: fmt.Sprintf("action%d", i), OK: true})
-	}
+			logger, err := New("lastn-" + tt.name)
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+			defer func() { _ = logger.Close() }()
 
-	entries, err := logger.lastNEntries(5)
-	if err != nil {
-		t.Fatalf("lastNEntries() error = %v", err)
-	}
-	if len(entries) != 5 {
-		t.Fatalf("lastNEntries() returned %d entries, want 5", len(entries))
-	}
-	// Should return the last 5 entries
-	if entries[0].Action != "action5" {
-		t.Fatalf("entries[0].Action = %s, want action5", entries[0].Action)
-	}
-	if entries[4].Action != "action9" {
-		t.Fatalf("entries[4].Action = %s, want action9", entries[4].Action)
+			for i := 0; i < tt.numEntries; i++ {
+				logger.LogEntry(LogEntry{Agent: "test", Action: fmt.Sprintf("action%d", i), OK: true})
+			}
+
+			entries, err := logger.lastNEntries(tt.requestN)
+			if err != nil {
+				t.Fatalf("lastNEntries() error = %v", err)
+			}
+			if len(entries) != tt.wantLen {
+				t.Fatalf("lastNEntries() returned %d entries, want %d", len(entries), tt.wantLen)
+			}
+			if entries[0].Action != tt.wantFirst {
+				t.Fatalf("entries[0].Action = %s, want %s", entries[0].Action, tt.wantFirst)
+			}
+			lastIdx := len(entries) - 1
+			if entries[lastIdx].Action != tt.wantLast {
+				t.Fatalf("entries[%d].Action = %s, want %s", lastIdx, entries[lastIdx].Action, tt.wantLast)
+			}
+		})
 	}
 }
 
@@ -1291,37 +1320,6 @@ func TestGetErrorsAllErrors(t *testing.T) {
 		if e.Reason != "fail" {
 			t.Fatalf("errors[%d].Reason = %s, want fail", i, e.Reason)
 		}
-	}
-}
-
-func TestLastNEntriesLargeFile(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-
-	logger, err := New("large-entries-test")
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
-	defer func() { _ = logger.Close() }()
-
-	// Write 200 entries
-	for i := 0; i < 200; i++ {
-		logger.LogEntry(LogEntry{Agent: "test", Action: fmt.Sprintf("action%d", i), OK: true})
-	}
-
-	entries, err := logger.lastNEntries(50)
-	if err != nil {
-		t.Fatalf("lastNEntries() error = %v", err)
-	}
-	if len(entries) != 50 {
-		t.Fatalf("lastNEntries() returned %d entries, want 50", len(entries))
-	}
-	// Verify we got the last 50
-	if entries[0].Action != "action150" {
-		t.Fatalf("entries[0].Action = %s, want action150", entries[0].Action)
-	}
-	if entries[49].Action != "action199" {
-		t.Fatalf("entries[49].Action = %s, want action199", entries[49].Action)
 	}
 }
 
