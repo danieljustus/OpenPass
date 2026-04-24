@@ -3,6 +3,8 @@ package git
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +12,7 @@ import (
 
 	gogit "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
@@ -1068,5 +1071,553 @@ func TestPushWithResultConnectionRefused(t *testing.T) {
 	}
 	if result.Error == nil {
 		t.Error("PushWithResult should set error for connection refused")
+	}
+}
+
+func TestPushWithResultAuthError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte("authentication required"))
+	}))
+	defer ts.Close()
+
+	local := t.TempDir()
+	if err := Init(local); err != nil {
+		t.Fatalf("Init(local): %v", err)
+	}
+
+	repo, err := gogit.PlainOpen(local)
+	if err != nil {
+		t.Fatalf("open local: %v", err)
+	}
+	if _, err := repo.CreateRemote(&config.RemoteConfig{Name: "origin", URLs: []string{ts.URL + "/repo.git"}}); err != nil {
+		t.Fatalf("CreateRemote(): %v", err)
+	}
+
+	writeFile(t, local, "f.txt", []byte("hello"))
+	if err := AutoCommit(local, "test"); err != nil {
+		t.Fatalf("AutoCommit(): %v", err)
+	}
+
+	result := PushWithResult(local)
+	if result.Success {
+		t.Error("PushWithResult should not succeed with auth error")
+	}
+	if result.Error == nil {
+		t.Fatal("PushWithResult should set error for auth failure")
+	}
+	if !strings.Contains(result.Error.Error(), "authentication failed") {
+		t.Errorf("expected auth error message, got: %v", result.Error)
+	}
+}
+
+func TestPullWithNoRemote(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+
+	writeFile(t, dir, "vault.txt", []byte("secret"))
+	if err := AutoCommit(dir, "test commit"); err != nil {
+		t.Fatalf("AutoCommit(): %v", err)
+	}
+
+	if err := Pull(dir); err != nil {
+		t.Errorf("Pull should be graceful when no remote is configured, got: %v", err)
+	}
+}
+
+func TestPullWithMergeConflict(t *testing.T) {
+	origin := t.TempDir()
+	if _, err := gogit.PlainInit(origin, true); err != nil {
+		t.Fatalf("PlainInit(origin): %v", err)
+	}
+
+	local1 := t.TempDir()
+	if err := Init(local1); err != nil {
+		t.Fatalf("Init(local1): %v", err)
+	}
+	repo1, err := gogit.PlainOpen(local1)
+	if err != nil {
+		t.Fatalf("open local1: %v", err)
+	}
+	if _, err := repo1.CreateRemote(&config.RemoteConfig{Name: "origin", URLs: []string{origin}}); err != nil {
+		t.Fatalf("CreateRemote(local1): %v", err)
+	}
+	writeFile(t, local1, "vault.txt", []byte("local1"))
+	if err := AutoCommit(local1, "local1 commit"); err != nil {
+		t.Fatalf("AutoCommit(local1): %v", err)
+	}
+	if err := Push(local1); err != nil {
+		t.Fatalf("Push(local1): %v", err)
+	}
+
+	local2Dir := t.TempDir()
+	local2, err := gogit.PlainClone(local2Dir, false, &gogit.CloneOptions{URL: origin})
+	if err != nil {
+		t.Fatalf("PlainClone(local2): %v", err)
+	}
+	writeFile(t, local2Dir, "vault.txt", []byte("local2"))
+	if err := AutoCommit(local2Dir, "local2 commit"); err != nil {
+		t.Fatalf("AutoCommit(local2): %v", err)
+	}
+	if err := local2.Push(&gogit.PushOptions{}); err != nil {
+		t.Fatalf("Push(local2): %v", err)
+	}
+
+	writeFile(t, local1, "vault.txt", []byte("local1-new"))
+	if err := AutoCommit(local1, "local1 new commit"); err != nil {
+		t.Fatalf("AutoCommit(local1): %v", err)
+	}
+
+	err = Pull(local1)
+	if err == nil {
+		t.Error("Pull should return error for merge conflict (non-fast-forward)")
+	}
+}
+
+func TestPullWithRemoteNotFound(t *testing.T) {
+	local := t.TempDir()
+	if err := Init(local); err != nil {
+		t.Fatalf("Init(local): %v", err)
+	}
+
+	repo, err := gogit.PlainOpen(local)
+	if err != nil {
+		t.Fatalf("open local: %v", err)
+	}
+
+	if _, err := repo.CreateRemote(&config.RemoteConfig{Name: "origin", URLs: []string{filepath.Join(t.TempDir(), "missing.git")}}); err != nil {
+		t.Fatalf("CreateRemote(): %v", err)
+	}
+
+	err = Pull(local)
+	if err == nil {
+		t.Error("Pull should return error when remote repository does not exist")
+	}
+}
+
+func TestBranchManagement(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+
+	writeFile(t, dir, "init.txt", []byte("initial"))
+	if err := AutoCommit(dir, "initial commit"); err != nil {
+		t.Fatalf("AutoCommit(): %v", err)
+	}
+
+	repo, err := gogit.PlainOpen(dir)
+	if err != nil {
+		t.Fatalf("open repo: %v", err)
+	}
+
+	w, err := repo.Worktree()
+	if err != nil {
+		t.Fatalf("Worktree(): %v", err)
+	}
+
+	if err := w.Checkout(&gogit.CheckoutOptions{
+		Branch: plumbing.NewBranchReferenceName("feature-branch"),
+		Create: true,
+	}); err != nil {
+		t.Fatalf("Checkout new branch: %v", err)
+	}
+
+	writeFile(t, dir, "feature.txt", []byte("feature content"))
+	if err := AutoCommit(dir, "feature commit"); err != nil {
+		t.Fatalf("AutoCommit(): %v", err)
+	}
+
+	ref, err := repo.Head()
+	if err != nil {
+		t.Fatalf("repo.Head(): %v", err)
+	}
+
+	if ref.Name().String() != "refs/heads/feature-branch" {
+		t.Errorf("HEAD = %q, want refs/heads/feature-branch", ref.Name().String())
+	}
+
+	commit, err := repo.CommitObject(ref.Hash())
+	if err != nil {
+		t.Fatalf("CommitObject(): %v", err)
+	}
+	if commit.Message != "feature commit" {
+		t.Errorf("commit message = %q, want %q", commit.Message, "feature commit")
+	}
+}
+
+func TestCreateGitignoreReadFileError(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+
+	gitignorePath := filepath.Join(dir, ".gitignore")
+	if err := os.Mkdir(gitignorePath, 0o700); err != nil {
+		t.Fatalf("Mkdir(.gitignore): %v", err)
+	}
+
+	if err := CreateGitignore(dir); err == nil {
+		t.Error("CreateGitignore should return error when .gitignore is a directory")
+	}
+}
+
+func TestAutoCommitWithOptionsGitignoreError(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+
+	gitignorePath := filepath.Join(dir, ".gitignore")
+	if err := os.Mkdir(gitignorePath, 0o700); err != nil {
+		t.Fatalf("Mkdir(.gitignore): %v", err)
+	}
+
+	writeFile(t, dir, "vault.txt", []byte("secret"))
+
+	if err := AutoCommitWithOptions(dir, CommitOptions{Message: "test"}); err == nil {
+		t.Error("AutoCommitWithOptions should return error when gitignore creation fails")
+	}
+}
+
+func TestAutoCommitWithOptionsAddError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root; permission tests are unreliable")
+	}
+
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+
+	badFile := filepath.Join(dir, "unreadable.txt")
+	if err := os.WriteFile(badFile, []byte("test"), 0o600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	if err := os.Chmod(badFile, 0o000); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	defer os.Chmod(badFile, 0o600) //nolint:errcheck
+
+	if err := AutoCommitWithOptions(dir, CommitOptions{Message: "test"}); err == nil {
+		t.Error("AutoCommitWithOptions should return error when AddWithOptions fails")
+	}
+}
+
+func TestHasStagedChangesUnmodifiedAndUntracked(t *testing.T) {
+	status := gogit.Status{
+		"file1": {Staging: gogit.Unmodified, Worktree: gogit.Unmodified},
+		"file2": {Staging: gogit.Untracked, Worktree: gogit.Untracked},
+	}
+	if hasStagedChanges(status) {
+		t.Error("hasStagedChanges should return false for only unmodified/untracked files")
+	}
+}
+
+func TestIsProtectedRuntimePathExactAndPrefix(t *testing.T) {
+	if !isProtectedRuntimePath("mcp-token") {
+		t.Error("mcp-token should be protected (exact match)")
+	}
+	if !isProtectedRuntimePath("mcp-token.backup") {
+		t.Error("mcp-token.backup should be protected (prefix match)")
+	}
+	if !isProtectedRuntimePath(".runtime-port") {
+		t.Error(".runtime-port should be protected (exact match)")
+	}
+	if !isProtectedRuntimePath(".runtime-port.old") {
+		t.Error(".runtime-port.old should be protected (prefix match)")
+	}
+	if isProtectedRuntimePath("mcp-tokens") {
+		t.Error("mcp-tokens should NOT be protected")
+	}
+	if isProtectedRuntimePath("other-file") {
+		t.Error("other-file should NOT be protected")
+	}
+}
+
+func TestUnstageProtectedRuntimeArtifactsWithHead(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+
+	writeFile(t, dir, "init.txt", []byte("initial"))
+	if err := AutoCommit(dir, "initial commit"); err != nil {
+		t.Fatalf("AutoCommit(): %v", err)
+	}
+
+	writeFile(t, dir, "mcp-token", []byte("secret-token"))
+	if err := AutoCommit(dir, "should not include token"); err != nil {
+		t.Fatalf("AutoCommit(): %v", err)
+	}
+
+	repo, err := gogit.PlainOpen(dir)
+	if err != nil {
+		t.Fatalf("open repo: %v", err)
+	}
+
+	ref, err := repo.Head()
+	if err != nil {
+		t.Fatalf("repo.Head(): %v", err)
+	}
+
+	commit, err := repo.CommitObject(ref.Hash())
+	if err != nil {
+		t.Fatalf("CommitObject(): %v", err)
+	}
+
+	if _, err := commit.File("init.txt"); err != nil {
+		t.Errorf("expected init.txt in commit: %v", err)
+	}
+	if _, err := commit.File("mcp-token"); err == nil {
+		t.Error("mcp-token should not be in commit after unstage")
+	}
+}
+
+func TestAppendMissingGitignoreEntriesWithTrailingNewline(t *testing.T) {
+	current := "existing content\n"
+	defaults := "new-entry"
+	result := appendMissingGitignoreEntries(current, defaults)
+	if !strings.Contains(result, "existing content\nnew-entry") && !strings.Contains(result, "existing content\n# OpenPass") {
+		t.Logf("result preserves content with trailing newline: %q", result)
+	}
+
+	current2 := "existing content"
+	result2 := appendMissingGitignoreEntries(current2, defaults)
+	if !strings.Contains(result2, "existing content\n") {
+		t.Errorf("expected newline to be added before new entries, got: %q", result2)
+	}
+}
+
+func TestLogWithLimitTruncation(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+
+	for i := 0; i < 3; i++ {
+		writeFile(t, dir, "vault.txt", []byte(fmt.Sprintf("secret-%d", i)))
+		if err := AutoCommit(dir, fmt.Sprintf("commit %d", i)); err != nil {
+			t.Fatalf("AutoCommit(): %v", err)
+		}
+	}
+
+	commits, err := Log(dir, "", 2)
+	if err != nil {
+		t.Fatalf("Log() error = %v", err)
+	}
+	if len(commits) != 2 {
+		t.Errorf("expected 2 commits with limit=2, got %d", len(commits))
+	}
+}
+
+func TestPushWithResultGenericError(t *testing.T) {
+	local := t.TempDir()
+	if err := Init(local); err != nil {
+		t.Fatalf("Init(local): %v", err)
+	}
+
+	repo, err := gogit.PlainOpen(local)
+	if err != nil {
+		t.Fatalf("open local: %v", err)
+	}
+
+	if _, err := repo.CreateRemote(&config.RemoteConfig{Name: "origin", URLs: []string{"://invalid-url"}}); err != nil {
+		t.Fatalf("CreateRemote(): %v", err)
+	}
+
+	writeFile(t, local, "f.txt", []byte("hello"))
+	if err := AutoCommit(local, "test"); err != nil {
+		t.Fatalf("AutoCommit(): %v", err)
+	}
+
+	result := PushWithResult(local)
+	if result.Success {
+		t.Error("PushWithResult should not succeed with invalid URL")
+	}
+	if result.Error == nil {
+		t.Fatal("PushWithResult should set error for invalid URL")
+	}
+}
+
+func TestAutoCommitAndPushCommitFailure(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+
+	if err := os.Mkdir(filepath.Join(dir, ".gitignore"), 0o700); err != nil {
+		t.Fatalf("Mkdir(.gitignore): %v", err)
+	}
+
+	writeFile(t, dir, "vault.txt", []byte("secret"))
+
+	err := AutoCommitAndPush(dir, "test commit", false)
+	if err == nil {
+		t.Error("AutoCommitAndPush should return error when commit fails due to gitignore error")
+	}
+}
+
+func TestPushWithResultSSHAuthError(t *testing.T) {
+	local := t.TempDir()
+	if err := Init(local); err != nil {
+		t.Fatalf("Init(local): %v", err)
+	}
+
+	repo, err := gogit.PlainOpen(local)
+	if err != nil {
+		t.Fatalf("open local: %v", err)
+	}
+
+	if _, err := repo.CreateRemote(&config.RemoteConfig{Name: "origin", URLs: []string{"ssh://git@127.0.0.1:1/repo.git"}}); err != nil {
+		t.Fatalf("CreateRemote(): %v", err)
+	}
+
+	writeFile(t, local, "f.txt", []byte("hello"))
+	if err := AutoCommit(local, "test"); err != nil {
+		t.Fatalf("AutoCommit(): %v", err)
+	}
+
+	result := PushWithResult(local)
+	if result.Success {
+		t.Error("PushWithResult should not succeed with SSH connection refused")
+	}
+	if result.Error == nil {
+		t.Fatal("PushWithResult should set error for SSH connection refused")
+	}
+	if !strings.Contains(result.Error.Error(), "network error") && !strings.Contains(result.Error.Error(), "connection") {
+		t.Errorf("expected network error message, got: %v", result.Error)
+	}
+}
+
+func TestUnstageProtectedRuntimeArtifactsDirect(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+
+	writeFile(t, dir, "init.txt", []byte("init"))
+	if err := AutoCommit(dir, "initial"); err != nil {
+		t.Fatalf("AutoCommit(): %v", err)
+	}
+
+	repo, err := gogit.PlainOpen(dir)
+	if err != nil {
+		t.Fatalf("open repo: %v", err)
+	}
+
+	w, err := repo.Worktree()
+	if err != nil {
+		t.Fatalf("Worktree(): %v", err)
+	}
+
+	writeFile(t, dir, "mcp-token", []byte("token"))
+	if _, err := w.Add("mcp-token"); err != nil {
+		t.Fatalf("Add(mcp-token): %v", err)
+	}
+
+	status, err := w.Status()
+	if err != nil {
+		t.Fatalf("Status(): %v", err)
+	}
+
+	if err := unstageProtectedRuntimeArtifacts(repo, w, status); err != nil {
+		t.Fatalf("unstageProtectedRuntimeArtifacts(): %v", err)
+	}
+
+	status2, err := w.Status()
+	if err != nil {
+		t.Fatalf("Status() after unstage: %v", err)
+	}
+	for path, fs := range status2 {
+		if isProtectedRuntimePath(path) && fs.Staging != gogit.Untracked {
+			t.Errorf("expected %s to be unstaged, got staging=%d", path, fs.Staging)
+		}
+	}
+}
+
+func TestUnstageProtectedRuntimeArtifactsNoHead(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+
+	repo, err := gogit.PlainOpen(dir)
+	if err != nil {
+		t.Fatalf("open repo: %v", err)
+	}
+
+	w, err := repo.Worktree()
+	if err != nil {
+		t.Fatalf("Worktree(): %v", err)
+	}
+
+	writeFile(t, dir, "mcp-token", []byte("token"))
+	if _, err := w.Add("mcp-token"); err != nil {
+		t.Fatalf("Add(mcp-token): %v", err)
+	}
+
+	status, err := w.Status()
+	if err != nil {
+		t.Fatalf("Status(): %v", err)
+	}
+
+	if err := unstageProtectedRuntimeArtifacts(repo, w, status); err != nil {
+		t.Fatalf("unstageProtectedRuntimeArtifacts(): %v", err)
+	}
+
+	status2, err := w.Status()
+	if err != nil {
+		t.Fatalf("Status() after unstage: %v", err)
+	}
+	for path, fs := range status2 {
+		if isProtectedRuntimePath(path) && fs.Staging != gogit.Untracked {
+			t.Errorf("expected %s to be unstaged, got staging=%d", path, fs.Staging)
+		}
+	}
+}
+
+func TestAutoCommitAndPushPushErrorNotSkipped(t *testing.T) {
+	local := t.TempDir()
+	if err := Init(local); err != nil {
+		t.Fatalf("Init(local): %v", err)
+	}
+
+	repo, err := gogit.PlainOpen(local)
+	if err != nil {
+		t.Fatalf("open local: %v", err)
+	}
+
+	if _, err := repo.CreateRemote(&config.RemoteConfig{Name: "origin", URLs: []string{"http://127.0.0.1:1/repo.git"}}); err != nil {
+		t.Fatalf("CreateRemote(): %v", err)
+	}
+
+	writeFile(t, local, "f.txt", []byte("hello"))
+
+	err = AutoCommitAndPush(local, "test push", true)
+	if err == nil {
+		t.Error("AutoCommitAndPush should return error when push fails and is not skipped")
+	}
+}
+
+func TestLogWithForEachError(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+
+	writeFile(t, dir, "vault.txt", []byte("secret"))
+	if err := AutoCommit(dir, "first"); err != nil {
+		t.Fatalf("AutoCommit(): %v", err)
+	}
+
+	commits, err := Log(dir, "", -1)
+	if err != nil {
+		t.Fatalf("Log() error = %v", err)
+	}
+	if len(commits) != 1 {
+		t.Errorf("expected 1 commit, got %d", len(commits))
 	}
 }
