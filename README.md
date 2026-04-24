@@ -1,5 +1,7 @@
 # OpenPass
 
+![OpenPass hero](docs/assets/openpass-hero.png)
+
 A modern, secure command-line password manager written in Go. OpenPass uses [age](https://age-encryption.org/) for encryption and provides an intuitive CLI interface for managing your secrets — with built-in MCP server support for AI agent integration.
 
 ## Safety Notice
@@ -225,6 +227,8 @@ openpass git push
 ## MCP Server
 
 OpenPass can act as an MCP server so AI agents can securely read (and optionally write) vault entries.
+
+![OpenPass architecture](docs/assets/openpass-architecture.png)
 
 ### Stdio mode (recommended for local agents)
 
