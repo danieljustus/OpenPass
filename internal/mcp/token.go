@@ -13,8 +13,8 @@ import (
 
 var randReader = rand.Reader
 
-func LoadOrCreateToken(path string) (string, error) { //nosec:G304
-	data, err := os.ReadFile(path)
+func LoadOrCreateToken(path string) (string, error) {
+	data, err := os.ReadFile(path) //#nosec G304 -- path comes from TokenFilePath() which uses filepath.Join on vaultDir
 	if err == nil {
 		token := strings.TrimSpace(string(data))
 		if token != "" {

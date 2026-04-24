@@ -81,7 +81,7 @@ The editor is determined by the --editor flag or EDITOR environment variable (de
 			return fmt.Errorf("cannot close temp file: %w", closeErr)
 		}
 
-		//nolint:gosec // Editor path already validated via exec.LookPath above; this is intentional subprocess invocation
+		//#nosec G204 -- editor path validated via exec.LookPath above
 		editorCmd := exec.Command(editor, tmpFile.Name())
 		editorCmd.Stdin = os.Stdin
 		editorCmd.Stdout = os.Stdout

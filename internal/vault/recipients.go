@@ -73,7 +73,7 @@ func (rm *RecipientsManager) LoadRecipients() ([]*age.X25519Recipient, error) {
 		return []*age.X25519Recipient{}, nil
 	}
 
-	file, err := os.Open(path)
+	file, err := os.Open(path) //#nosec G304 -- path is constructed from validated vaultDir via RecipientsFilePath()
 	if err != nil {
 		return nil, fmt.Errorf("open recipients file: %w", err)
 	}
@@ -120,8 +120,7 @@ func (rm *RecipientsManager) LoadRecipientStrings() ([]string, error) {
 		return []string{}, nil
 	}
 
-	//nosec:G304 // path is constructed from validated vaultDir via RecipientsFilePath() - validated by validateVaultDir()
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //#nosec G304 -- path is constructed from validated vaultDir via RecipientsFilePath()
 	if err != nil {
 		return nil, fmt.Errorf("read recipients file: %w", err)
 	}
@@ -172,7 +171,7 @@ func (rm *RecipientsManager) AddRecipient(recipientStr string) error {
 
 	// Create file if it doesn't exist, or append to existing
 	flags := os.O_APPEND | os.O_WRONLY | os.O_CREATE
-	file, err := os.OpenFile(path, flags, 0o600)
+	file, err := os.OpenFile(path, flags, 0o600) //#nosec G304 -- path is constructed from validated vaultDir via RecipientsFilePath()
 	if err != nil {
 		return fmt.Errorf("open recipients file for writing: %w", err)
 	}
@@ -226,7 +225,7 @@ func (rm *RecipientsManager) RemoveRecipient(recipientStr string) error {
 	}
 
 	// Read all lines
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //#nosec G304 -- path is constructed from validated vaultDir via RecipientsFilePath()
 	if err != nil {
 		return fmt.Errorf("read recipients file: %w", err)
 	}
@@ -286,7 +285,7 @@ func (rm *RecipientsManager) ListRecipients() ([]RecipientInfo, error) {
 		return []RecipientInfo{}, nil
 	}
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //#nosec G304 -- path is constructed from validated vaultDir via RecipientsFilePath()
 	if err != nil {
 		return nil, fmt.Errorf("read recipients file: %w", err)
 	}

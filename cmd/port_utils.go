@@ -35,13 +35,23 @@ func findAvailablePort(bind string, preferredPort int) (port int, isPreferred bo
 }
 
 func saveRuntimePort(vaultDir string, port int) error {
-	portFile := filepath.Join(vaultDir, runtimePortFileName)
-	return os.WriteFile(portFile, []byte(strconv.Itoa(port)), 0600)
+	cleanDir := filepath.Clean(vaultDir)
+	portFile := filepath.Join(cleanDir, runtimePortFileName)
+	cleanPath := filepath.Clean(portFile)
+	if !strings.HasPrefix(cleanPath, cleanDir+string(filepath.Separator)) {
+		return fmt.Errorf("invalid port file path: outside vault directory")
+	}
+	return os.WriteFile(cleanPath, []byte(strconv.Itoa(port)), 0600)
 }
 
 func loadRuntimePort(vaultDir string) (int, bool) {
-	portFile := filepath.Join(vaultDir, runtimePortFileName)
-	data, err := os.ReadFile(portFile)
+	cleanDir := filepath.Clean(vaultDir)
+	portFile := filepath.Join(cleanDir, runtimePortFileName)
+	cleanPath := filepath.Clean(portFile)
+	if !strings.HasPrefix(cleanPath, cleanDir+string(filepath.Separator)) {
+		return 0, false
+	}
+	data, err := os.ReadFile(cleanPath) //#nosec G304 -- path validated above: cleaned and checked to be within vault dir
 	if err != nil {
 		return 0, false
 	}
@@ -53,8 +63,13 @@ func loadRuntimePort(vaultDir string) (int, bool) {
 }
 
 func clearRuntimePort(vaultDir string) error {
-	portFile := filepath.Join(vaultDir, runtimePortFileName)
-	if err := os.Remove(portFile); err != nil && !os.IsNotExist(err) {
+	cleanDir := filepath.Clean(vaultDir)
+	portFile := filepath.Join(cleanDir, runtimePortFileName)
+	cleanPath := filepath.Clean(portFile)
+	if !strings.HasPrefix(cleanPath, cleanDir+string(filepath.Separator)) {
+		return fmt.Errorf("invalid port file path: outside vault directory")
+	}
+	if err := os.Remove(cleanPath); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil

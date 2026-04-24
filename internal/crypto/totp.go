@@ -1,9 +1,8 @@
 package crypto
 
-//nosec:G505
 import (
 	"crypto/hmac"
-	"crypto/sha1"
+	"crypto/sha1" //#nosec G505 -- SHA1 is required by RFC 6238 (TOTP); this is intentional, not a security weakness
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base32"

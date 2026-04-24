@@ -102,7 +102,7 @@ func LoadIdentity(path string, passphrase string) (*age.X25519Identity, error) {
 		return nil, err
 	}
 
-	raw, err := os.ReadFile(path) //nosec:G304
+	raw, err := os.ReadFile(path) //#nosec G304 -- path validated by validateIdentityPath()
 	if err != nil {
 		return nil, fmt.Errorf("read file: %w", err)
 	}

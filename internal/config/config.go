@@ -91,7 +91,7 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
-	data, err := os.ReadFile(path) //nosec:G304
+	data, err := os.ReadFile(path) //#nosec G304 -- path validated by validateConfigPath()
 	if err != nil {
 		return nil, err
 	}

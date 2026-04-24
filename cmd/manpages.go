@@ -19,7 +19,7 @@ var manpagesCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("resolve manpage directory: %w", err)
 		}
-		if err := os.MkdirAll(dir, 0o755); err != nil { //nosec:G301
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return fmt.Errorf("create manpage directory: %w", err)
 		}
 
