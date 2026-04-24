@@ -491,3 +491,21 @@ func TestNormalizeConfigWithNilAgents(t *testing.T) {
 		t.Error("Agents should be initialized")
 	}
 }
+
+func TestInitWithReadOnlyDirectory(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root; chmod 0 has no effect")
+	}
+	parent := t.TempDir()
+	if err := os.Chmod(parent, 0o500); err != nil {
+		t.Fatalf("Chmod() error = %v", err)
+	}
+	defer os.Chmod(parent, 0o700)
+
+	identity := testutil.TempIdentity(t)
+	cfg := config.Default()
+	err := Init(parent+"/no-write-vault", identity, cfg)
+	if err == nil {
+		t.Fatal("Init() on read-only parent = nil, want error")
+	}
+}

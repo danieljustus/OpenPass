@@ -421,6 +421,217 @@ func TestGetEntryMetadataReturnsUpdatedMetadataAfterMerge(t *testing.T) {
 	}
 }
 
+func TestExtractTOTP(t *testing.T) {
+	tests := []struct {
+		name            string
+		data            map[string]any
+		wantSecret      string
+		wantAlgo        string
+		wantDigits      int
+		wantPeriod      int
+		wantHasTOTP     bool
+	}{
+		{
+			name: "valid totp with all fields",
+			data: map[string]any{
+				"totp": map[string]any{
+					"secret":    "JBSWY3DPEHPK3PXP",
+					"algorithm": "SHA256",
+					"digits":    float64(8),
+					"period":    float64(60),
+				},
+			},
+			wantSecret:  "JBSWY3DPEHPK3PXP",
+			wantAlgo:    "SHA256",
+			wantDigits:  8,
+			wantPeriod:  60,
+			wantHasTOTP: true,
+		},
+		{
+			name: "valid totp with defaults",
+			data: map[string]any{
+				"totp": map[string]any{
+					"secret": "JBSWY3DPEHPK3PXP",
+				},
+			},
+			wantSecret:  "JBSWY3DPEHPK3PXP",
+			wantAlgo:    "SHA1",
+			wantDigits:  6,
+			wantPeriod:  30,
+			wantHasTOTP: true,
+		},
+		{
+			name:        "missing totp key",
+			data:        map[string]any{"username": "alice"},
+			wantHasTOTP: false,
+		},
+		{
+			name:        "nil data",
+			data:        nil,
+			wantHasTOTP: false,
+		},
+		{
+			name: "totp not a map",
+			data: map[string]any{
+				"totp": "not-a-map",
+			},
+			wantHasTOTP: false,
+		},
+		{
+			name: "totp missing secret",
+			data: map[string]any{
+				"totp": map[string]any{
+					"algorithm": "SHA1",
+				},
+			},
+			wantHasTOTP: false,
+		},
+		{
+			name: "totp empty secret",
+			data: map[string]any{
+				"totp": map[string]any{
+					"secret": "",
+				},
+			},
+			wantHasTOTP: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotSecret, gotAlgo, gotDigits, gotPeriod, gotHasTOTP := ExtractTOTP(tt.data)
+			if gotHasTOTP != tt.wantHasTOTP {
+				t.Errorf("hasTOTP = %v, want %v", gotHasTOTP, tt.wantHasTOTP)
+			}
+			if gotSecret != tt.wantSecret {
+				t.Errorf("secret = %q, want %q", gotSecret, tt.wantSecret)
+			}
+			if gotAlgo != tt.wantAlgo {
+				t.Errorf("algorithm = %q, want %q", gotAlgo, tt.wantAlgo)
+			}
+			if gotDigits != tt.wantDigits {
+				t.Errorf("digits = %d, want %d", gotDigits, tt.wantDigits)
+			}
+			if gotPeriod != tt.wantPeriod {
+				t.Errorf("period = %d, want %d", gotPeriod, tt.wantPeriod)
+			}
+		})
+	}
+}
+
+func TestEntryGetField(t *testing.T) {
+	tests := []struct {
+		name      string
+		entry     *Entry
+		key       string
+		wantVal   any
+		wantOk    bool
+	}{
+		{
+			name:   "existing field",
+			entry:  &Entry{Data: map[string]any{"username": "alice"}},
+			key:    "username",
+			wantVal: "alice",
+			wantOk: true,
+		},
+		{
+			name:   "missing field",
+			entry:  &Entry{Data: map[string]any{"username": "alice"}},
+			key:    "password",
+			wantVal: nil,
+			wantOk: false,
+		},
+		{
+			name:   "nil data",
+			entry:  &Entry{Data: nil},
+			key:    "username",
+			wantVal: nil,
+			wantOk: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotVal, gotOk := tt.entry.GetField(tt.key)
+			if gotOk != tt.wantOk {
+				t.Errorf("ok = %v, want %v", gotOk, tt.wantOk)
+			}
+			if gotVal != tt.wantVal {
+				t.Errorf("value = %#v, want %#v", gotVal, tt.wantVal)
+			}
+		})
+	}
+}
+
+func TestEntrySetField(t *testing.T) {
+	t.Run("set on nil data initializes map", func(t *testing.T) {
+		entry := &Entry{Data: nil}
+		entry.SetField("username", "alice")
+		if entry.Data == nil {
+			t.Fatal("Data should be initialized")
+		}
+		if entry.Data["username"] != "alice" {
+			t.Errorf("username = %v, want alice", entry.Data["username"])
+		}
+	})
+
+	t.Run("overwrite existing field", func(t *testing.T) {
+		entry := &Entry{Data: map[string]any{"username": "old"}}
+		entry.SetField("username", "new")
+		if entry.Data["username"] != "new" {
+			t.Errorf("username = %v, want new", entry.Data["username"])
+		}
+	})
+
+	t.Run("add new field", func(t *testing.T) {
+		entry := &Entry{Data: map[string]any{"username": "alice"}}
+		entry.SetField("password", "s3cr3t")
+		if entry.Data["password"] != "s3cr3t" {
+			t.Errorf("password = %v, want s3cr3t", entry.Data["password"])
+		}
+		if entry.Data["username"] != "alice" {
+			t.Error("existing field should be preserved")
+		}
+	})
+}
+
+func TestEntryHasField(t *testing.T) {
+	tests := []struct {
+		name   string
+		entry  *Entry
+		key    string
+		want   bool
+	}{
+		{
+			name:  "existing field",
+			entry: &Entry{Data: map[string]any{"username": "alice"}},
+			key:   "username",
+			want:  true,
+		},
+		{
+			name:  "missing field",
+			entry: &Entry{Data: map[string]any{"username": "alice"}},
+			key:   "password",
+			want:  false,
+		},
+		{
+			name:  "nil data",
+			entry: &Entry{Data: nil},
+			key:   "username",
+			want:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.entry.HasField(tt.key)
+			if got != tt.want {
+				t.Errorf("HasField(%q) = %v, want %v", tt.key, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGetEntryMetadataRejectsNilIdentity(t *testing.T) {
 	vaultDir := t.TempDir()
 

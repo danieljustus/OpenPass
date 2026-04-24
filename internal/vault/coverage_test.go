@@ -147,3 +147,71 @@ func TestMergeEntryWithRecipientsNotFoundCoverage(t *testing.T) {
 		t.Fatal("MergeEntryWithRecipients() error = nil, want error for non-existent entry")
 	}
 }
+
+// TestSafeWriteFileOnDirectory covers the ENOTDIR error when writing to a directory.
+func TestSafeWriteFileOnDirectory(t *testing.T) {
+	dir := t.TempDir()
+	err := SafeWriteFile(dir, []byte("data"), 0o600)
+	if err == nil {
+		t.Fatal("SafeWriteFile() on directory = nil, want error")
+	}
+}
+
+// TestSafeRemoveOnDirectory covers the ENOTDIR error when removing a directory.
+func TestSafeRemoveOnDirectory(t *testing.T) {
+	dir := t.TempDir()
+	subdir := dir + "/subdir"
+	if err := os.Mkdir(subdir, 0o700); err != nil {
+		t.Fatalf("Mkdir() error = %v", err)
+	}
+	err := SafeRemove(subdir)
+	if err == nil {
+		t.Fatal("SafeRemove() on directory = nil, want error")
+	}
+}
+
+// TestSafeRemoveNonexistent covers the error when removing a nonexistent file.
+func TestSafeRemoveNonexistent(t *testing.T) {
+	err := SafeRemove("/nonexistent/file/that/does/not/exist.age")
+	if err == nil {
+		t.Fatal("SafeRemove() on nonexistent file = nil, want error")
+	}
+}
+
+// TestReadEntryCorruptedFile covers the decrypt error path with a corrupted .age file.
+func TestReadEntryCorruptedFile(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	entryDir := vaultDir + "/entries/test"
+	if err := os.MkdirAll(entryDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(entryDir+"/entry.age", []byte("this is not valid age ciphertext"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	_, err := ReadEntry(vaultDir, "test/entry", id)
+	if err == nil {
+		t.Fatal("ReadEntry() with corrupted file = nil, want decrypt error")
+	}
+}
+
+// TestInitReadOnlyDirectory covers the write error when vault dir is not writable.
+func TestInitReadOnlyDirectory(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root; chmod 0 has no effect")
+	}
+	parent := t.TempDir()
+	if err := os.Chmod(parent, 0o500); err != nil {
+		t.Fatalf("Chmod() error = %v", err)
+	}
+	defer os.Chmod(parent, 0o700) //nolint:errcheck
+
+	identity := testutil.TempIdentity(t)
+	cfg := config.Default()
+	err := Init(parent+"/readonly-vault", identity, cfg)
+	if err == nil {
+		t.Fatal("Init() on read-only parent = nil, want write error")
+	}
+}

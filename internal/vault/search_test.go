@@ -283,3 +283,101 @@ func TestFindWithEmptyQuery(t *testing.T) {
 		t.Fatalf("len(Find()) = %d, want 1 for empty query", len(got))
 	}
 }
+
+func TestFindConcurrentMatchesFind(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	mustWriteEntry(t, vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
+	mustWriteEntry(t, vaultDir, id, "personal/email", map[string]interface{}{"username": "bob"})
+	mustWriteEntry(t, vaultDir, id, "work/aws", map[string]interface{}{
+		"username": "carol",
+		"password": "s3cr3t",
+	})
+
+	queries := []string{"github", "s3cr", "alice", ""}
+
+	for _, q := range queries {
+		t.Run(q, func(t *testing.T) {
+			findResults, err := Find(vaultDir, q)
+			if err != nil {
+				t.Fatalf("Find() error = %v", err)
+			}
+
+			concurrentResults, err := FindConcurrent(vaultDir, q, 4)
+			if err != nil {
+				t.Fatalf("FindConcurrent() error = %v", err)
+			}
+
+			if len(concurrentResults) != len(findResults) {
+				t.Fatalf("FindConcount() len=%d, Find len=%d for query %q", len(concurrentResults), len(findResults), q)
+			}
+
+			findPaths := make(map[string]bool)
+			for _, m := range findResults {
+				findPaths[m.Path] = true
+			}
+			for _, m := range concurrentResults {
+				if !findPaths[m.Path] {
+					t.Errorf("FindConcurrent() returned path %q not in Find() results", m.Path)
+				}
+			}
+		})
+	}
+}
+
+func TestFindConcurrentNoIdentity(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	mustWriteEntry(t, vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
+
+	searchIdentityMu.Lock()
+	searchIdentity = nil
+	searchIdentityMu.Unlock()
+	t.Cleanup(func() {
+		rememberSearchIdentity(id)
+	})
+
+	_, err := FindConcurrent(vaultDir, "github", 4)
+	if err == nil {
+		t.Fatal("expected error when no search identity is available")
+	}
+}
+
+func TestFindConcurrentEmptyVault(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+	rememberSearchIdentity(id)
+
+	got, err := FindConcurrent(vaultDir, "query", 4)
+	if err != nil {
+		t.Fatalf("FindConcurrent() error = %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("FindConcurrent() on empty vault returned %d results, want 0", len(got))
+	}
+}
+
+func TestFindConcurrentDefaultsMaxWorkers(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	mustWriteEntry(t, vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
+
+	got, err := FindConcurrent(vaultDir, "github", 0)
+	if err != nil {
+		t.Fatalf("FindConcurrent() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("FindConcurrent() with maxWorkers=0 returned %d results, want 1", len(got))
+	}
+
+	got2, err := FindConcurrent(vaultDir, "github", -1)
+	if err != nil {
+		t.Fatalf("FindConcurrent() error = %v", err)
+	}
+	if len(got2) != 1 {
+		t.Fatalf("FindConcurrent() with maxWorkers=-1 returned %d results, want 1", len(got2))
+	}
+}
