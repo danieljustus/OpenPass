@@ -106,12 +106,17 @@ func CreateGitignore(vaultDir string) error {
 		return nil
 	}
 
-	gitignorePath := filepath.Join(vaultDir, ".gitignore")
+	cleanVaultDir := filepath.Clean(vaultDir)
+	gitignorePath := filepath.Join(cleanVaultDir, ".gitignore")
+	cleanGitignorePath := filepath.Clean(gitignorePath)
+	if !strings.HasPrefix(cleanGitignorePath, cleanVaultDir+string(filepath.Separator)) {
+		return fmt.Errorf("invalid gitignore path: outside vault directory")
+	}
 
-	content, err := os.ReadFile(gitignorePath) //nolint:gosec // path is derived from the configured vault dir
+	content, err := os.ReadFile(cleanGitignorePath) //nolint:gosec // path is validated above
 	if err != nil {
 		if os.IsNotExist(err) {
-			return os.WriteFile(gitignorePath, []byte(DefaultGitignoreContent), 0o600)
+			return os.WriteFile(cleanGitignorePath, []byte(DefaultGitignoreContent), 0o600)
 		}
 		return err
 	}
@@ -120,7 +125,7 @@ func CreateGitignore(vaultDir string) error {
 	if updated == string(content) {
 		return nil
 	}
-	return os.WriteFile(gitignorePath, []byte(updated), 0o600)
+	return os.WriteFile(cleanGitignorePath, []byte(updated), 0o600) //#nosec G703 -- path validated above: cleaned and checked to be within vault dir
 }
 
 // AutoCommitWithOptions performs an auto-commit with the given options

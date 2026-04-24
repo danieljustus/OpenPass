@@ -145,18 +145,23 @@ func New(agentName string) (*Logger, error) {
 		home = resolved
 	}
 
-	auditDir := filepath.Join(home, defaultDirName)
-	if err := os.MkdirAll(auditDir, 0o700); err != nil {
+	cleanHome := filepath.Clean(home)
+	auditDir := filepath.Join(cleanHome, defaultDirName)
+	cleanAuditDir := filepath.Clean(auditDir)
+	if !strings.HasPrefix(cleanAuditDir, cleanHome+string(filepath.Separator)) {
+		return nil, errors.New("invalid audit directory path")
+	}
+	if err := os.MkdirAll(cleanAuditDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create audit dir: %w", err)
 	}
 
-	path := filepath.Join(auditDir, fmt.Sprintf(defaultFileNamePattern, agentName))
+	path := filepath.Join(cleanAuditDir, fmt.Sprintf(defaultFileNamePattern, agentName))
 	cleanPath := filepath.Clean(path)
-	if !strings.HasPrefix(cleanPath, auditDir) {
+	if !strings.HasPrefix(cleanPath, cleanAuditDir+string(filepath.Separator)) {
 		return nil, errors.New("agent name resulted in path outside audit directory")
 	}
 
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) //nosec:G304
+	file, err := os.OpenFile(cleanPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) //nolint:gosec // path is validated above
 	if err != nil {
 		return nil, fmt.Errorf("open audit log: %w", err)
 	}
@@ -164,7 +169,7 @@ func New(agentName string) (*Logger, error) {
 	l := &Logger{
 		file:      file,
 		agentName: agentName,
-		path:      path,
+		path:      cleanPath,
 	}
 
 	if err := l.rotateIfNeeded(); err != nil {

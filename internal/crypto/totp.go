@@ -71,7 +71,11 @@ func GenerateTOTP(secret string, algorithm string, digits int, period int) (*TOT
 
 	// Get current time and calculate time step
 	now := time.Now()
-	counter := uint64(now.Unix()) / uint64(period)
+	unixTime := now.Unix()
+	if unixTime < 0 {
+		return nil, fmt.Errorf("system time is before Unix epoch")
+	}
+	counter := uint64(unixTime) / uint64(period)
 
 	// Calculate next expiration time
 	expiresAt := now.Add(time.Duration(period) * time.Second)
@@ -99,7 +103,11 @@ func GenerateTOTP(secret string, algorithm string, digits int, period int) (*TOT
 	code := binary.BigEndian.Uint32(hash[offset:offset+4]) & 0x7fffffff
 
 	// Modulo to get desired number of digits
-	code = code % uint32(power10(digits))
+	mod := power10(digits)
+	if mod < 0 || mod > int(^uint32(0)) {
+		return nil, fmt.Errorf("digits value %d produces out-of-range modulus", digits)
+	}
+	code = code % uint32(mod)
 
 	// Format with leading zeros
 	codeStr := fmt.Sprintf("%0*d", digits, code)

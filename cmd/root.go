@@ -25,8 +25,12 @@ var readPasswordFunc func(int) ([]byte, error) = term.ReadPassword
 
 func readHiddenInput(prompt string, reader *bufio.Reader) (string, error) {
 	fmt.Fprint(os.Stderr, prompt)
-	//nosec:G115 // os.Stdin.Fd() uintptr->int conversion is safe on all supported platforms (darwin/linux/windows)
-	fd := int(os.Stdin.Fd())
+	fdRaw := os.Stdin.Fd()
+	// Bounds check: file descriptors are small non-negative integers; ensure they fit in int
+	if fdRaw > uintptr(^uint(0)>>1) {
+		return "", fmt.Errorf("file descriptor %d exceeds int range", fdRaw)
+	}
+	fd := int(fdRaw)
 	if term.IsTerminal(fd) {
 		passphrase, err := readPasswordFunc(fd)
 		fmt.Fprintln(os.Stderr)
