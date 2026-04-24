@@ -315,3 +315,154 @@ func TestCheckerNilCache(t *testing.T) {
 		t.Fatalf("LatestVersion = %q, want %q", result.LatestVersion, "1.2.0")
 	}
 }
+
+func TestCheckerRejectsDraftRelease(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"draft":true,"tag_name":"v1.0.0","html_url":"https://example.com/v1.0.0"}`))
+	}))
+	defer server.Close()
+
+	checker := NewChecker(server.Client())
+	checker.LatestReleaseURL = server.URL
+	checker.Cache = nil
+
+	_, err := checker.Check(context.Background(), "0.9.0")
+	if err == nil {
+		t.Fatal("expected error for draft release")
+	}
+	if !strings.Contains(err.Error(), "draft") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCheckerRejectsPrerelease(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"prerelease":true,"tag_name":"v1.0.0","html_url":"https://example.com/v1.0.0"}`))
+	}))
+	defer server.Close()
+
+	checker := NewChecker(server.Client())
+	checker.LatestReleaseURL = server.URL
+	checker.Cache = nil
+
+	_, err := checker.Check(context.Background(), "0.9.0")
+	if err == nil {
+		t.Fatal("expected error for prerelease")
+	}
+	if !strings.Contains(err.Error(), "prerelease") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCheckerRejectsEmptyTagName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tag_name":"   ","html_url":"https://example.com/"}`))
+	}))
+	defer server.Close()
+
+	checker := NewChecker(server.Client())
+	checker.LatestReleaseURL = server.URL
+	checker.Cache = nil
+
+	_, err := checker.Check(context.Background(), "1.0.0")
+	if err == nil {
+		t.Fatal("expected error for empty tag name")
+	}
+	if !strings.Contains(err.Error(), "did not include a tag name") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCheckerRateLimitExceeded(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer server.Close()
+
+	checker := NewChecker(server.Client())
+	checker.LatestReleaseURL = server.URL
+	checker.Cache = nil
+
+	_, err := checker.Check(context.Background(), "1.0.0")
+	if err == nil {
+		t.Fatal("expected error for rate limit exceeded")
+	}
+	if !strings.Contains(err.Error(), "rate limit exceeded") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCheckerCacheUnparseableVersion(t *testing.T) {
+	tmpDir := t.TempDir()
+	cache := NewCacheWithTTL(tmpDir+"/update-cache.json", 24*time.Hour)
+
+	_ = cache.Save(&CacheEntry{
+		Timestamp:     time.Now(),
+		LatestVersion: "not-a-version",
+		ReleaseURL:    "https://example.com/v1.0.0",
+	})
+
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tag_name":"v1.5.0","html_url":"https://example.com/v1.5.0"}`))
+	}))
+	defer server.Close()
+
+	checker := NewChecker(server.Client())
+	checker.LatestReleaseURL = server.URL
+	checker.Cache = cache
+
+	result, err := checker.Check(context.Background(), "1.0.0")
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if requestCount != 1 {
+		t.Fatalf("expected 1 HTTP request due to unparseable cache version, got %d", requestCount)
+	}
+	if result.LatestVersion != "1.5.0" {
+		t.Fatalf("LatestVersion = %q, want %q", result.LatestVersion, "1.5.0")
+	}
+}
+
+func TestNewCheckerWithNilClient(t *testing.T) {
+	checker := NewChecker(nil)
+	if checker == nil {
+		t.Fatal("NewChecker(nil) returned nil")
+	}
+	if checker.HTTPClient == nil {
+		t.Fatal("NewChecker(nil) should have non-nil HTTPClient")
+	}
+	if checker.Cache == nil {
+		t.Fatal("NewChecker(nil) should have non-nil Cache")
+	}
+	if checker.LatestReleaseURL == "" {
+		t.Fatal("NewChecker(nil) should have non-empty LatestReleaseURL")
+	}
+}
+
+func TestCheckerURLTrimming(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tag_name":"v1.2.0","html_url":"https://example.com/v1.2.0"}`))
+	}))
+	defer server.Close()
+
+	checker := NewChecker(server.Client())
+	checker.LatestReleaseURL = "  " + server.URL + "  "
+	checker.Cache = nil
+
+	result, err := checker.Check(context.Background(), "1.0.0")
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if result.LatestVersion != "1.2.0" {
+		t.Fatalf("LatestVersion = %q, want %q", result.LatestVersion, "1.2.0")
+	}
+}
