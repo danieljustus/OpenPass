@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -457,5 +458,158 @@ func TestNewFormatStoredEncrypted(t *testing.T) {
 	}
 	if sess.Nonce == "" {
 		t.Error("new format should contain nonce")
+	}
+}
+
+func TestDecryptPassphrase_InvalidBase64Ciphertext(t *testing.T) {
+	_, err := decryptPassphrase("not-valid-base64!!!", "dGVzdA==", "/tmp/vault")
+	if err == nil {
+		t.Fatal("decryptPassphrase() error = nil, want base64 decode error for invalid ciphertext")
+	}
+}
+
+func TestDecryptPassphrase_InvalidBase64Nonce(t *testing.T) {
+	// Valid base64 for ciphertext but invalid base64 for nonce
+	_, err := decryptPassphrase("dGVzdA==", "!!!not-base64", "/tmp/vault")
+	if err == nil {
+		t.Fatal("decryptPassphrase() error = nil, want base64 decode error for invalid nonce")
+	}
+}
+
+func TestLoadPassphrase_ResolveDecryptError(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	vaultDir := "/tmp/vault-corrupt-enc"
+	// Store a session with valid JSON but corrupted ciphertext (valid base64, wrong encryption)
+	sess := storedSession{
+		EncryptedPassphrase: "dGVzdA==", // "test" in base64 — not valid AES-GCM ciphertext
+		Nonce:               "YWJjZGVmZ2hpamts", // "abcdefghijkl" in base64 — 12 bytes
+		SavedAt:             time.Now().UTC(),
+		LastAccess:          time.Now().UTC(),
+		TTL:                 int64(time.Hour),
+	}
+	payload, err := json.Marshal(sess)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	if setErr := fake.set("openpass:"+vaultDir, sessionAccount, string(payload)); setErr != nil {
+		t.Fatalf("fake.set() error = %v", setErr)
+	}
+
+	_, err = LoadPassphrase(vaultDir)
+	if err == nil {
+		t.Fatal("LoadPassphrase() error = nil, want decrypt error for corrupted ciphertext")
+	}
+}
+
+func TestLoadPassphrase_UpdateKeyringSetError(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	vaultDir := "/tmp/vault-update-err"
+	passphrase := "update-test-secret"
+
+	// Save a valid session first
+	if err := SavePassphrase(vaultDir, passphrase, time.Hour); err != nil {
+		t.Fatalf("SavePassphrase() error = %v", err)
+	}
+
+	// Now set a one-shot error for the next keyringSet call (which happens during LoadPassphrase update)
+	fake.setErr = errors.New("keyring update failed")
+
+	_, err := LoadPassphrase(vaultDir)
+	if err == nil {
+		t.Fatal("LoadPassphrase() error = nil, want update session error")
+	}
+}
+
+func TestIsSessionExpired_MalformedJSON(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	vaultDir := "/tmp/vault-bad-json"
+	// Store malformed JSON directly
+	if err := fake.set("openpass:"+vaultDir, sessionAccount, "{invalid json!!!"); err != nil {
+		t.Fatalf("fake.set() error = %v", err)
+	}
+
+	if !IsSessionExpired(vaultDir) {
+		t.Error("IsSessionExpired() = false, want true for malformed JSON")
+	}
+}
+
+func TestLoadPassphraseWithTouchID_BiometricSuccessButLoadFails(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	// Set up biometric mock: available and auth succeeds
+	mock := &mockBiometricAuthenticator{available: true, authErr: nil}
+	biometricAuthenticator = mock
+	defer func() { biometricAuthenticator = nil }()
+
+	// No session exists in keyring, so LoadPassphrase will fail
+	_, err := LoadPassphraseWithTouchID(context.Background(), "/tmp/vault-no-session")
+	if err == nil {
+		t.Fatal("LoadPassphraseWithTouchID() error = nil, want error from LoadPassphrase")
+	}
+	if errors.Is(err, ErrBiometricNotAvailable) {
+		t.Error("error should be from LoadPassphrase, not ErrBiometricNotAvailable")
+	}
+}
+
+func TestResolvePassphrase_NoData(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	vaultDir := "/tmp/vault-no-data"
+	// Store a session with no passphrase data at all
+	sess := storedSession{
+		SavedAt:    time.Now().UTC(),
+		LastAccess: time.Now().UTC(),
+		TTL:        int64(time.Hour),
+	}
+	payload, err := json.Marshal(sess)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	if setErr := fake.set("openpass:"+vaultDir, sessionAccount, string(payload)); setErr != nil {
+		t.Fatalf("fake.set() error = %v", setErr)
+	}
+
+	_, err = LoadPassphrase(vaultDir)
+	if err == nil {
+		t.Fatal("LoadPassphrase() error = nil, want no passphrase data error")
+	}
+}
+
+func TestLoadPassphrase_NegativeTTL(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	vaultDir := "/tmp/vault-neg-ttl"
+	payload := fmt.Sprintf(`{"saved_at":"2024-01-01T00:00:00Z","last_access":"2024-01-01T00:00:00Z","passphrase":"secret","ttl_ns":%d}`, int64(-1))
+	if err := fake.set("openpass:"+vaultDir, sessionAccount, payload); err != nil {
+		t.Fatalf("fake.set() error = %v", err)
+	}
+
+	_, err := LoadPassphrase(vaultDir)
+	if err == nil {
+		t.Fatal("LoadPassphrase() error = nil, want expired error for negative TTL")
+	}
+}
+
+func TestIsSessionExpired_NegativeTTL(t *testing.T) {
+	fake := newFakeKeyring()
+	stubKeyring(t, fake)
+
+	vaultDir := "/tmp/vault-neg-ttl2"
+	payload := fmt.Sprintf(`{"saved_at":"2024-01-01T00:00:00Z","last_access":"2024-01-01T00:00:00Z","passphrase":"secret","ttl_ns":%d}`, int64(-1))
+	if err := fake.set("openpass:"+vaultDir, sessionAccount, payload); err != nil {
+		t.Fatalf("fake.set() error = %v", err)
+	}
+
+	if !IsSessionExpired(vaultDir) {
+		t.Error("IsSessionExpired() = false, want true for negative TTL")
 	}
 }
