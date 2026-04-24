@@ -26,10 +26,10 @@ func TestVaultInitWithPassphrase_Integration(t *testing.T) {
 
 	identityPath := vaultDir + "/identity.age"
 	configPath := vaultDir + "/config.yaml"
-	if _, err := exec.Command("test", "-f", identityPath).CombinedOutput(); err != nil {
+	if _, cmdErr := exec.Command("test", "-f", identityPath).CombinedOutput(); cmdErr != nil {
 		t.Errorf("identity.age file not created at %s", identityPath)
 	}
-	if _, err := exec.Command("test", "-f", configPath).CombinedOutput(); err != nil {
+	if _, cmdErr := exec.Command("test", "-f", configPath).CombinedOutput(); cmdErr != nil {
 		t.Errorf("config.yaml file not created at %s", configPath)
 	}
 
@@ -103,8 +103,8 @@ func TestVaultEntryCRUD_Integration(t *testing.T) {
 		t.Errorf("MergeEntry() notes = %v, want merged note", mergedEntry.Data["notes"])
 	}
 
-	if err := vaultpkg.DeleteEntry(vaultDir, "github.com/user"); err != nil {
-		t.Fatalf("DeleteEntry() error = %v", err)
+	if delErr := vaultpkg.DeleteEntry(vaultDir, "github.com/user"); delErr != nil {
+		t.Fatalf("DeleteEntry() error = %v", delErr)
 	}
 
 	_, err = vaultpkg.ReadEntry(vaultDir, "github.com/user", identity)

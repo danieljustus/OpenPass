@@ -314,7 +314,7 @@ func TestAuditCommand_JSON(t *testing.T) {
 	logFile := filepath.Join(auditDir, "audit-default.log")
 	entry := audit.LogEntry{Timestamp: time.Now().UTC().Format(time.RFC3339), Agent: "default", Action: "get", Path: "test", Transport: "stdio", OK: true}
 	data, _ := json.Marshal(entry)
-	if err := os.WriteFile(logFile, []byte(data), 0o600); err != nil {
+	if err := os.WriteFile(logFile, data, 0o600); err != nil {
 		t.Fatalf("write log: %v", err)
 	}
 
@@ -354,7 +354,7 @@ func TestAuditCommand_Table(t *testing.T) {
 	logFile := filepath.Join(auditDir, "audit-default.log")
 	entry := audit.LogEntry{Timestamp: time.Now().UTC().Format(time.RFC3339), Agent: "default", Action: "get", Path: "test", Transport: "stdio", OK: true}
 	data, _ := json.Marshal(entry)
-	if err := os.WriteFile(logFile, []byte(data), 0o600); err != nil {
+	if err := os.WriteFile(logFile, data, 0o600); err != nil {
 		t.Fatalf("write log: %v", err)
 	}
 

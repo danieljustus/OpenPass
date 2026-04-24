@@ -785,8 +785,8 @@ func TestLoad_RejectsInvalidApprovalMode(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name  string
-		yaml  string
+		name string
+		yaml string
 	}{
 		{"invalid_mode", `agents:
   test:

@@ -423,13 +423,13 @@ func TestGetEntryMetadataReturnsUpdatedMetadataAfterMerge(t *testing.T) {
 
 func TestExtractTOTP(t *testing.T) {
 	tests := []struct {
-		name            string
-		data            map[string]any
-		wantSecret      string
-		wantAlgo        string
-		wantDigits      int
-		wantPeriod      int
-		wantHasTOTP     bool
+		name        string
+		data        map[string]any
+		wantSecret  string
+		wantAlgo    string
+		wantDigits  int
+		wantPeriod  int
+		wantHasTOTP bool
 	}{
 		{
 			name: "valid totp with all fields",
@@ -521,32 +521,32 @@ func TestExtractTOTP(t *testing.T) {
 
 func TestEntryGetField(t *testing.T) {
 	tests := []struct {
-		name      string
-		entry     *Entry
-		key       string
-		wantVal   any
-		wantOk    bool
+		name    string
+		entry   *Entry
+		key     string
+		wantVal any
+		wantOk  bool
 	}{
 		{
-			name:   "existing field",
-			entry:  &Entry{Data: map[string]any{"username": "alice"}},
-			key:    "username",
+			name:    "existing field",
+			entry:   &Entry{Data: map[string]any{"username": "alice"}},
+			key:     "username",
 			wantVal: "alice",
-			wantOk: true,
+			wantOk:  true,
 		},
 		{
-			name:   "missing field",
-			entry:  &Entry{Data: map[string]any{"username": "alice"}},
-			key:    "password",
+			name:    "missing field",
+			entry:   &Entry{Data: map[string]any{"username": "alice"}},
+			key:     "password",
 			wantVal: nil,
-			wantOk: false,
+			wantOk:  false,
 		},
 		{
-			name:   "nil data",
-			entry:  &Entry{Data: nil},
-			key:    "username",
+			name:    "nil data",
+			entry:   &Entry{Data: nil},
+			key:     "username",
 			wantVal: nil,
-			wantOk: false,
+			wantOk:  false,
 		},
 	}
 
@@ -597,10 +597,10 @@ func TestEntrySetField(t *testing.T) {
 
 func TestEntryHasField(t *testing.T) {
 	tests := []struct {
-		name   string
-		entry  *Entry
-		key    string
-		want   bool
+		name  string
+		entry *Entry
+		key   string
+		want  bool
 	}{
 		{
 			name:  "existing field",

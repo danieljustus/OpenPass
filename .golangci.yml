@@ -75,6 +75,16 @@ linters:
     exhaustive:
       default-signifies-exhaustive: true
 
+  exclusions:
+    rules:
+      - path: '(.+)_test\.go'
+        linters:
+          - errcheck
+          - errorlint
+          - unused
+          - govet
+          - staticcheck
+
 formatters:
   enable:
     - gofmt

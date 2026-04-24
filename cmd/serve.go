@@ -151,7 +151,14 @@ The server can run in HTTP mode or stdio mode.`,
 
 		select {
 		case <-done:
-			return nil
+			// After all goroutines finish, check if there were any errors
+			// to avoid a race where both done and errCh are ready simultaneously.
+			select {
+			case err := <-errCh:
+				return err
+			default:
+				return nil
+			}
 		case err := <-errCh:
 			cancel()
 			return err

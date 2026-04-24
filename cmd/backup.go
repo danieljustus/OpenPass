@@ -183,7 +183,7 @@ func restoreBackup(archivePath, vaultDir string) error {
 			if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
 				return fmt.Errorf("create parent directory: %w", err)
 			}
-			mode := os.FileMode(header.Mode) // #nosec // mode comes from trusted backup archive
+			mode := os.FileMode(header.Mode)                                                  // #nosec // mode comes from trusted backup archive
 			outFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode) // #nosec // path validated above
 			if err != nil {
 				return fmt.Errorf("create file: %w", err)
