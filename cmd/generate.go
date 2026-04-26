@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -41,7 +40,7 @@ var generateCmd = &cobra.Command{
 				return err
 			}
 
-			entryPath := filepath.Join(v.Dir, genStore+".age")
+			entryPath := vaultpkg.EntryPath(v, genStore)
 			if _, err := vaultpkg.ReadEntry(v.Dir, genStore, v.Identity); err == nil {
 				if _, err := vaultpkg.MergeEntryWithRecipients(v.Dir, genStore, map[string]any{"password": password}, v.Identity); err != nil {
 					return fmt.Errorf("cannot store password: %w", err)
