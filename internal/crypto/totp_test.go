@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -131,6 +132,49 @@ func TestGenerateTOTP_DifferentAlgorithmsDifferentCodes(t *testing.T) {
 	// At least two of the three should differ (extremely unlikely all match)
 	if sha1Code.Code == sha256Code.Code && sha256Code.Code == sha512Code.Code {
 		t.Error("all three algorithms produced the same code — extremely unlikely")
+	}
+}
+
+func TestValidateTOTPSecret_ValidPadded(t *testing.T) {
+	secret := "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+	if err := ValidateTOTPSecret(secret); err != nil {
+		t.Errorf("ValidateTOTPSecret(%q) = %v; want nil", secret, err)
+	}
+}
+
+func TestValidateTOTPSecret_ValidUnpadded(t *testing.T) {
+	secret := "JBSWY3DPEHPK3PXP"
+	if err := ValidateTOTPSecret(secret); err != nil {
+		t.Errorf("ValidateTOTPSecret(%q) = %v; want nil", secret, err)
+	}
+}
+
+func TestValidateTOTPSecret_WithSpaces(t *testing.T) {
+	secret := "JBSW Y3DP EHPK 3PXP"
+	if err := ValidateTOTPSecret(secret); err != nil {
+		t.Errorf("ValidateTOTPSecret(%q) = %v; want nil", secret, err)
+	}
+}
+
+func TestValidateTOTPSecret_Lowercase(t *testing.T) {
+	secret := "jbswy3dpehpk3pxp"
+	if err := ValidateTOTPSecret(secret); err != nil {
+		t.Errorf("ValidateTOTPSecret(%q) = %v; want nil", secret, err)
+	}
+}
+
+func TestValidateTOTPSecret_InvalidRejected(t *testing.T) {
+	secret := "not-valid-base32!!!"
+	err := ValidateTOTPSecret(secret)
+	if err == nil {
+		t.Fatal("expected error for invalid secret")
+	}
+	want := "TOTP secret must be Base32-encoded (spaces allowed)"
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Error("error message must not contain the secret value")
 	}
 }
 

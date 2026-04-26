@@ -20,6 +20,19 @@ type TOTPCode struct {
 	Period    int
 }
 
+func ValidateTOTPSecret(secret string) error {
+	secret = strings.ToUpper(strings.ReplaceAll(secret, " ", ""))
+
+	_, err := base32.StdEncoding.DecodeString(secret)
+	if err != nil {
+		_, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
+		if err != nil {
+			return fmt.Errorf("TOTP secret must be Base32-encoded (spaces allowed)")
+		}
+	}
+	return nil
+}
+
 // ValidateTOTPParams enforces RFC 6238 bounds on TOTP parameters.
 // Empty algorithm and zero digits/period are accepted (used to detect if values need to be set).
 // This prevents DoS/overflow from malformed entries.

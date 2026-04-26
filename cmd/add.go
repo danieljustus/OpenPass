@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/danieljustus/OpenPass/internal/crypto"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -180,6 +181,14 @@ Examples:
 					totpData["account_name"] = totpAccount
 				}
 				data["totp"] = totpData
+			}
+		}
+
+		if totpData, ok := data["totp"].(map[string]any); ok {
+			if secret, ok := totpData["secret"].(string); ok && secret != "" {
+				if err := crypto.ValidateTOTPSecret(secret); err != nil {
+					return err
+				}
 			}
 		}
 
