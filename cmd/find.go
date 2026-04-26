@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -33,7 +34,11 @@ var findCmd = &cobra.Command{
 			return err
 		}
 
-		matches, err := vaultpkg.Find(v.Dir, args[0])
+		workers := runtime.GOMAXPROCS(0)
+		if workers > 4 {
+			workers = 4
+		}
+		matches, err := vaultpkg.FindConcurrent(v.Dir, args[0], workers)
 		if err != nil {
 			return fmt.Errorf("search failed: %w", err)
 		}

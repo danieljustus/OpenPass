@@ -215,11 +215,20 @@ func listEntriesFast(root, base, prefix string, seen map[string]struct{}, legacy
 	})
 }
 
-// Find searches vault entries matching a query.
-// Performance: Uses path-only fast path to avoid decrypting entries when possible.
-// If query appears in a path, entry is included without decryption.
-// Only entries where path doesn't match are decrypted to search field content.
-func Find(vaultDir string, query string) ([]Match, error) {
+// FindOptions configures search behavior for FindWithOptions.
+type FindOptions struct {
+	// MaxWorkers controls the number of concurrent decryption workers.
+	// Values <= 0 use sequential search (same as Find).
+	MaxWorkers int
+	// ScopeFilter, if non-nil, restricts search to paths that pass the filter.
+	// Applied before decryption to avoid decrypting out-of-scope entries.
+	ScopeFilter func(path string) bool
+}
+
+// FindWithOptions searches vault entries with configurable options.
+// It supports both sequential and concurrent decryption, and optional
+// scope filtering before decrypt.
+func FindWithOptions(vaultDir string, query string, opts FindOptions) ([]Match, error) {
 	paths, err := List(vaultDir, "")
 	if err != nil {
 		return nil, err
@@ -237,6 +246,9 @@ func Find(vaultDir string, query string) ([]Match, error) {
 
 	// First pass: separate path-only matches from paths needing field search
 	for _, path := range paths {
+		if opts.ScopeFilter != nil && !opts.ScopeFilter(path) {
+			continue
+		}
 		if needle == "" || strings.Contains(strings.ToLower(path), needle) {
 			// Path matches - no decryption needed
 			pathOnlyMatches = append(pathOnlyMatches, Match{Path: path, Fields: []string{"path"}})
@@ -246,26 +258,96 @@ func Find(vaultDir string, query string) ([]Match, error) {
 		}
 	}
 
-	// Second pass: only decrypt entries where path didn't match
-	for _, path := range pathsNeedingDecrypt {
-		entry, err := ReadEntry(vaultDir, path, identity)
-		if err != nil {
-			return nil, err
+	maxWorkers := opts.MaxWorkers
+	if maxWorkers <= 0 {
+		for _, path := range pathsNeedingDecrypt {
+			entry, err := ReadEntry(vaultDir, path, identity)
+			if err != nil {
+				return nil, err
+			}
+
+			fields := make(map[string]struct{})
+			CollectFieldMatches(fields, "", entry.Data, needle)
+
+			if len(fields) == 0 {
+				continue
+			}
+
+			matchFields := make([]string, 0, len(fields))
+			for field := range fields {
+				matchFields = append(matchFields, field)
+			}
+			sort.Strings(matchFields)
+			matches = append(matches, Match{Path: path, Fields: matchFields})
+		}
+	} else {
+		if len(pathsNeedingDecrypt) == 0 {
+			sort.Slice(pathOnlyMatches, func(i, j int) bool {
+				return pathOnlyMatches[i].Path < pathOnlyMatches[j].Path
+			})
+			return pathOnlyMatches, nil
 		}
 
-		fields := make(map[string]struct{})
-		CollectFieldMatches(fields, "", entry.Data, needle)
-
-		if len(fields) == 0 {
-			continue
+		type decryptResult struct {
+			err    error
+			path   string
+			fields []string
 		}
 
-		matchFields := make([]string, 0, len(fields))
-		for field := range fields {
-			matchFields = append(matchFields, field)
+		pathChan := make(chan string, len(pathsNeedingDecrypt))
+		resultChan := make(chan decryptResult, len(pathsNeedingDecrypt))
+
+		var wg sync.WaitGroup
+
+		for i := 0; i < maxWorkers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for path := range pathChan {
+					entry, err := ReadEntry(vaultDir, path, identity)
+					if err != nil {
+						resultChan <- decryptResult{err: err, path: path}
+						continue
+					}
+
+					fields := make(map[string]struct{})
+					CollectFieldMatches(fields, "", entry.Data, needle)
+
+					if len(fields) == 0 {
+						resultChan <- decryptResult{path: path, fields: nil}
+						continue
+					}
+
+					matchFields := make([]string, 0, len(fields))
+					for field := range fields {
+						matchFields = append(matchFields, field)
+					}
+					sort.Strings(matchFields)
+					resultChan <- decryptResult{path: path, fields: matchFields}
+				}
+			}()
 		}
-		sort.Strings(matchFields)
-		matches = append(matches, Match{Path: path, Fields: matchFields})
+
+		go func() {
+			for _, path := range pathsNeedingDecrypt {
+				pathChan <- path
+			}
+			close(pathChan)
+		}()
+
+		go func() {
+			wg.Wait()
+			close(resultChan)
+		}()
+
+		for result := range resultChan {
+			if result.err != nil {
+				return nil, result.err
+			}
+			if result.fields != nil {
+				matches = append(matches, Match{Path: result.path, Fields: result.fields})
+			}
+		}
 	}
 
 	// Combine path-only matches with field matches
@@ -281,6 +363,14 @@ func Find(vaultDir string, query string) ([]Match, error) {
 	})
 
 	return matches, nil
+}
+
+// Find searches vault entries matching a query.
+// Performance: Uses path-only fast path to avoid decrypting entries when possible.
+// If query appears in a path, entry is included without decryption.
+// Only entries where path doesn't match are decrypted to search field content.
+func Find(vaultDir string, query string) ([]Match, error) {
+	return FindWithOptions(vaultDir, query, FindOptions{})
 }
 
 func hasField(fields []string, want string) bool {
@@ -328,108 +418,5 @@ func FindConcurrent(vaultDir string, query string, maxWorkers int) ([]Match, err
 	if maxWorkers <= 0 {
 		maxWorkers = 4
 	}
-
-	paths, err := List(vaultDir, "")
-	if err != nil {
-		return nil, err
-	}
-
-	identity := currentSearchIdentity()
-	if identity == nil {
-		return nil, fmt.Errorf("no search identity available")
-	}
-
-	needle := strings.ToLower(query)
-	pathOnlyMatches := make([]Match, 0)
-	pathsNeedingDecrypt := make([]string, 0, len(paths))
-
-	for _, path := range paths {
-		if needle == "" || strings.Contains(strings.ToLower(path), needle) {
-			pathOnlyMatches = append(pathOnlyMatches, Match{Path: path, Fields: []string{"path"}})
-		} else {
-			pathsNeedingDecrypt = append(pathsNeedingDecrypt, path)
-		}
-	}
-
-	if len(pathsNeedingDecrypt) == 0 {
-		sort.Slice(pathOnlyMatches, func(i, j int) bool {
-			return pathOnlyMatches[i].Path < pathOnlyMatches[j].Path
-		})
-		return pathOnlyMatches, nil
-	}
-
-	type decryptResult struct {
-		err    error
-		path   string
-		fields []string
-	}
-
-	pathChan := make(chan string, len(pathsNeedingDecrypt))
-	resultChan := make(chan decryptResult, len(pathsNeedingDecrypt))
-
-	var wg sync.WaitGroup
-
-	for i := 0; i < maxWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for path := range pathChan {
-				entry, err := ReadEntry(vaultDir, path, identity)
-				if err != nil {
-					resultChan <- decryptResult{err: err, path: path}
-					continue
-				}
-
-				fields := make(map[string]struct{})
-				CollectFieldMatches(fields, "", entry.Data, needle)
-
-				if len(fields) == 0 {
-					resultChan <- decryptResult{path: path, fields: nil}
-					continue
-				}
-
-				matchFields := make([]string, 0, len(fields))
-				for field := range fields {
-					matchFields = append(matchFields, field)
-				}
-				sort.Strings(matchFields)
-				resultChan <- decryptResult{path: path, fields: matchFields}
-			}
-		}()
-	}
-
-	go func() {
-		for _, path := range pathsNeedingDecrypt {
-			pathChan <- path
-		}
-		close(pathChan)
-	}()
-
-	go func() {
-		wg.Wait()
-		close(resultChan)
-	}()
-
-	var matches []Match
-	for result := range resultChan {
-		if result.err != nil {
-			return nil, result.err
-		}
-		if result.fields != nil {
-			matches = append(matches, Match{Path: result.path, Fields: result.fields})
-		}
-	}
-
-	matches = append(matches, pathOnlyMatches...)
-
-	sort.Slice(matches, func(i, j int) bool {
-		iPath := hasField(matches[i].Fields, "path")
-		jPath := hasField(matches[j].Fields, "path")
-		if iPath != jPath {
-			return iPath
-		}
-		return matches[i].Path < matches[j].Path
-	})
-
-	return matches, nil
+	return FindWithOptions(vaultDir, query, FindOptions{MaxWorkers: maxWorkers})
 }
