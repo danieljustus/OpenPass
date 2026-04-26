@@ -325,6 +325,152 @@ func TestRestoreCommand_CorruptArchive(t *testing.T) {
 	}
 }
 
+func TestCreateBackup_SymlinkSkipped(t *testing.T) {
+	vaultDir := t.TempDir()
+	passphrase := "test-passphrase-123"
+	cfg := config.Default()
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, cfg); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+
+	targetFile := filepath.Join(vaultDir, "real.txt")
+	if err := os.WriteFile(targetFile, []byte("real"), 0o600); err != nil {
+		t.Fatalf("write real file: %v", err)
+	}
+	linkFile := filepath.Join(vaultDir, "link.txt")
+	if err := os.Symlink(targetFile, linkFile); err != nil {
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	archivePath := filepath.Join(t.TempDir(), "backup.tar.gz")
+	if err := createBackup(vaultDir, archivePath, false); err != nil {
+		t.Fatalf("createBackup() error = %v", err)
+	}
+
+	f, err := os.Open(archivePath)
+	if err != nil {
+		t.Fatalf("open archive: %v", err)
+	}
+	defer f.Close()
+
+	gr, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatalf("gzip reader: %v", err)
+	}
+	defer gr.Close()
+
+	tr := tar.NewReader(gr)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("read tar: %v", err)
+		}
+		if header.Name == "link.txt" {
+			t.Fatal("archive should not contain symlink")
+		}
+	}
+}
+
+func TestRestoreBackup_ExistingSymlinkRejected(t *testing.T) {
+	vaultDir := t.TempDir()
+	passphrase := "test-passphrase-123"
+	cfg := config.Default()
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, cfg); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+
+	archivePath := filepath.Join(t.TempDir(), "backup.tar.gz")
+	if err := createBackup(vaultDir, archivePath, false); err != nil {
+		t.Fatalf("createBackup() error = %v", err)
+	}
+
+	restoreDir := t.TempDir()
+	symlinkPath := filepath.Join(restoreDir, "identity.age")
+	if err := os.Symlink("/etc/passwd", symlinkPath); err != nil {
+		t.Fatalf("create symlink: %v", err)
+	}
+
+	if err := restoreBackup(archivePath, restoreDir); err == nil {
+		t.Fatal("expected error when restoring over existing symlink")
+	}
+}
+
+func TestRestoreBackup_ModeClamping(t *testing.T) {
+	archivePath := filepath.Join(t.TempDir(), "modes.tar.gz")
+	f, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatalf("create archive: %v", err)
+	}
+
+	gw := gzip.NewWriter(f)
+	tw := tar.NewWriter(gw)
+
+	files := []struct {
+		name     string
+		mode     int64
+		content  string
+		typ      byte
+	}{
+		{"identity.age", 0o644, "id", tar.TypeReg},
+		{"config.yaml", 0o644, "cfg", tar.TypeReg},
+		{"entries/", 0o755, "", tar.TypeDir},
+		{"worldreadable.txt", 0o644, "hello", tar.TypeReg},
+		{"worlddir/", 0o755, "", tar.TypeDir},
+	}
+	for _, file := range files {
+		h := &tar.Header{
+			Name:     file.name,
+			Mode:     file.mode,
+			Size:     int64(len(file.content)),
+			Typeflag: file.typ,
+		}
+		if err := tw.WriteHeader(h); err != nil {
+			t.Fatalf("write header: %v", err)
+		}
+		if file.typ == tar.TypeReg && len(file.content) > 0 {
+			if _, err := tw.Write([]byte(file.content)); err != nil {
+				t.Fatalf("write data: %v", err)
+			}
+		}
+	}
+
+	tw.Close()
+	gw.Close()
+	f.Close()
+
+	restoreDir := t.TempDir()
+	if err := restoreBackup(archivePath, restoreDir); err != nil {
+		t.Fatalf("restoreBackup() error = %v", err)
+	}
+
+	fileInfo, err := os.Lstat(filepath.Join(restoreDir, "worldreadable.txt"))
+	if err != nil {
+		t.Fatalf("stat restored file: %v", err)
+	}
+	if fileInfo.Mode().Perm() != 0o600 {
+		t.Fatalf("file mode = %o, want 0o600", fileInfo.Mode().Perm())
+	}
+
+	dirInfo, err := os.Lstat(filepath.Join(restoreDir, "worlddir"))
+	if err != nil {
+		t.Fatalf("stat restored dir: %v", err)
+	}
+	if dirInfo.Mode().Perm() != 0o700 {
+		t.Fatalf("dir mode = %o, want 0o700", dirInfo.Mode().Perm())
+	}
+
+	idInfo, err := os.Lstat(filepath.Join(restoreDir, "identity.age"))
+	if err != nil {
+		t.Fatalf("stat restored identity: %v", err)
+	}
+	if idInfo.Mode().Perm() != 0o600 {
+		t.Fatalf("identity mode = %o, want 0o600", idInfo.Mode().Perm())
+	}
+}
+
 func TestBackupCommand_ExcludeGit(t *testing.T) {
 	resetCommandTestState()
 	t.Cleanup(resetCommandTestState)

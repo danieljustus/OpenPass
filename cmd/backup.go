@@ -71,6 +71,11 @@ func createBackup(vaultDir, archivePath string, excludeGit bool) error {
 			return err
 		}
 
+		// Skip symlinks — do not follow them
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil
+		}
+
 		relPath, err := filepath.Rel(vaultDir, path)
 		if err != nil {
 			return err
@@ -174,16 +179,24 @@ func restoreBackup(archivePath, vaultDir string) error {
 			return fmt.Errorf("archive contains path traversal: %s", header.Name)
 		}
 
+		// Reject restore if target already exists as a symlink
+		if existingInfo, err := os.Lstat(targetPath); err == nil {
+			if existingInfo.Mode()&os.ModeSymlink != 0 {
+				return fmt.Errorf("target path is a symlink: %s", targetPath)
+			}
+		}
+
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(targetPath, 0o700); err != nil {
+			mode := os.FileMode(header.Mode) & 0o700
+			if err := os.MkdirAll(targetPath, mode); err != nil {
 				return fmt.Errorf("create directory: %w", err)
 			}
 		case tar.TypeReg:
 			if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
 				return fmt.Errorf("create parent directory: %w", err)
 			}
-			mode := os.FileMode(header.Mode)                                                  // #nosec // mode comes from trusted backup archive
+			mode := os.FileMode(header.Mode) & 0o600
 			outFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode) // #nosec // path validated above
 			if err != nil {
 				return fmt.Errorf("create file: %w", err)
@@ -193,6 +206,8 @@ func restoreBackup(archivePath, vaultDir string) error {
 			if copyErr != nil {
 				return fmt.Errorf("write file: %w", copyErr)
 			}
+		default:
+			return fmt.Errorf("unsupported archive entry type: %s", header.Name)
 		}
 	}
 
