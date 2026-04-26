@@ -188,7 +188,10 @@ func restoreBackup(archivePath, vaultDir string) error {
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			mode := os.FileMode(header.Mode) & 0o700
+			if header.Mode < 0 {
+				return fmt.Errorf("invalid negative mode in archive: %s", header.Name)
+			}
+			mode := os.FileMode(header.Mode) & 0o700 // #nosec G115 // header.Mode validated as non-negative above
 			if err := os.MkdirAll(targetPath, mode); err != nil {
 				return fmt.Errorf("create directory: %w", err)
 			}
@@ -196,7 +199,10 @@ func restoreBackup(archivePath, vaultDir string) error {
 			if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
 				return fmt.Errorf("create parent directory: %w", err)
 			}
-			mode := os.FileMode(header.Mode) & 0o600
+			if header.Mode < 0 {
+				return fmt.Errorf("invalid negative mode in archive: %s", header.Name)
+			}
+			mode := os.FileMode(header.Mode) & 0o600                                          // #nosec G115 // header.Mode validated as non-negative above
 			outFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode) // #nosec // path validated above
 			if err != nil {
 				return fmt.Errorf("create file: %w", err)
