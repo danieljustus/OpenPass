@@ -153,7 +153,7 @@ func (s *Server) checkScope(path string) bool {
 		return false
 	}
 	if len(s.agent.AllowedPaths) == 0 {
-		return true
+		return false
 	}
 
 	normalizedPath := normalizeScopePath(path)

@@ -324,8 +324,8 @@ func TestCheckScope_EmptyAllowedPaths(t *testing.T) {
 		},
 	}
 
-	if !srv.checkScope("any/path") {
-		t.Error("checkScope() with empty allowed paths should allow any path")
+	if srv.checkScope("any/path") {
+		t.Error("checkScope() with empty allowed paths should deny all paths")
 	}
 }
 

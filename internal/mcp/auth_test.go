@@ -375,7 +375,7 @@ func TestClientIPXForwardedFor(t *testing.T) {
 	req.Header.Set("X-Forwarded-For", "203.0.113.195, 70.41.3.18, 150.172.238.178")
 	req.RemoteAddr = "10.0.0.1:12345"
 
-	ip := clientIP(req)
+	ip := clientIP(req, []string{"10.0.0.1"})
 	if ip != "203.0.113.195" {
 		t.Fatalf("clientIP = %q, want 203.0.113.195", ip)
 	}
@@ -386,7 +386,7 @@ func TestClientIPXRealIP(t *testing.T) {
 	req.Header.Set("X-Real-IP", "192.168.1.100")
 	req.RemoteAddr = "10.0.0.1:12345"
 
-	ip := clientIP(req)
+	ip := clientIP(req, []string{"10.0.0.1"})
 	if ip != "192.168.1.100" {
 		t.Fatalf("clientIP = %q, want 192.168.1.100", ip)
 	}
@@ -396,7 +396,7 @@ func TestClientIPRemoteAddr(t *testing.T) {
 	req := httptest.NewRequest("POST", "/mcp", nil)
 	req.RemoteAddr = "192.168.1.50:54321"
 
-	ip := clientIP(req)
+	ip := clientIP(req, nil)
 	if ip != "192.168.1.50" {
 		t.Fatalf("clientIP = %q, want 192.168.1.50", ip)
 	}
@@ -406,7 +406,7 @@ func TestClientIPRemoteAddrNoPort(t *testing.T) {
 	req := httptest.NewRequest("POST", "/mcp", nil)
 	req.RemoteAddr = "192.168.1.50"
 
-	ip := clientIP(req)
+	ip := clientIP(req, nil)
 	if ip != "192.168.1.50" {
 		t.Fatalf("clientIP = %q, want 192.168.1.50", ip)
 	}
@@ -416,9 +416,141 @@ func TestClientIPUnknown(t *testing.T) {
 	req := httptest.NewRequest("POST", "/mcp", nil)
 	req.RemoteAddr = ""
 
-	ip := clientIP(req)
+	ip := clientIP(req, nil)
 	if ip != "unknown" {
 		t.Fatalf("clientIP = %q, want unknown", ip)
+	}
+}
+
+func TestClientIPUntrustedProxyIgnoresXFF(t *testing.T) {
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Header.Set("X-Forwarded-For", "203.0.113.195")
+	req.RemoteAddr = "10.0.0.1:12345"
+
+	ip := clientIP(req, []string{"192.168.1.1"})
+	if ip != "10.0.0.1" {
+		t.Fatalf("clientIP = %q, want 10.0.0.1 (untrusted proxy should use RemoteAddr)", ip)
+	}
+}
+
+func TestClientIPTrustedProxyUsesXFF(t *testing.T) {
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Header.Set("X-Forwarded-For", "203.0.113.195, 70.41.3.18")
+	req.RemoteAddr = "10.0.0.1:12345"
+
+	ip := clientIP(req, []string{"10.0.0.1"})
+	if ip != "203.0.113.195" {
+		t.Fatalf("clientIP = %q, want 203.0.113.195", ip)
+	}
+}
+
+func TestClientIPTrustedProxyUsesXRealIP(t *testing.T) {
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Header.Set("X-Real-IP", "192.168.1.100")
+	req.RemoteAddr = "10.0.0.1:12345"
+
+	ip := clientIP(req, []string{"10.0.0.1"})
+	if ip != "192.168.1.100" {
+		t.Fatalf("clientIP = %q, want 192.168.1.100", ip)
+	}
+}
+
+func TestClientIPNoTrustedProxiesDefault(t *testing.T) {
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Header.Set("X-Forwarded-For", "203.0.113.195")
+	req.RemoteAddr = "10.0.0.1:12345"
+
+	ip := clientIP(req, nil)
+	if ip != "10.0.0.1" {
+		t.Fatalf("clientIP = %q, want 10.0.0.1 (no trusted proxies should use RemoteAddr)", ip)
+	}
+}
+
+func TestClientIPCIDRTrustedProxy(t *testing.T) {
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Header.Set("X-Forwarded-For", "203.0.113.195")
+	req.RemoteAddr = "10.0.0.1:12345"
+
+	ip := clientIP(req, []string{"10.0.0.0/24"})
+	if ip != "203.0.113.195" {
+		t.Fatalf("clientIP = %q, want 203.0.113.195", ip)
+	}
+}
+
+func TestClientIPTrustedProxyIPv6(t *testing.T) {
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Header.Set("X-Forwarded-For", "203.0.113.195")
+	req.RemoteAddr = "[::1]:12345"
+
+	ip := clientIP(req, []string{"::1"})
+	if ip != "203.0.113.195" {
+		t.Fatalf("clientIP = %q, want 203.0.113.195", ip)
+	}
+}
+
+func TestRateLimiterMiddlewareTrustedProxyXFF(t *testing.T) {
+	rl := NewRateLimiter(2, time.Minute, "10.0.0.1")
+	handler := RateLimiterMiddleware(rl, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// First request from "real" client via trusted proxy
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.50")
+	req.RemoteAddr = "10.0.0.1:12345"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("first request: status = %d, want 200", rec.Code)
+	}
+
+	// Second request from same real client via trusted proxy
+	req2 := httptest.NewRequest("POST", "/mcp", nil)
+	req2.Header.Set("X-Forwarded-For", "192.168.1.50")
+	req2.RemoteAddr = "10.0.0.1:12345"
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("second request: status = %d, want 200", rec2.Code)
+	}
+
+	// Third request from same real client via trusted proxy should be rate limited
+	req3 := httptest.NewRequest("POST", "/mcp", nil)
+	req3.Header.Set("X-Forwarded-For", "192.168.1.50")
+	req3.RemoteAddr = "10.0.0.1:12345"
+	rec3 := httptest.NewRecorder()
+	handler.ServeHTTP(rec3, req3)
+	if rec3.Code != http.StatusTooManyRequests {
+		t.Fatalf("third request: status = %d, want 429", rec3.Code)
+	}
+}
+
+func TestRateLimiterMiddlewareUntrustedProxySpoofedXFF(t *testing.T) {
+	rl := NewRateLimiter(2, time.Minute, "10.0.0.1")
+	handler := RateLimiterMiddleware(rl, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Spoofed XFF from untrusted client — rate limit applies to RemoteAddr
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest("POST", "/mcp", nil)
+		req.Header.Set("X-Forwarded-For", "192.168.1.50")
+		req.RemoteAddr = "10.0.0.2:12345"
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("request %d: status = %d, want 200", i+1, rec.Code)
+		}
+	}
+
+	// Third request from same untrusted client should be rate limited (based on RemoteAddr)
+	req3 := httptest.NewRequest("POST", "/mcp", nil)
+	req3.Header.Set("X-Forwarded-For", "192.168.1.50")
+	req3.RemoteAddr = "10.0.0.2:12345"
+	rec3 := httptest.NewRecorder()
+	handler.ServeHTTP(rec3, req3)
+	if rec3.Code != http.StatusTooManyRequests {
+		t.Fatalf("third request: status = %d, want 429", rec3.Code)
 	}
 }
 

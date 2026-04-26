@@ -65,6 +65,9 @@ mcp:
   stdio: false
   # HTTP bearer token file path. "auto" stores mcp-token in the vault.
   httpTokenFile: auto
+  # Require bearer token for /metrics on non-loopback binds. Default is true.
+  # Set to false to allow anonymous metrics access when bound to non-local addresses.
+  # metrics_auth_required: true
   # HTTP server timeouts. Increase for slow networks or large payloads.
   # read_header_timeout: 5s
   # read_timeout: 10s

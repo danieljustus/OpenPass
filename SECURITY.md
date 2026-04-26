@@ -101,6 +101,21 @@ chmod 600 ~/.openpass/identity.age
 - Never expose the MCP server port to the network
 - Use `approvalMode: deny` or `approvalMode: prompt` for untrusted agents
 
+#### Metrics Endpoint
+
+The `/metrics` endpoint exposes Prometheus-format metrics.
+
+- On loopback binds (`127.0.0.1`, `::1`, `localhost`), `/metrics` is accessible without authentication
+- On non-loopback binds, `/metrics` requires bearer token authentication by default
+- This behavior is controlled via the `metrics_auth_required` config option:
+
+```yaml
+mcp:
+  metrics_auth_required: true   # default: require auth on non-loopback binds
+```
+
+Setting `metrics_auth_required: false` allows anonymous access to `/metrics` when bound to non-local addresses. Only disable this if you have other access controls (e.g., firewall rules or reverse-proxy auth) in place.
+
 #### Token Rotation
 
 Bearer tokens can be rotated using the `mcp-token-rotate` command:
@@ -216,9 +231,12 @@ vault:
 
 ### Environment Variables
 
-| Variable         | Purpose                                      | Security Note                      |
-| ---------------- | -------------------------------------------- | ---------------------------------- |
-| `OPENPASS_VAULT` | Override vault location                      | Ensure path has proper permissions |
+| Variable                    | Purpose                                      | Security Note                      |
+| --------------------------- | -------------------------------------------- | ---------------------------------- |
+| `OPENPASS_VAULT`            | Override vault location                      | Ensure path has proper permissions |
+| `OPENPASS_AUDIT_MAX_SIZE_MB` | Max audit log file size in MB                | Higher values increase disk usage  |
+| `OPENPASS_AUDIT_MAX_BACKUPS` | Number of audit backups to retain           | More backups use more disk space   |
+| `OPENPASS_AUDIT_MAX_AGE_DAYS` | Days before audit backups are deleted       | Longer retention uses more space   |
 
 ## Security Best Practices
 
@@ -267,9 +285,19 @@ All data remains on your device:
 
 OpenPass maintains local audit logs for MCP tool calls (see `internal/audit/audit.go`). These logs:
 - Are stored in `~/.openpass/audit-<agent>.log`
-- Rotate when they exceed 10MB or 7 days old
-- Are retained up to 100MB total before oldest are pruned
+- Rotate when they exceed 100MB per file or 30 days old
+- Are retained up to 5 backup files before oldest are pruned
 - Contain only action metadata, no field values or secrets
+
+#### Audit Log Configuration
+
+Audit log rotation is configurable via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENPASS_AUDIT_MAX_SIZE_MB` | 100 | Max size in MB per audit log file before rotation |
+| `OPENPASS_AUDIT_MAX_BACKUPS` | 5 | Number of rotated backup files to retain |
+| `OPENPASS_AUDIT_MAX_AGE_DAYS` | 30 | Max age in days before rotated files are deleted |
 
 ### GDPR Compliance
 

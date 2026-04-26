@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"mime"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -226,13 +227,17 @@ func runHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault
 	}
 
 	rateLimit := 60
-	if v != nil && v.Config != nil && v.Config.MCP != nil && v.Config.MCP.RateLimit >= 0 {
-		rateLimit = v.Config.MCP.RateLimit
+	var trustedProxyIPs []string
+	if v != nil && v.Config != nil && v.Config.MCP != nil {
+		if v.Config.MCP.RateLimit >= 0 {
+			rateLimit = v.Config.MCP.RateLimit
+		}
+		trustedProxyIPs = v.Config.MCP.TrustedProxyIPs
 	}
 	var rateLimiter *mcp.RateLimiter
 	var stopCleanup func()
 	if rateLimit > 0 {
-		rateLimiter = mcp.NewRateLimiter(rateLimit, time.Minute)
+		rateLimiter = mcp.NewRateLimiter(rateLimit, time.Minute, trustedProxyIPs...)
 		stopCleanup = rateLimiter.StartCleanup(ctx, 5*time.Minute)
 	}
 
@@ -297,8 +302,16 @@ func runHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault
 		_ = json.NewEncoder(w).Encode(resp)
 	})
 
-	// Metrics endpoint — Prometheus format, no auth required
-	mux.Handle("/metrics", promhttp.HandlerFor(metrics.Registry(), promhttp.HandlerOpts{}))
+	metricsHandler := promhttp.HandlerFor(metrics.Registry(), promhttp.HandlerOpts{})
+	metricsAuthRequired := true
+	if v != nil && v.Config != nil && v.Config.MCP != nil {
+		metricsAuthRequired = v.Config.MCP.MetricsAuthRequired
+	}
+	if !isLoopbackBind(bind) && metricsAuthRequired {
+		mux.Handle("/metrics", mcp.BearerAuthMiddleware(token, metricsHandler))
+	} else {
+		mux.Handle("/metrics", metricsHandler)
+	}
 
 	// MCP endpoint — bearer auth + agent header, JSON-RPC via POST
 	const maxRequestBodySize = 1 * 1024 * 1024
@@ -418,6 +431,15 @@ func runHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault
 		return err
 	}
 	return nil
+}
+
+func isLoopbackBind(bind string) bool {
+	host := strings.TrimSpace(bind)
+	if host == "" || host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func writeMCPHTTPError(w http.ResponseWriter, status int, id json.RawMessage, code int, message string) {

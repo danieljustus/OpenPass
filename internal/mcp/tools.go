@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/danieljustus/OpenPass/internal/crypto"
@@ -151,15 +149,8 @@ func (s *Server) handleFind(ctx context.Context, req CallToolRequest) (*CallTool
 		return nil, err
 	}
 
-	filtered := make([]vault.Match, 0, len(matches))
-	for _, match := range matches {
-		if s.checkScope(match.Path) {
-			filtered = append(filtered, match)
-		}
-	}
-
 	s.logAudit("find", query, true)
-	result, err := json.Marshal(filtered)
+	result, err := json.Marshal(matches)
 	if err != nil {
 		return nil, err
 	}
@@ -350,63 +341,13 @@ func (s *Server) handleHealth(ctx context.Context, req CallToolRequest) (*CallTo
 }
 
 // findEntries searches vault entries matching a query.
-// Performance: Uses path-only fast path to avoid decrypting entries when possible.
-// If query appears in a path, entry is returned without decryption.
-// Only entries where path doesn't match are decrypted to search field content.
+// It delegates to vault.FindWithOptions for concurrent search with
+// scope filtering applied before decryption.
 func (s *Server) findEntries(query string) ([]vault.Match, error) {
-	paths, err := vault.List(s.vault.Dir, "")
-	if err != nil {
-		return nil, err
-	}
-
-	needle := strings.ToLower(query)
-	var matches []vault.Match
-	pathOnlyMatches := make([]vault.Match, 0)
-	pathsNeedingDecrypt := make([]string, 0, len(paths))
-
-	// First pass: separate path-only matches from paths needing field search
-	for _, path := range paths {
-		if !s.checkScope(path) {
-			continue
-		}
-
-		if needle == "" || strings.Contains(strings.ToLower(path), needle) {
-			// Path matches - no decryption needed
-			pathOnlyMatches = append(pathOnlyMatches, vault.Match{Path: path, Fields: []string{"path"}})
-		} else {
-			// Path doesn't match, need to decrypt and search fields
-			pathsNeedingDecrypt = append(pathsNeedingDecrypt, path)
-		}
-	}
-
-	// Second pass: only decrypt entries where path didn't match
-	for _, path := range pathsNeedingDecrypt {
-		entry, err := vault.ReadEntry(s.vault.Dir, path, s.vault.Identity)
-		if err != nil {
-			return nil, err
-		}
-
-		fields := make(map[string]struct{})
-		vault.CollectFieldMatches(fields, "", entry.Data, needle)
-		if len(fields) == 0 {
-			continue
-		}
-
-		matchFields := make([]string, 0, len(fields))
-		for field := range fields {
-			matchFields = append(matchFields, field)
-		}
-		sort.Strings(matchFields)
-		matches = append(matches, vault.Match{Path: path, Fields: matchFields})
-	}
-
-	// Combine path-only matches with field matches
-	matches = append(matches, pathOnlyMatches...)
-
-	sort.Slice(matches, func(i, j int) bool {
-		return matches[i].Path < matches[j].Path
+	return vault.FindWithOptions(s.vault.Dir, query, vault.FindOptions{
+		MaxWorkers:  4,
+		ScopeFilter: s.checkScope,
 	})
-	return matches, nil
 }
 
 func generatePassword(length int, symbols bool) (string, error) {

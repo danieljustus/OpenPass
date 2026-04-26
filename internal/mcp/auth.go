@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"sync"
@@ -28,12 +29,13 @@ func init() {
 }
 
 type RateLimiter struct {
-	attempts     map[string]*rateLimitEntry
-	mu           sync.Mutex
-	limit        int
-	window       time.Duration
-	cleanupCount int64
-	log          *log.Logger
+	attempts       map[string]*rateLimitEntry
+	mu             sync.Mutex
+	limit          int
+	window         time.Duration
+	cleanupCount   int64
+	log            *log.Logger
+	trustedProxies []string
 }
 
 type rateLimitEntry struct {
@@ -41,11 +43,12 @@ type rateLimitEntry struct {
 	count   int
 }
 
-func NewRateLimiter(limit int, dur time.Duration) *RateLimiter {
+func NewRateLimiter(limit int, dur time.Duration, trustedProxies ...string) *RateLimiter {
 	return &RateLimiter{
-		attempts: make(map[string]*rateLimitEntry),
-		limit:    limit,
-		window:   dur,
+		attempts:       make(map[string]*rateLimitEntry),
+		limit:          limit,
+		window:         dur,
+		trustedProxies: trustedProxies,
 	}
 }
 
@@ -137,7 +140,7 @@ func (rl *RateLimiter) Close() error {
 
 func RateLimiterMiddleware(rl *RateLimiter, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !rl.Allow(clientIP(r)) {
+		if !rl.Allow(clientIP(r, rl.trustedProxies)) {
 			http.Error(w, "too many requests", http.StatusTooManyRequests)
 			return
 		}
@@ -160,15 +163,17 @@ func logAuthFailure(r *http.Request, reason, detail string) {
 	})
 }
 
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if idx := strings.Index(xff, ","); idx != -1 {
-			xff = xff[:idx]
+func clientIP(r *http.Request, trustedProxies []string) string {
+	if isTrustedProxy(r.RemoteAddr, trustedProxies) {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			if idx := strings.Index(xff, ","); idx != -1 {
+				xff = xff[:idx]
+			}
+			return strings.TrimSpace(xff)
 		}
-		return strings.TrimSpace(xff)
-	}
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return xri
+		if xri := r.Header.Get("X-Real-IP"); xri != "" {
+			return xri
+		}
 	}
 	if ra := r.RemoteAddr; ra != "" {
 		host, _, err := net.SplitHostPort(ra)
@@ -178,6 +183,37 @@ func clientIP(r *http.Request) string {
 		return ra
 	}
 	return "unknown"
+}
+
+func isTrustedProxy(remoteAddr string, trustedProxies []string) bool {
+	if len(trustedProxies) == 0 {
+		return false
+	}
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		host = remoteAddr
+	}
+	if host == "" {
+		return false
+	}
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		return false
+	}
+	for _, p := range trustedProxies {
+		if strings.Contains(p, "/") {
+			prefix, err := netip.ParsePrefix(p)
+			if err == nil && prefix.Contains(addr) {
+				return true
+			}
+		} else {
+			trustedAddr, err := netip.ParseAddr(p)
+			if err == nil && trustedAddr == addr {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func BearerAuthMiddleware(token string, next http.Handler) http.Handler {

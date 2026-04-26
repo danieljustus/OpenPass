@@ -35,7 +35,9 @@ type MCPConfig struct {
 	WriteTimeout      time.Duration `yaml:"write_timeout,omitempty"`
 	ShutdownTimeout   time.Duration `yaml:"shutdown_timeout,omitempty"`
 	ApprovalTimeout   time.Duration `yaml:"approval_timeout,omitempty"`
-	RateLimit         int           `yaml:"rate_limit,omitempty"` // requests per minute, 0 = disabled
+	RateLimit           int           `yaml:"rate_limit,omitempty"`             // requests per minute, 0 = disabled
+	TrustedProxyIPs     []string      `yaml:"trusted_proxy_ips,omitempty"`
+	MetricsAuthRequired bool          `yaml:"metrics_auth_required,omitempty"`
 }
 
 // UpdateConfig holds update check-related configuration.
@@ -76,7 +78,8 @@ func defaultMCPConfig() MCPConfig {
 		WriteTimeout:      10 * time.Second,
 		ShutdownTimeout:   5 * time.Second,
 		ApprovalTimeout:   30 * time.Second,
-		RateLimit:         60,
+		RateLimit:           60,
+		MetricsAuthRequired: true,
 	}
 }
 
@@ -123,7 +126,9 @@ type fileMCPConfig struct {
 	WriteTimeout      *time.Duration `yaml:"write_timeout,omitempty"`
 	ShutdownTimeout   *time.Duration `yaml:"shutdown_timeout,omitempty"`
 	ApprovalTimeout   *time.Duration `yaml:"approval_timeout,omitempty"`
-	RateLimit         *int           `yaml:"rate_limit,omitempty"`
+	RateLimit           *int           `yaml:"rate_limit,omitempty"`
+	TrustedProxyIPs     []string       `yaml:"trusted_proxy_ips,omitempty"`
+	MetricsAuthRequired *bool          `yaml:"metrics_auth_required,omitempty"`
 }
 
 // fileUpdateConfig is the file-based update configuration with pointer fields
@@ -215,6 +220,12 @@ func MergeFileMCPConfig(fileCfg *fileMCPConfig, defaults MCPConfig) MCPConfig {
 	}
 	if fileCfg.RateLimit != nil {
 		result.RateLimit = *fileCfg.RateLimit
+	}
+	if fileCfg.TrustedProxyIPs != nil {
+		result.TrustedProxyIPs = append([]string(nil), fileCfg.TrustedProxyIPs...)
+	}
+	if fileCfg.MetricsAuthRequired != nil {
+		result.MetricsAuthRequired = *fileCfg.MetricsAuthRequired
 	}
 	return result
 }

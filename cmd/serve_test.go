@@ -59,18 +59,22 @@ func newTestVault(t *testing.T) *vaultpkg.Vault {
 	return v
 }
 
-func runHTTPServerAsync(ctx context.Context, t *testing.T, port int, v *vaultpkg.Vault) func() {
+func runHTTPServerAsyncWithBind(ctx context.Context, t *testing.T, bind string, port int, v *vaultpkg.Vault) func() {
 	t.Helper()
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := runHTTPServer(ctx, "127.0.0.1", port, v); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := runHTTPServer(ctx, bind, port, v); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			t.Errorf("runHTTPServer error: %v", err)
 		}
 	}()
 	time.Sleep(200 * time.Millisecond)
 	return wg.Wait
+}
+
+func runHTTPServerAsync(ctx context.Context, t *testing.T, port int, v *vaultpkg.Vault) func() {
+	return runHTTPServerAsyncWithBind(ctx, t, "127.0.0.1", port, v)
 }
 
 func testMCPToken(t *testing.T) string {
@@ -826,4 +830,90 @@ func TestRunStdioServer_WithNilVault(t *testing.T) {
 	_ = w.Close()
 	_ = pr.Close()
 	_ = pw.Close()
+}
+
+func TestRunHTTPServer_MetricsEndpoint_NonLoopback_RequiresAuth(t *testing.T) {
+	v := newTestVault(t)
+	port := findFreePort(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	waitForServer := runHTTPServerAsyncWithBind(ctx, t, "0.0.0.0", port, v)
+	defer func() {
+		cancel()
+		waitForServer()
+	}()
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+
+	// Request without auth should be denied
+	resp, err := newTestHTTPClient().Get(baseURL + "/metrics")
+	if err != nil {
+		t.Fatalf("metrics request failed: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("metrics without auth status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+	}
+
+	// Request with valid bearer token should succeed
+	token := testMCPToken(t)
+	req, _ := http.NewRequest(http.MethodGet, baseURL+"/metrics", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err = newTestHTTPClient().Do(req)
+	if err != nil {
+		t.Fatalf("metrics request with auth failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("metrics with auth status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+}
+
+func TestRunHTTPServer_MetricsEndpoint_NonLoopback_AllowsWhenDisabled(t *testing.T) {
+	v := newTestVault(t)
+	v.Config.MCP = &config.MCPConfig{
+		MetricsAuthRequired: false,
+	}
+	port := findFreePort(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	waitForServer := runHTTPServerAsyncWithBind(ctx, t, "0.0.0.0", port, v)
+	defer func() {
+		cancel()
+		waitForServer()
+	}()
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+
+	resp, err := newTestHTTPClient().Get(baseURL + "/metrics")
+	if err != nil {
+		t.Fatalf("metrics request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("metrics status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+}
+
+func TestRunHTTPServer_HealthEndpoint_NonLoopback(t *testing.T) {
+	v := newTestVault(t)
+	port := findFreePort(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	waitForServer := runHTTPServerAsyncWithBind(ctx, t, "0.0.0.0", port, v)
+	defer func() {
+		cancel()
+		waitForServer()
+	}()
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+
+	resp, err := newTestHTTPClient().Get(baseURL + "/health")
+	if err != nil {
+		t.Fatalf("health request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("health status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
 }
