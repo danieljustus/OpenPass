@@ -409,10 +409,10 @@ func TestRestoreBackup_ModeClamping(t *testing.T) {
 	tw := tar.NewWriter(gw)
 
 	files := []struct {
-		name     string
-		mode     int64
-		content  string
-		typ      byte
+		name    string
+		mode    int64
+		content string
+		typ     byte
 	}{
 		{"identity.age", 0o644, "id", tar.TypeReg},
 		{"config.yaml", 0o644, "cfg", tar.TypeReg},

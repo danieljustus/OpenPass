@@ -25,17 +25,17 @@ type GitConfig struct {
 
 // MCPConfig holds MCP server-related configuration for AI agent integration.
 type MCPConfig struct {
-	Bind              string        `yaml:"bind,omitempty"`
-	HTTPTokenFile     string        `yaml:"httpTokenFile,omitempty"`
-	Port              int           `yaml:"port,omitempty"`
-	Stdio             bool          `yaml:"stdio,omitempty"`
-	ApprovalRequired  bool          `yaml:"approval_required,omitempty"`
-	ReadHeaderTimeout time.Duration `yaml:"read_header_timeout,omitempty"`
-	ReadTimeout       time.Duration `yaml:"read_timeout,omitempty"`
-	WriteTimeout      time.Duration `yaml:"write_timeout,omitempty"`
-	ShutdownTimeout   time.Duration `yaml:"shutdown_timeout,omitempty"`
-	ApprovalTimeout   time.Duration `yaml:"approval_timeout,omitempty"`
-	RateLimit           int           `yaml:"rate_limit,omitempty"`             // requests per minute, 0 = disabled
+	Bind                string        `yaml:"bind,omitempty"`
+	HTTPTokenFile       string        `yaml:"httpTokenFile,omitempty"`
+	Port                int           `yaml:"port,omitempty"`
+	Stdio               bool          `yaml:"stdio,omitempty"`
+	ApprovalRequired    bool          `yaml:"approval_required,omitempty"`
+	ReadHeaderTimeout   time.Duration `yaml:"read_header_timeout,omitempty"`
+	ReadTimeout         time.Duration `yaml:"read_timeout,omitempty"`
+	WriteTimeout        time.Duration `yaml:"write_timeout,omitempty"`
+	ShutdownTimeout     time.Duration `yaml:"shutdown_timeout,omitempty"`
+	ApprovalTimeout     time.Duration `yaml:"approval_timeout,omitempty"`
+	RateLimit           int           `yaml:"rate_limit,omitempty"` // requests per minute, 0 = disabled
 	TrustedProxyIPs     []string      `yaml:"trusted_proxy_ips,omitempty"`
 	MetricsAuthRequired bool          `yaml:"metrics_auth_required,omitempty"`
 }
@@ -69,15 +69,15 @@ func defaultGitConfig() GitConfig {
 // defaultMCPConfig returns the default MCP server configuration.
 func defaultMCPConfig() MCPConfig {
 	return MCPConfig{
-		Port:              8080,
-		Bind:              "127.0.0.1",
-		Stdio:             false,
-		HTTPTokenFile:     "auto",
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		ShutdownTimeout:   5 * time.Second,
-		ApprovalTimeout:   30 * time.Second,
+		Port:                8080,
+		Bind:                "127.0.0.1",
+		Stdio:               false,
+		HTTPTokenFile:       "auto",
+		ReadHeaderTimeout:   5 * time.Second,
+		ReadTimeout:         10 * time.Second,
+		WriteTimeout:        10 * time.Second,
+		ShutdownTimeout:     5 * time.Second,
+		ApprovalTimeout:     30 * time.Second,
 		RateLimit:           60,
 		MetricsAuthRequired: true,
 	}
@@ -116,16 +116,16 @@ type fileGitConfig struct {
 // fileMCPConfig is the file-based MCP configuration with pointer fields
 // for optional YAML unmarshaling.
 type fileMCPConfig struct {
-	Port              *int           `yaml:"port,omitempty"`
-	Bind              *string        `yaml:"bind,omitempty"`
-	Stdio             *bool          `yaml:"stdio,omitempty"`
-	ApprovalRequired  *bool          `yaml:"approval_required,omitempty"` // deprecated, parsed but ignored
-	HTTPTokenFile     *string        `yaml:"httpTokenFile,omitempty"`
-	ReadHeaderTimeout *time.Duration `yaml:"read_header_timeout,omitempty"`
-	ReadTimeout       *time.Duration `yaml:"read_timeout,omitempty"`
-	WriteTimeout      *time.Duration `yaml:"write_timeout,omitempty"`
-	ShutdownTimeout   *time.Duration `yaml:"shutdown_timeout,omitempty"`
-	ApprovalTimeout   *time.Duration `yaml:"approval_timeout,omitempty"`
+	Port                *int           `yaml:"port,omitempty"`
+	Bind                *string        `yaml:"bind,omitempty"`
+	Stdio               *bool          `yaml:"stdio,omitempty"`
+	ApprovalRequired    *bool          `yaml:"approval_required,omitempty"` // deprecated, parsed but ignored
+	HTTPTokenFile       *string        `yaml:"httpTokenFile,omitempty"`
+	ReadHeaderTimeout   *time.Duration `yaml:"read_header_timeout,omitempty"`
+	ReadTimeout         *time.Duration `yaml:"read_timeout,omitempty"`
+	WriteTimeout        *time.Duration `yaml:"write_timeout,omitempty"`
+	ShutdownTimeout     *time.Duration `yaml:"shutdown_timeout,omitempty"`
+	ApprovalTimeout     *time.Duration `yaml:"approval_timeout,omitempty"`
 	RateLimit           *int           `yaml:"rate_limit,omitempty"`
 	TrustedProxyIPs     []string       `yaml:"trusted_proxy_ips,omitempty"`
 	MetricsAuthRequired *bool          `yaml:"metrics_auth_required,omitempty"`
