@@ -77,6 +77,45 @@ openpass serve --stdio --agent default  # Restart MCP server
 
 ---
 
+## Vault Backup and Recovery
+
+### Creating Backups
+
+Use the built-in CLI commands to create and restore vault backups:
+
+```bash
+# Create a backup archive
+openpass backup ~/backups/openpass-$(date +%Y%m%d).tar.gz
+
+# Exclude .git directory to reduce archive size
+openpass backup ~/backups/openpass-$(date +%Y%m%d).tar.gz --exclude-git
+```
+
+### Restoring from Backup
+
+```bash
+# Restore vault from a backup archive
+openpass restore ~/backups/openpass-20260427.tar.gz
+```
+
+After restore, verify the vault is accessible:
+```bash
+openpass unlock
+openpass list
+```
+
+### Important Warnings
+
+- **Sensitive data**: Backup archives contain encrypted vault files (identity.age, entries, mcp-token). Treat archives with the same care as the vault itself.
+- **Test restores**: Always verify that restore works before relying on backups. An untested backup is not a backup.
+- **Git history caution**: If your vault is committed to Git, be aware that Git history may contain sensitive files that were tracked before being added to `.gitignore`. The `mcp-token` and other runtime files should never be committed.
+
+### Recovery Without Backup
+
+If `identity.age` is lost, **there is no recovery**. The identity file is the private key for all encrypted entries. Without a tested backup, your vault is unrecoverable.
+
+---
+
 ## MCP Connection Problems
 
 ### Symptom: Agent can't connect to OpenPass
@@ -233,6 +272,44 @@ journalctl --user -u openpass-mcp -f
 ls -la ~/.openpass/
 # Should be owned by your user, not root
 ```
+
+### FreeBSD
+
+**Session caching is unavailable in prebuilt binaries:**
+
+OpenPass release binaries (including those from GitHub Releases and `go install`) are built with `CGO_ENABLED=0`. On FreeBSD, the `zalando/go-keyring` dependency requires CGO to access the D-Bus Secret Service API. When CGO is disabled, the keyring library compiles a fallback provider that returns `ErrUnsupportedPlatform` for all operations.
+
+**Verified behavior:**
+
+- **`openpass unlock` fails** after passphrase entry. The vault decrypts successfully, but `session.SavePassphrase()` returns `unsupported platform: freebsd`, causing the command to exit with an error.
+- **`openpass lock` fails** with the same `unsupported platform: freebsd` error.
+- **There is no memory-only fallback.** The codebase does not implement an in-memory session cache; it delegates entirely to the OS keyring.
+- **Every vault command will prompt for the passphrase** (or require `OPENPASS_PASSPHRASE`) because the session cannot be persisted.
+
+**User impact:**
+
+| Scenario | Behavior |
+|----------|----------|
+| `openpass unlock` | Errors after passphrase entry; vault is decrypted but session is not saved |
+| `openpass lock` | Errors because session cannot be cleared from the (non-functional) keyring |
+| `openpass get <entry>` | Prompts for passphrase on every invocation |
+| MCP server | Prompts for passphrase on every start (stdio mode) or requires `OPENPASS_PASSPHRASE` |
+
+**Workarounds:**
+
+1. **Use `OPENPASS_PASSPHRASE`** (less secure, visible in `ps` and `/proc/<pid>/environ`):
+   ```bash
+   OPENPASS_PASSPHRASE="your-passphrase" openpass get github.password
+   ```
+
+2. **Build from source with CGO enabled** (requires a FreeBSD desktop environment with D-Bus and a Secret Service provider such as GNOME Keyring or KWallet):
+   ```bash
+   CGO_ENABLED=1 go build -o openpass .
+   ```
+
+**Verification status:**
+
+This behavior was determined by code inspection of `github.com/zalando/go-keyring@v0.2.8` (build tag `(freebsd && cgo)` in `keyring_unix.go`) and OpenPass `.goreleaser.yml` (`CGO_ENABLED=0`). We do not have a physical FreeBSD environment to test runtime behavior; if you observe different behavior on FreeBSD, please open an issue.
 
 ### Windows
 

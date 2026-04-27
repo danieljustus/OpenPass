@@ -127,7 +127,7 @@ mv openpass ~/bin/
 
 **Notes:**
 - **Windows arm64**: Requires Windows 11 on ARM or Windows 10 on ARM. The PowerShell installer auto-detects architecture.
-- **FreeBSD**: OS keyring integration may have limited support depending on the desktop environment. Session caching falls back to memory-only if no keyring is available.
+- **FreeBSD**: Prebuilt binaries are compiled with `CGO_ENABLED=0`, which disables OS keyring integration entirely (`zalando/go-keyring` requires CGO on FreeBSD). Session caching is unavailable; you must enter your passphrase for every command. Building from source with `CGO_ENABLED=1` may enable keyring support if a D-Bus secret service is installed.
 - All binaries are built with `CGO_ENABLED=0` for consistent cross-compilation.
 
 ## Quick Start
@@ -265,6 +265,25 @@ openpass git log
 openpass git pull
 openpass git push
 ```
+
+### Backup and Restore
+
+Create a compressed archive of your entire vault:
+
+```bash
+openpass backup ~/backups/openpass-$(date +%Y%m%d).tar.gz
+
+# Exclude .git directory to reduce archive size
+openpass backup ~/backups/openpass-$(date +%Y%m%d).tar.gz --exclude-git
+```
+
+Restore from a backup archive:
+
+```bash
+openpass restore ~/backups/openpass-20260427.tar.gz
+```
+
+> **Warning**: Backup archives contain your encrypted vault data (identity.age, config.yaml, entries, and mcp-token). Protect them as you would the vault itself — anyone with access to the archive and your passphrase can decrypt all entries. Always test restore procedures before relying on backups for critical data.
 
 ## MCP Server
 

@@ -219,6 +219,9 @@ This configuration:
 Agents can then use `generate_totp` to get time-based codes without ever accessing
 the underlying secret.
 
+For the full syntax of `redactFields` (including wildcard patterns and nested field paths),
+see the [Field Redaction section in mcp-api.md](mcp-api.md#field-redaction-with-redactfields).
+
 ## Agent Skill
 
 The skill template in `docs/skills/openpass-agent/SKILL.md` can be copied into an

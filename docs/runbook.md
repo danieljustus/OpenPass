@@ -35,9 +35,10 @@ OpenPass uses GitHub Actions for CI/CD:
 
 ### Release Pipeline Jobs
 
-1. **test** - Pre-release validation
-2. **govulncheck** - Final vulnerability scan
-3. **release** - GoReleaser artifact publishing
+1. **lint** - Format check, golangci-lint, gosec SAST (mirrors CI gates)
+2. **test** - Pre-release validation
+3. **govulncheck** - Final vulnerability scan
+4. **release** - GoReleaser artifact publishing (depends on all above)
 
 ---
 
@@ -324,10 +325,31 @@ OpenPass stores all data in a vault directory. The vault contains:
 └── .git/             # Git repository (if enabled)
 ```
 
+### CLI Backup and Restore (Recommended)
+
+The `openpass backup` and `openpass restore` commands are the primary method for vault backup and recovery:
+
+```bash
+# Create a backup archive
+openpass backup ~/backups/openpass-$(date +%Y%m%d_%H%M%S).tar.gz
+
+# Exclude .git directory to reduce archive size
+openpass backup ~/backups/openpass-$(date +%Y%m%d_%H%M%S).tar.gz --exclude-git
+
+# Restore from backup
+openpass restore ~/backups/openpass-20260427_120000.tar.gz
+```
+
+**Security notes**:
+- Backup archives contain encrypted vault files (identity.age, config.yaml, entries, mcp-token). Treat archives with the same care as the vault itself.
+- Always test restore procedures on a separate system or directory before relying on backups for critical recovery.
+- Store backups in a location separate from the vault (3-2-1 rule: 3 copies, 2 media types, 1 offsite).
+
 ### Backup Methods
 
 | Method | Pros | Cons |
 |--------|------|------|
+| **CLI backup** | Built-in, verified, includes integrity checks | Requires OpenPass binary |
 | **Git auto-sync** | Automatic, versioned, distributed | Requires remote push, .git can grow large |
 | **Manual copy** | Simple, full control | No incremental history, manual effort |
 | **age encryption** | Entries are individually encrypted, portable | Must secure identity.age separately |

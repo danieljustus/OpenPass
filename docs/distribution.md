@@ -9,6 +9,10 @@ OpenPass is distributed through multiple channels to support different platforms
 | Linux | amd64, arm64 | tar.gz, deb, rpm, apk |
 | macOS | amd64, arm64 | tar.gz, Homebrew |
 | Windows | amd64 | zip |
+| FreeBSD | amd64, arm64 | tar.gz |
+
+**Notes:**
+- **FreeBSD**: Prebuilt binaries are built with `CGO_ENABLED=0`, which disables OS keyring integration. Session caching is unavailable; see [docs/troubleshooting.md](troubleshooting.md#freebsd) for workarounds.
 
 ## First-Class Channels
 
@@ -110,11 +114,12 @@ All artifacts are built by [GoReleaser](https://goreleaser.com/) via the release
 
 The pipeline:
 1. Runs tests and govulncheck
-2. Builds cross-platform binaries
-3. Creates archives (tar.gz/zip)
-4. Creates Linux packages (deb/rpm/apk) via nfpms
-5. Generates Homebrew formula
-6. Publishes GitHub Release with all artifacts and checksums
+2. Runs lint and security gates (fmt-check, golangci-lint, gosec)
+3. Builds cross-platform binaries
+4. Creates archives (tar.gz/zip)
+5. Creates Linux packages (deb/rpm/apk) via nfpms
+6. Generates Homebrew formula
+7. Publishes GitHub Release with all artifacts and checksums
 
 ## Release Verification
 
@@ -152,9 +157,32 @@ openpass version
 
 The `commit` value should match the git tag's commit SHA on GitHub.
 
-## Smoke Tests
+## Smoke Test Matrix
 
-After each release, automated smoke tests verify that published artifacts are installable and functional. See `.github/workflows/release.yml` for the smoke test job.
+The following matrix shows which distribution channels have automated vs. manual smoke tests:
+
+| Platform | Format | Status | Notes |
+|----------|--------|--------|-------|
+| Linux amd64 | tar.gz | Automated | `smoke-test-linux` job |
+| Linux amd64 | deb | Automated | `smoke-test-deb` job |
+| Linux amd64 | rpm | Manual | See manual procedure below |
+| Linux amd64 | apk | Manual | Alpine package |
+| Linux arm64 | All | Manual | Cross-compile target |
+| macOS amd64 | tar.gz | Automated | `smoke-test-macos` job |
+| macOS arm64 | tar.gz | Manual | Apple Silicon (M1/M2/M3) |
+| macOS | Homebrew | Manual | Tap-based install |
+| Windows amd64 | zip | Manual | Windows Server test |
+| FreeBSD amd64 | tar.gz | Manual | No GA runner available |
+| FreeBSD arm64 | tar.gz | Manual | No GA runner available |
+
+### Automated Smoke Tests
+
+Release workflow runs automated smoke tests for the primary targets:
+- Linux amd64 archive (`smoke-test-linux`)
+- Linux amd64 deb package (`smoke-test-deb`)
+- macOS amd64 archive (`smoke-test-macos`)
+
+See `.github/workflows/release.yml` for test implementation.
 
 ### Manual Smoke Test Procedure
 

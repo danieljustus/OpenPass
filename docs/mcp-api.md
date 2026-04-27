@@ -11,7 +11,8 @@ This document provides comprehensive API documentation for the OpenPass Model Co
 5. [Error Handling](#error-handling)
 6. [Rate Limiting](#rate-limiting)
 7. [Agent Configuration](#agent-configuration)
-8. [Examples](#examples)
+8. [Field Redaction with redactFields](#field-redaction-with-redactfields)
+9. [Examples](#examples)
 
 ---
 
@@ -763,6 +764,111 @@ agents:
 | `work/aws` | Exact path `work/aws` |
 | `api/*` | All entries under `api/` |
 | `["work/*", "personal/*"]` | Both work and personal directories |
+
+---
+
+## Field Redaction with `redactFields`
+
+The `redactFields` agent profile setting controls which entry fields are hidden from `get_entry` responses. Redacted fields appear as `[REDACTED]` instead of their actual values.
+
+### What Gets Redacted
+
+Redaction is applied **only** to `get_entry` responses. It does **not** affect:
+- `list_entries`, `find_entries`, or `get_entry_metadata` (these never return field values)
+- `generate_totp` (reads the secret directly from the vault)
+- `generate_password` (creates new values)
+- Write operations such as `set_entry_field` or `secure_input`
+
+### Pattern Syntax
+
+`redactFields` is an array of field name patterns. Patterns are matched against the fully-qualified field path using dot notation for nested maps.
+
+| Pattern | Matches | Example |
+|---------|---------|---------|
+| `"password"` | Exact top-level field | `password` |
+| `"totp.secret"` | Exact nested field | `totp.secret` |
+| `"*"` | **All** fields | everything |
+| `"totp.*"` | All fields under the `totp` map | `totp.secret`, `totp.issuer`, `totp.algorithm` |
+
+### TOTP Secret Redaction (Recommended)
+
+The most common use case is preventing agents from reading raw TOTP secrets while still allowing them to generate codes:
+
+```yaml
+agents:
+  totp-only:
+    allowedPaths: ["*"]
+    canWrite: false
+    redactFields: ["totp.secret"]
+```
+
+With this profile:
+- `get_entry github` returns all fields, but `totp.secret` shows `[REDACTED]`
+- `generate_totp github` still works normally and returns the current TOTP code
+- The agent can use TOTP-based authentication without ever seeing the underlying seed
+
+### Other Common Examples
+
+```yaml
+agents:
+  # Redact all TOTP-related fields
+  totp-redacted:
+    allowedPaths: ["*"]
+    canWrite: false
+    redactFields: ["totp.*"]
+
+  # Redact password and TOTP secret
+  limited-reader:
+    allowedPaths: ["*"]
+    canWrite: false
+    redactFields: ["password", "totp.secret", "api_key"]
+
+  # Redact everything (metadata-only access)
+  metadata-only:
+    allowedPaths: ["*"]
+    canWrite: false
+    redactFields: ["*"]
+```
+
+### Response Example with Redaction
+
+**Profile**:
+```yaml
+agents:
+  readonly-agent:
+    allowedPaths: ["*"]
+    canWrite: false
+    redactFields: ["totp.secret"]
+```
+
+**Request**:
+```json
+{
+  "tool": "get_entry",
+  "arguments": {
+    "path": "github"
+  }
+}
+```
+
+**Response**:
+```json
+{
+  "path": "github",
+  "data": {
+    "password": "mysecretpassword",
+    "username": "myuser",
+    "url": "https://github.com",
+    "totp": {
+      "secret": "[REDACTED]",
+      "issuer": "GitHub",
+      "algorithm": "SHA1"
+    }
+  }
+}
+```
+
+Note that `generate_totp github` continues to work because it reads the TOTP secret directly from the encrypted vault entry, bypassing the `get_entry` redaction layer.
 
 ---
 
