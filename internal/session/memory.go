@@ -72,6 +72,8 @@ func (m *memoryKeyring) Delete(service, account string) error {
 	return nil
 }
 
+var memoryFallbackActive bool
+
 func init() {
 	mk := &memoryKeyring{}
 	keyringSet = mk.Set

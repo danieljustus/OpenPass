@@ -73,10 +73,9 @@ const (
 )
 
 var (
-	keyringSet           func(service, account, value string) error
-	keyringGet           func(service, account string) (string, error)
-	keyringDelete        func(service, account string) error
-	memoryFallbackActive bool
+	keyringSet    func(service, account, value string) error
+	keyringGet    func(service, account string) (string, error)
+	keyringDelete func(service, account string) error
 )
 
 type storedSession struct {
