@@ -1,5 +1,11 @@
 # OpenPass
 
+[![CI](https://github.com/danieljustus/OpenPass/actions/workflows/ci.yml/badge.svg)](https://github.com/danieljustus/OpenPass/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/danieljustus/OpenPass)](https://github.com/danieljustus/OpenPass/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Go Reference](https://pkg.go.dev/badge/github.com/danieljustus/OpenPass.svg)](https://pkg.go.dev/github.com/danieljustus/OpenPass)
+[![Go Report Card](https://goreportcard.com/badge/github.com/danieljustus/OpenPass)](https://goreportcard.com/report/github.com/danieljustus/OpenPass)
+
 ![OpenPass hero](docs/assets/openpass-hero.png)
 
 A modern, secure command-line password manager written in Go. OpenPass uses [age](https://age-encryption.org/) for encryption and provides an intuitive CLI interface for managing your secrets — with built-in MCP server support for AI agent integration.
