@@ -63,8 +63,6 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 
 	"crypto/sha256"
-
-	"github.com/zalando/go-keyring"
 )
 
 const (
@@ -75,9 +73,10 @@ const (
 )
 
 var (
-	keyringSet    = keyring.Set
-	keyringGet    = keyring.Get
-	keyringDelete = keyring.Delete
+	keyringSet           func(service, account, value string) error
+	keyringGet           func(service, account string) (string, error)
+	keyringDelete        func(service, account string) error
+	memoryFallbackActive bool
 )
 
 type storedSession struct {
