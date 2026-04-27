@@ -34,6 +34,7 @@ builds:
       - linux
       - darwin
       - windows
+      - freebsd
     goarch:
       - amd64
       - arm64
@@ -41,9 +42,6 @@ builds:
       - v1
     goarm:
       - "7"
-    ignore:
-      - goos: windows
-        goarch: arm64
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
@@ -156,6 +154,19 @@ brews:
       Documentation: https://github.com/danieljustus/OpenPass#readme
     test: |
       system "#{bin}/openpass", "version"
+
+scoops:
+  - name: openpass
+    repository:
+      owner: danieljustus
+      name: scoop-bucket
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: bucket
+    homepage: "https://github.com/danieljustus/OpenPass"
+    description: "Modern CLI password manager with age encryption"
+    license: MIT
+    persist:
+      - config.yaml
 
 nfpms:
   - id: openpass

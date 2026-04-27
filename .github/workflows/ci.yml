@@ -7,6 +7,8 @@ on:
       - 'v*'
   pull_request:
     branches: [ main ]
+  schedule:
+    - cron: '0 6 * * 1'
 
 permissions:
   contents: read
@@ -34,6 +36,34 @@ jobs:
         with:
           go-version-input: '1.26'
           go-package: ./...
+
+  dependency-scan:
+    name: Dependency Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Run OSV Scanner
+        uses: google/osv-scanner-action@v2
+        with:
+          scan-args: >-
+            --lockfile=go.mod
+            --format=sarif
+            --output=osv-results.sarif
+        continue-on-error: true
+
+      - name: Upload OSV SARIF to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: osv-results.sarif
 
   lint:
     name: Lint
@@ -163,6 +193,13 @@ jobs:
           - goos: windows
             goarch: amd64
             extension: .exe
+          - goos: windows
+            goarch: arm64
+            extension: .exe
+          - goos: freebsd
+            goarch: amd64
+          - goos: freebsd
+            goarch: arm64
     steps:
       - name: Checkout code
         uses: actions/checkout@v5

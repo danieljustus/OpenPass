@@ -34,7 +34,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating in ou
 - **Git Integration**: Automatic commits and optional sync with Git repositories
 - **Multi-User Vaults**: Manage age recipients for shared vault access
 - **MCP Server**: Built-in Model Context Protocol server for AI agent access (stdio and HTTP)
-- **Cross-Platform**: Works on macOS, Linux, and Windows
+- **Cross-Platform**: Works on macOS, Linux, Windows, and FreeBSD
 
 ## Installation
 
@@ -82,6 +82,19 @@ brew tap danieljustus/tap
 brew install openpass
 ```
 
+### Scoop (Windows)
+
+```powershell
+scoop bucket add openpass https://github.com/danieljustus/scoop-bucket
+scoop install openpass
+```
+
+Or install directly from the manifest:
+
+```powershell
+scoop install https://raw.githubusercontent.com/danieljustus/OpenPass/main/scoop/openpass.json
+```
+
 ### Manual download
 
 Download a prebuilt binary from the latest release:
@@ -102,6 +115,20 @@ cd OpenPass
 go build -o openpass .
 mv openpass ~/bin/
 ```
+
+### Platform Support
+
+| Platform | amd64 | arm64 | Install Methods |
+|----------|-------|-------|-----------------|
+| macOS | ✓ | ✓ | Quick install, Homebrew, Go, Manual |
+| Linux | ✓ | ✓ | Quick install, Homebrew, Go, Manual, deb/rpm/apk |
+| Windows | ✓ | ✓ | Quick install, Scoop, Go, Manual |
+| FreeBSD | ✓ | ✓ | Go, Manual |
+
+**Notes:**
+- **Windows arm64**: Requires Windows 11 on ARM or Windows 10 on ARM. The PowerShell installer auto-detects architecture.
+- **FreeBSD**: OS keyring integration may have limited support depending on the desktop environment. Session caching falls back to memory-only if no keyring is available.
+- All binaries are built with `CGO_ENABLED=0` for consistent cross-compilation.
 
 ## Quick Start
 
