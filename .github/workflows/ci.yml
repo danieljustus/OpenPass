@@ -228,7 +228,7 @@ jobs:
     needs: [build]
     steps:
       - name: Download linux-amd64 binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: openpass-linux-amd64
           path: ./bin
