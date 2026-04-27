@@ -244,7 +244,7 @@ func TestFindReturnsEmptyForNoMatches(t *testing.T) {
 	id := testutil.TempIdentity(t)
 	rememberSearchIdentity(id)
 
-	mustWriteEntryCoverage(vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
+	mustWriteEntryCoverage(t, vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
 
 	got, err := Find(vaultDir, "nomatch")
 	if err != nil {
@@ -261,7 +261,7 @@ func TestFindConcurrentReturnsEmptyForNoMatches(t *testing.T) {
 	id := testutil.TempIdentity(t)
 	rememberSearchIdentity(id)
 
-	mustWriteEntryCoverage(vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
+	mustWriteEntryCoverage(t, vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
 
 	got, err := FindConcurrent(vaultDir, "nomatch", 4)
 	if err != nil {
@@ -278,7 +278,7 @@ func TestFindWithUnicodeQuery(t *testing.T) {
 	id := testutil.TempIdentity(t)
 	rememberSearchIdentity(id)
 
-	mustWriteEntryCoverage(vaultDir, id, "test/entry", map[string]interface{}{"data": "日本語テスト"})
+	mustWriteEntryCoverage(t, vaultDir, id, "test/entry", map[string]interface{}{"data": "日本語テスト"})
 
 	got, err := Find(vaultDir, "日本語")
 	if err != nil {
@@ -295,7 +295,7 @@ func TestFindPathMatchesBeforeFieldSearch(t *testing.T) {
 	id := testutil.TempIdentity(t)
 	rememberSearchIdentity(id)
 
-	mustWriteEntryCoverage(vaultDir, id, "github.com/user", map[string]interface{}{
+	mustWriteEntryCoverage(t, vaultDir, id, "github.com/user", map[string]interface{}{
 		"username": "alice",
 		"password": "secret123",
 	})
@@ -318,7 +318,7 @@ func TestFindConcurrentPathMatchesBeforeFieldSearch(t *testing.T) {
 	id := testutil.TempIdentity(t)
 	rememberSearchIdentity(id)
 
-	mustWriteEntryCoverage(vaultDir, id, "github.com/user", map[string]interface{}{
+	mustWriteEntryCoverage(t, vaultDir, id, "github.com/user", map[string]interface{}{
 		"username": "alice",
 		"password": "secret123",
 	})
@@ -440,7 +440,7 @@ func TestFindNoPathMatchesDecryptsAll(t *testing.T) {
 	id := testutil.TempIdentity(t)
 	rememberSearchIdentity(id)
 
-	mustWriteEntryCoverage(vaultDir, id, "github.com/user", map[string]interface{}{
+	mustWriteEntryCoverage(t, vaultDir, id, "github.com/user", map[string]interface{}{
 		"username": "alice",
 		"password": "secret123",
 	})
@@ -463,9 +463,9 @@ func TestFindMatchesMultipleEntries(t *testing.T) {
 	id := testutil.TempIdentity(t)
 	rememberSearchIdentity(id)
 
-	mustWriteEntryCoverage(vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
-	mustWriteEntryCoverage(vaultDir, id, "github.com/work", map[string]interface{}{"username": "bob"})
-	mustWriteEntryCoverage(vaultDir, id, "gitlab.com/user", map[string]interface{}{"username": "carol"})
+	mustWriteEntryCoverage(t, vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
+	mustWriteEntryCoverage(t, vaultDir, id, "github.com/work", map[string]interface{}{"username": "bob"})
+	mustWriteEntryCoverage(t, vaultDir, id, "gitlab.com/user", map[string]interface{}{"username": "carol"})
 
 	got, err := Find(vaultDir, "github")
 	if err != nil {
@@ -482,9 +482,9 @@ func TestFindConcurrentMatchesMultipleEntries(t *testing.T) {
 	id := testutil.TempIdentity(t)
 	rememberSearchIdentity(id)
 
-	mustWriteEntryCoverage(vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
-	mustWriteEntryCoverage(vaultDir, id, "github.com/work", map[string]interface{}{"username": "bob"})
-	mustWriteEntryCoverage(vaultDir, id, "gitlab.com/user", map[string]interface{}{"username": "carol"})
+	mustWriteEntryCoverage(t, vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
+	mustWriteEntryCoverage(t, vaultDir, id, "github.com/work", map[string]interface{}{"username": "bob"})
+	mustWriteEntryCoverage(t, vaultDir, id, "gitlab.com/user", map[string]interface{}{"username": "carol"})
 
 	got, err := FindConcurrent(vaultDir, "github", 4)
 	if err != nil {
@@ -676,9 +676,10 @@ func TestAutoCommitUsesDefaultMessage(t *testing.T) {
 	}
 }
 
-func mustWriteEntryCoverage(vaultDir string, identity *age.X25519Identity, path string, data map[string]interface{}) {
+func mustWriteEntryCoverage(t *testing.T, vaultDir string, identity *age.X25519Identity, path string, data map[string]interface{}) {
+	t.Helper()
 	if err := WriteEntry(vaultDir, path, &Entry{Data: data}, identity); err != nil {
-		panic(err)
+		t.Fatalf("WriteEntry(%q) error = %v", path, err)
 	}
 }
 
