@@ -920,12 +920,12 @@ After every release, verify:
 # https://github.com/danieljustus/OpenPass/releases/tag/vX.Y.Z
 
 # 2. Verify checksums
-sha256sum -c SHA256SUMS
+sha256sum -c OpenPass_X.Y.Z_checksums.txt --ignore-missing
 # or on macOS:
-shasum -a 256 --check SHA256SUMS
+shasum -a 256 --check OpenPass_X.Y.Z_checksums.txt --ignore-missing
 
 # 3. Verify binary (Linux example)
-./openpass-linux-amd64 version
+./OpenPass_X.Y.Z_linux_amd64/openpass version
 # Should match tag version
 ```
 
@@ -939,8 +939,11 @@ docker run -it ubuntu:latest bash
 apt-get update && apt-get install -y curl gpg
 
 # 3. Download and verify release
-curl -fsSL https://github.com/danieljustus/OpenPass/releases/download/vX.Y.Z/openpass-linux-amd64 -o openpass
-curl -fsSL https://github.com/danieljustus/OpenPass/releases/download/vX.Y.Z/checksums.txt -o checksums.txt
+curl -fsSLO https://github.com/danieljustus/OpenPass/releases/download/vX.Y.Z/OpenPass_X.Y.Z_linux_amd64.tar.gz
+curl -fsSLO https://github.com/danieljustus/OpenPass/releases/download/vX.Y.Z/OpenPass_X.Y.Z_checksums.txt
+sha256sum -c OpenPass_X.Y.Z_checksums.txt --ignore-missing
+tar xzf OpenPass_X.Y.Z_linux_amd64.tar.gz
+cp OpenPass_X.Y.Z_linux_amd64/openpass ./openpass
 
 # 4. Check binary works
 chmod +x openpass

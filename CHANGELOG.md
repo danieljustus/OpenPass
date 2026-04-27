@@ -90,9 +90,58 @@ CI fix for release validation.
 
 - Fixed release smoke tests to properly validate published artifacts
 
+## [v1.2.0] - 2026-04-24
+
+Audit, backup, and security hardening release.
+
+### Added
+
+- Backup and restore commands with automated test coverage
+- Audit log support and broader integration test coverage for vault operations
+
+### Changed
+
+- Enabled Homebrew tap publishing through the release workflow
+- Raised package test coverage across vault, session, update, git, and audit paths
+
+### Fixed
+
+- Resolved CI lint failures and a serve race condition
+- Fixed generated coverage artifact handling in Git ignores
+
+### Security
+
+- Hardened file handling against path traversal, symlink TOCTOU, and unsafe permissions
+- Addressed gosec findings for integer conversion and weak crypto hash usage
+
+## [v1.3.0] - 2026-04-26
+
+MCP, vault search, and backup hardening release.
+
+### Added
+
+- Concurrent vault search with scoped `FindWithOptions` support
+- Trusted proxy support for MCP HTTP deployments
+- TOTP secret validation before storing credentials
+
+### Changed
+
+- Metrics endpoint authentication now respects loopback vs non-loopback bind security
+
+### Fixed
+
+- Password generation stores entries through the vault entry path helper
+
+### Security
+
+- Hardened backup restore against symlink and permission vulnerabilities
+- Fixed additional integer overflow findings in backup restore handling
+
 [v1.0.0]: https://github.com/danieljustus/OpenPass/releases/tag/v1.0.0
 [v1.1.0]: https://github.com/danieljustus/OpenPass/releases/tag/v1.1.0
 [v1.1.1]: https://github.com/danieljustus/OpenPass/releases/tag/v1.1.1
 [v1.1.2]: https://github.com/danieljustus/OpenPass/releases/tag/v1.1.2
 [v1.1.3]: https://github.com/danieljustus/OpenPass/releases/tag/v1.1.3
 [v1.1.4]: https://github.com/danieljustus/OpenPass/releases/tag/v1.1.4
+[v1.2.0]: https://github.com/danieljustus/OpenPass/releases/tag/v1.2.0
+[v1.3.0]: https://github.com/danieljustus/OpenPass/releases/tag/v1.3.0

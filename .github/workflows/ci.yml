@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  security-events: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -49,6 +50,9 @@ jobs:
           go-version: '1.26'
           cache: true
 
+      - name: Check formatting
+        run: make fmt-check
+
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
@@ -68,6 +72,12 @@ jobs:
           name: gosec-sarif
           path: gosec.sarif
           retention-days: 7
+
+      - name: Upload gosec results to code scanning
+        if: always() && github.event_name == 'push'
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: gosec.sarif
 
   test:
     name: Test

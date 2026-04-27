@@ -133,13 +133,13 @@ func isUserWritable(path string) bool {
 
 #### 3.1 Checksum Verification (SHA256)
 
-**Requirement:** All downloaded archives must be verified against the official `openpass_{version}_checksums.txt` file.
+**Requirement:** All downloaded archives must be verified against the official `OpenPass_{version}_checksums.txt` file.
 
 **Implementation:**
 ```go
 // Download checksums file over HTTPS
 checksumsURL := fmt.Sprintf(
-    "https://github.com/danieljustus/OpenPass/releases/download/v%s/openpass_%s_checksums.txt",
+    "https://github.com/danieljustus/OpenPass/releases/download/v%s/OpenPass_%s_checksums.txt",
     version, version,
 )
 

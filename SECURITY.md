@@ -64,10 +64,10 @@ OpenPass releases publish SHA-256 checksums for downloadable artifacts. To verif
 a downloaded artifact:
 
 ```bash
-sha256sum --check openpass_VERSION_checksums.txt
+sha256sum --check OpenPass_VERSION_checksums.txt
 ```
 
-On macOS, use `shasum -a 256 --check openpass_VERSION_checksums.txt` if
+On macOS, use `shasum -a 256 --check OpenPass_VERSION_checksums.txt` if
 `sha256sum` is not installed.
 
 ## Security-Related Configuration

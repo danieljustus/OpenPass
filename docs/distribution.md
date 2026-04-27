@@ -19,12 +19,12 @@ Pre-built binaries are published to GitHub Releases on every tagged release.
 **Download:** https://github.com/danieljustus/OpenPass/releases/latest
 
 Each release includes:
-- `openpass_<version>_<os>_<arch>.tar.gz` (Linux/macOS)
-- `openpass_<version>_windows_amd64.zip` (Windows)
+- `OpenPass_<version>_<os>_<arch>.tar.gz` (Linux/macOS)
+- `OpenPass_<version>_windows_amd64.zip` (Windows)
 - `openpass_<version>_<os>_<arch>.deb` (Debian/Ubuntu)
 - `openpass_<version>_<os>_<arch>.rpm` (Fedora/RHEL)
 - `openpass_<version>_<os>_<arch>.apk` (Alpine)
-- `openpass_<version>_checksums.txt` (SHA-256 checksums)
+- `OpenPass_<version>_checksums.txt` (SHA-256 checksums)
 
 ### Homebrew (macOS/Linux)
 
@@ -81,12 +81,12 @@ Download and extract the archive for your platform:
 
 ```bash
 # Linux/macOS
-tar xzf openpass_<version>_<os>_<arch>.tar.gz
-sudo mv openpass /usr/local/bin/
+tar xzf OpenPass_<version>_<os>_<arch>.tar.gz
+sudo mv OpenPass_<version>_<os>_<arch>/openpass /usr/local/bin/
 
 # Windows (PowerShell)
-Expand-Archive openpass_<version>_windows_amd64.zip
-Move-Item openpass.exe C:\Windows\System32\
+Expand-Archive OpenPass_<version>_windows_amd64.zip
+Move-Item OpenPass_<version>_windows_amd64\openpass.exe C:\Windows\System32\
 ```
 
 ### Go Install
@@ -120,25 +120,25 @@ The pipeline:
 
 ### Checksum File
 
-Every release includes `openpass_<version>_checksums.txt` containing SHA-256 hashes of all artifacts.
+Every release includes `OpenPass_<version>_checksums.txt` containing SHA-256 hashes of all artifacts.
 
 ### Verifying a Download
 
 ```bash
 # Download the checksum file
-curl -LO https://github.com/danieljustus/OpenPass/releases/latest/download/openpass_<version>_checksums.txt
+curl -LO https://github.com/danieljustus/OpenPass/releases/latest/download/OpenPass_<version>_checksums.txt
 
 # Verify a specific artifact
-sha256sum -c openpass_<version>_checksums.txt --ignore-missing
+sha256sum -c OpenPass_<version>_checksums.txt --ignore-missing
 ```
 
 Or manually:
 
 ```bash
 # Compute hash of downloaded file
-sha256sum openpass_<version>_linux_amd64.tar.gz
+sha256sum OpenPass_<version>_linux_amd64.tar.gz
 
-# Compare against the value in openpass_<version>_checksums.txt
+# Compare against the value in OpenPass_<version>_checksums.txt
 ```
 
 ### Verifying Binary Metadata
