@@ -193,7 +193,11 @@ func TestCmdGitLog_Success(t *testing.T) {
 
 func TestCmdGitUnknownAction(t *testing.T) {
 	vaultDir := t.TempDir()
+	passphrase := "correcthorsebatterystaple"
 	vaultFlagReset(t)
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
 	_ = os.Setenv("OPENPASS_VAULT", vaultDir)
 	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_VAULT") })
 
