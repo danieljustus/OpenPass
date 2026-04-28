@@ -31,7 +31,7 @@ func TestBetaSmokeFlow(t *testing.T) {
 		t.Fatalf("init vault: %v\n%s", err, output)
 	}
 
-		run := func(args ...string) string {
+	run := func(args ...string) string {
 		t.Helper()
 
 		cmd := exec.Command(binPath, args...)
