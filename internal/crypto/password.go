@@ -4,7 +4,9 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
+	"unicode"
 )
 
 // MaxPasswordLength is the upper bound for generated password length.
@@ -42,4 +44,53 @@ func generatePasswordWithReader(length int, useSymbols bool, reader io.Reader) (
 	}
 
 	return string(result), nil
+}
+
+// ValidatePasswordStrength checks if a password meets minimum strength requirements.
+// It requires at least 10 characters and 60 bits of entropy based on charset diversity.
+func ValidatePasswordStrength(password string) error {
+	if len(password) < 10 {
+		return fmt.Errorf("password too short: must be at least 10 characters")
+	}
+
+	charsetSize := 0
+	hasLower := false
+	hasUpper := false
+	hasDigit := false
+	hasSymbol := false
+
+	for _, r := range password {
+		if unicode.IsLower(r) {
+			hasLower = true
+		} else if unicode.IsUpper(r) {
+			hasUpper = true
+		} else if unicode.IsDigit(r) {
+			hasDigit = true
+		} else if unicode.IsPunct(r) || unicode.IsSymbol(r) {
+			hasSymbol = true
+		}
+	}
+
+	if hasLower {
+		charsetSize += 26
+	}
+	if hasUpper {
+		charsetSize += 26
+	}
+	if hasDigit {
+		charsetSize += 10
+	}
+	if hasSymbol {
+		charsetSize += 32
+	}
+	if charsetSize == 0 {
+		charsetSize = 256
+	}
+
+	entropy := float64(len(password)) * math.Log2(float64(charsetSize))
+	if entropy < 60 {
+		return fmt.Errorf("password too weak: estimated entropy %.1f bits, need at least 60 bits", entropy)
+	}
+
+	return nil
 }

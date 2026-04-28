@@ -23,13 +23,47 @@ type TOTPCode struct {
 func ValidateTOTPSecret(secret string) error {
 	secret = strings.ToUpper(strings.ReplaceAll(secret, " ", ""))
 
-	_, err := base32.StdEncoding.DecodeString(secret)
+	if len(secret) > 256 {
+		return fmt.Errorf("TOTP secret too long: maximum 256 base32 characters")
+	}
+
+	var decoded []byte
+	var err error
+
+	decoded, err = base32.StdEncoding.DecodeString(secret)
 	if err != nil {
-		_, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
+		decoded, err = base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
 		if err != nil {
 			return fmt.Errorf("TOTP secret must be Base32-encoded (spaces allowed)")
 		}
 	}
+
+	if len(decoded) < 16 {
+		return fmt.Errorf("TOTP secret too short: minimum 16 bytes required (26 base32 characters)")
+	}
+
+	allSame := true
+	for i := 1; i < len(decoded); i++ {
+		if decoded[i] != decoded[0] {
+			allSame = false
+			break
+		}
+	}
+	if allSame {
+		return fmt.Errorf("TOTP secret is trivially weak: all bytes identical")
+	}
+
+	sequential := true
+	for i := 1; i < len(decoded); i++ {
+		if decoded[i] != decoded[i-1]+1 {
+			sequential = false
+			break
+		}
+	}
+	if sequential {
+		return fmt.Errorf("TOTP secret is trivially weak: bytes are sequential")
+	}
+
 	return nil
 }
 

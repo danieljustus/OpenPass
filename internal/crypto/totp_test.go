@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"encoding/base32"
 	"strings"
 	"testing"
 	"time"
@@ -143,21 +144,21 @@ func TestValidateTOTPSecret_ValidPadded(t *testing.T) {
 }
 
 func TestValidateTOTPSecret_ValidUnpadded(t *testing.T) {
-	secret := "JBSWY3DPEHPK3PXP"
+	secret := "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
 	if err := ValidateTOTPSecret(secret); err != nil {
 		t.Errorf("ValidateTOTPSecret(%q) = %v; want nil", secret, err)
 	}
 }
 
 func TestValidateTOTPSecret_WithSpaces(t *testing.T) {
-	secret := "JBSW Y3DP EHPK 3PXP"
+	secret := "GEZD GNBV GY3T QOJQ GEZD GNBV GY3T QOJQ"
 	if err := ValidateTOTPSecret(secret); err != nil {
 		t.Errorf("ValidateTOTPSecret(%q) = %v; want nil", secret, err)
 	}
 }
 
 func TestValidateTOTPSecret_Lowercase(t *testing.T) {
-	secret := "jbswy3dpehpk3pxp"
+	secret := "gezdgnbvgy3tqojqgezdgnbvgy3tqojq"
 	if err := ValidateTOTPSecret(secret); err != nil {
 		t.Errorf("ValidateTOTPSecret(%q) = %v; want nil", secret, err)
 	}
@@ -227,5 +228,78 @@ func TestValidateTOTPParams_InvalidPeriod(t *testing.T) {
 	}
 	if err := ValidateTOTPParams("SHA1", 6, 3601); err == nil {
 		t.Error("expected error for period > 3600")
+	}
+}
+
+func TestValidateTOTPSecret_TooShort(t *testing.T) {
+	err := ValidateTOTPSecret("A")
+	if err == nil {
+		t.Fatal("expected error for too-short secret")
+	}
+	want := "TOTP secret too short: minimum 16 bytes required (26 base32 characters)"
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestValidateTOTPSecret_Exactly16Bytes(t *testing.T) {
+	data := []byte("OpenPass16Bytes!")
+	secret := base32.StdEncoding.EncodeToString(data)
+	if err := ValidateTOTPSecret(secret); err != nil {
+		t.Errorf("ValidateTOTPSecret(%q) = %v; want nil", secret, err)
+	}
+}
+
+func TestValidateTOTPSecret_TooLong(t *testing.T) {
+	secret := strings.Repeat("A", 257)
+	err := ValidateTOTPSecret(secret)
+	if err == nil {
+		t.Fatal("expected error for too-long secret")
+	}
+	want := "TOTP secret too long: maximum 256 base32 characters"
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestValidateTOTPSecret_MaxLength(t *testing.T) {
+	secret := strings.Repeat("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 8)
+	if err := ValidateTOTPSecret(secret); err != nil {
+		t.Errorf("ValidateTOTPSecret(%q) = %v; want nil", secret, err)
+	}
+}
+
+func TestValidateTOTPSecret_AllSameChar(t *testing.T) {
+	secret := strings.Repeat("A", 32)
+	err := ValidateTOTPSecret(secret)
+	if err == nil {
+		t.Fatal("expected error for all-same-char secret")
+	}
+	want := "TOTP secret is trivially weak: all bytes identical"
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestValidateTOTPSecret_SequentialBytes(t *testing.T) {
+	data := make([]byte, 16)
+	for i := range data {
+		data[i] = byte(i)
+	}
+	secret := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(data)
+	err := ValidateTOTPSecret(secret)
+	if err == nil {
+		t.Fatal("expected error for sequential bytes secret")
+	}
+	want := "TOTP secret is trivially weak: bytes are sequential"
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestValidateTOTPSecret_ValidStrong(t *testing.T) {
+	secret := "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+	if err := ValidateTOTPSecret(secret); err != nil {
+		t.Errorf("ValidateTOTPSecret(%q) = %v; want nil", secret, err)
 	}
 }

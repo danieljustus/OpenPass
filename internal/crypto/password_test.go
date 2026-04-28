@@ -125,3 +125,47 @@ type errorReader struct{}
 func (e *errorReader) Read([]byte) (int, error) {
 	return 0, fmt.Errorf("mock reader error")
 }
+
+func TestValidatePasswordStrength_WeakShort(t *testing.T) {
+	err := ValidatePasswordStrength("123")
+	if err == nil {
+		t.Error("expected error for short password, got nil")
+	}
+	if !strings.Contains(err.Error(), "too short") {
+		t.Errorf("expected 'too short' error, got %v", err)
+	}
+}
+
+func TestValidatePasswordStrength_WeakLowEntropy(t *testing.T) {
+	err := ValidatePasswordStrength("abcdefghij")
+	if err == nil {
+		t.Error("expected error for low entropy password, got nil")
+	}
+	if !strings.Contains(err.Error(), "too weak") {
+		t.Errorf("expected 'too weak' error, got %v", err)
+	}
+}
+
+func TestValidatePasswordStrength_Strong(t *testing.T) {
+	err := ValidatePasswordStrength("StrongP@ssw0rd123")
+	if err != nil {
+		t.Errorf("expected no error for strong password, got %v", err)
+	}
+}
+
+func TestValidatePasswordStrength_Empty(t *testing.T) {
+	err := ValidatePasswordStrength("")
+	if err == nil {
+		t.Error("expected error for empty password, got nil")
+	}
+	if !strings.Contains(err.Error(), "too short") {
+		t.Errorf("expected 'too short' error, got %v", err)
+	}
+}
+
+func TestValidatePasswordStrength_Unicode(t *testing.T) {
+	err := ValidatePasswordStrength("HelloW0rld!日本語テスト")
+	if err != nil {
+		t.Errorf("expected unicode password with sufficient entropy to be valid, got %v", err)
+	}
+}
