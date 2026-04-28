@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -41,7 +42,7 @@ var recipientsListCmd = &cobra.Command{
 		}
 
 		if !vaultpkg.IsInitialized(vaultDir) {
-			return fmt.Errorf("vault not initialized. Run 'openpass init' first")
+			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
 		}
 
 		rm := vaultpkg.NewRecipientsManager(vaultDir)
@@ -55,8 +56,8 @@ var recipientsListCmd = &cobra.Command{
 				PrintJSON(map[string]interface{}{"recipients": []string{}})
 				return nil
 			}
-			fmt.Println("No recipients configured.")
-			fmt.Println("Use 'openpass recipients add <public-key>' to add a recipient.")
+			printlnQuietAware("No recipients configured.")
+			printlnQuietAware("Use 'openpass recipients add <public-key>' to add a recipient.")
 			return nil
 		}
 
@@ -69,15 +70,15 @@ var recipientsListCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("Recipients (%d):\n\n", len(recipients))
+		printQuietAware("Recipients (%d):\n\n", len(recipients))
 		for _, r := range recipients {
 			status := "✓"
 			if !r.Valid {
 				status = "✗"
 			}
-			fmt.Printf("  %s %s\n", status, r.Normalized)
+			printlnQuietAware("  "+status+" "+r.Normalized)
 			if !r.Valid {
-				fmt.Printf("    Error: %s\n", r.Error)
+				printlnQuietAware("    Error: "+r.Error)
 			}
 		}
 
@@ -110,7 +111,7 @@ Example:
 		recipient := args[0]
 
 		if !vaultpkg.IsInitialized(vaultDir) {
-			return fmt.Errorf("vault not initialized. Run 'openpass init' first")
+			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
 		}
 
 		rm := vaultpkg.NewRecipientsManager(vaultDir)
@@ -124,7 +125,7 @@ Example:
 			return fmt.Errorf("cannot add recipient: %w", err)
 		}
 
-		fmt.Println("Recipient added successfully.")
+		printlnQuietAware("Recipient added successfully.")
 		return nil
 	},
 }
@@ -156,7 +157,7 @@ Example:
 		recipient := args[0]
 
 		if !vaultpkg.IsInitialized(vaultDir) {
-			return fmt.Errorf("vault not initialized. Run 'openpass init' first")
+			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
 		}
 
 		// Confirmation prompt unless --yes is passed or config disables it
@@ -183,7 +184,7 @@ Example:
 			return fmt.Errorf("cannot remove recipient: %w", err)
 		}
 
-		fmt.Println("Recipient removed successfully.")
+		printlnQuietAware("Recipient removed successfully.")
 		return nil
 	},
 }

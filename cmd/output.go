@@ -9,6 +9,9 @@ import (
 // PrintJSON outputs the given value as JSON to stdout.
 // JSON encoding errors are written to stderr.
 func PrintJSON(v interface{}) {
+	if quietMode {
+		return
+	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetEscapeHTML(false)
 	if err := enc.Encode(v); err != nil {

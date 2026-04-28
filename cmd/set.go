@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/crypto"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
@@ -18,6 +19,7 @@ var (
 	setTOTPSecret  string
 	setTOTPIssuer  string
 	setTOTPAccount string
+	setForce       bool
 )
 
 var setCmd = &cobra.Command{
@@ -32,7 +34,7 @@ var setCmd = &cobra.Command{
 		}
 
 		if !vaultpkg.IsInitialized(vaultDir) {
-			return fmt.Errorf("vault not initialized. Run 'openpass init' first")
+			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
 		}
 
 		v, err := unlockVault(vaultDir, true)
@@ -54,6 +56,11 @@ var setCmd = &cobra.Command{
 				data[field] = setValue
 			} else {
 				data["password"] = setValue
+			}
+			if !setForce && (field == "" || field == "password") {
+				if err := crypto.ValidatePasswordStrength(setValue); err != nil {
+					return err
+				}
 			}
 		} else {
 			reader := bufio.NewReader(os.Stdin)
@@ -80,6 +87,11 @@ var setCmd = &cobra.Command{
 					return fmt.Errorf("read password: %w", err)
 				}
 				data["password"] = password
+				if !setForce {
+					if err := crypto.ValidatePasswordStrength(password); err != nil {
+						return err
+					}
+				}
 
 				fmt.Fprint(os.Stderr, "URL (optional): ")
 				url, err := reader.ReadString('\n')
@@ -115,13 +127,27 @@ var setCmd = &cobra.Command{
 			data["totp"] = totpData
 		}
 
-		if totpData, ok := data["totp"].(map[string]any); ok {
-			if secret, ok := totpData["secret"].(string); ok && secret != "" {
-				if err := crypto.ValidateTOTPSecret(secret); err != nil {
-					return err
-				}
+	if totpData, ok := data["totp"].(map[string]any); ok {
+		if secret, ok := totpData["secret"].(string); ok && secret != "" {
+			if err := crypto.ValidateTOTPSecret(secret); err != nil {
+				return err
 			}
 		}
+		var algo string
+		var digits, period int
+		if a, ok := totpData["algorithm"].(string); ok {
+			algo = a
+		}
+		if d, ok := totpData["digits"].(float64); ok {
+			digits = int(d)
+		}
+		if p, ok := totpData["period"].(float64); ok {
+			period = int(p)
+		}
+		if err := crypto.ValidateTOTPParams(algo, digits, period); err != nil {
+			return fmt.Errorf("invalid TOTP: %v", err)
+		}
+	}
 
 		existing, readErr := vaultpkg.ReadEntry(v.Dir, path, v.Identity)
 		entryPath := path
@@ -139,7 +165,7 @@ var setCmd = &cobra.Command{
 		if err := v.AutoCommit(fmt.Sprintf("Update %s", path)); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: auto-commit failed: %v\n", err)
 		}
-		fmt.Printf("Entry saved: %s\n", path)
+		printQuietAware("Entry saved: %s\n", path)
 		return nil
 	},
 }
@@ -149,5 +175,6 @@ func init() {
 	setCmd.Flags().StringVar(&setTOTPSecret, "totp-secret", "", "TOTP secret key (base32 encoded)")
 	setCmd.Flags().StringVar(&setTOTPIssuer, "totp-issuer", "", "TOTP issuer/service name")
 	setCmd.Flags().StringVar(&setTOTPAccount, "totp-account", "", "TOTP account name/username")
+	setCmd.Flags().BoolVar(&setForce, "force", false, "Skip password strength validation")
 	rootCmd.AddCommand(setCmd)
 }

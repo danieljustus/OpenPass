@@ -34,7 +34,7 @@ func TestSetCommand_InvalidTOTPSecretRejected(t *testing.T) {
 
 	stderr := captureStderr(func() {
 		rootCmd.SetArgs([]string{"--vault", vaultDir, "set", "bad-totp-set",
-			"--value", "pass", "--totp-secret", "not-valid-base32!!!"})
+			"--value", "StrongP@ssw0rd123", "--totp-secret", "not-valid-base32!!!"})
 		_ = rootCmd.Execute()
 		rootCmd.SetArgs(nil)
 	})
@@ -53,7 +53,7 @@ func TestSetCommand_ValidTOTPSecretAccepted(t *testing.T) {
 	defer setupVaultFlag(t, vaultDir)()
 
 	out := execWithStdout("--vault", vaultDir, "set", "valid-totp-set",
-		"--value", "pass", "--totp-secret", "JBSWY3DPEHPK3PXP")
+		"--value", "StrongP@ssw0rd123", "--totp-secret", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ")
 	if !strings.Contains(out, "Entry saved") {
 		t.Errorf("expected Entry saved, got: %s", out)
 	}
@@ -65,7 +65,7 @@ func TestSetCommand_TOTPSecretWithSpacesAccepted(t *testing.T) {
 	defer setupVaultFlag(t, vaultDir)()
 
 	out := execWithStdout("--vault", vaultDir, "set", "spaced-totp-set",
-		"--value", "pass", "--totp-secret", "JBSW Y3DP EHPK 3PXP")
+		"--value", "StrongP@ssw0rd123", "--totp-secret", "GEZD GNBV GY3T QOJQ GEZD GNBV GY3T QOJQ")
 	if !strings.Contains(out, "Entry saved") {
 		t.Errorf("expected Entry saved, got: %s", out)
 	}

@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -22,7 +23,7 @@ var listCmd = &cobra.Command{
 		}
 
 		if !vaultpkg.IsInitialized(vaultDir) {
-			return fmt.Errorf("vault not initialized. Run 'openpass init' first")
+			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
 		}
 
 		v, err := unlockVault(vaultDir, true)
@@ -46,7 +47,7 @@ var listCmd = &cobra.Command{
 		}
 
 		for _, e := range entries {
-			fmt.Println(e)
+			printlnQuietAware(e)
 		}
 
 		return nil

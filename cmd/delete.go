@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -27,7 +28,7 @@ var deleteCmd = &cobra.Command{
 		}
 
 		if !vaultpkg.IsInitialized(vaultDir) {
-			return fmt.Errorf("vault not initialized. Run 'openpass init' first")
+			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
 		}
 
 		v, err := unlockVault(vaultDir, true)
@@ -63,7 +64,7 @@ var deleteCmd = &cobra.Command{
 			PrintJSON(map[string]any{"deleted": true, "path": path})
 			return nil
 		}
-		fmt.Printf("Deleted: %s\n", path)
+		printQuietAware("Deleted: %s\n", path)
 		return nil
 	},
 }

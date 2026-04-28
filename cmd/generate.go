@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/danieljustus/OpenPass/internal/crypto"
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -33,6 +34,10 @@ var generateCmd = &cobra.Command{
 			vaultDir, err := vaultPath()
 			if err != nil {
 				return err
+			}
+
+			if !vaultpkg.IsInitialized(vaultDir) {
+				return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
 			}
 
 			v, err := unlockVault(vaultDir, true)
@@ -71,7 +76,7 @@ var generateCmd = &cobra.Command{
 			if genQuiet {
 				return nil
 			}
-			fmt.Printf("Password stored at: %s\n", entryPath)
+			printQuietAware("Password stored at: %s\n", entryPath)
 		}
 
 		if genJSON {
@@ -79,7 +84,7 @@ var generateCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Println(password)
+		printlnQuietAware(password)
 		return nil
 	},
 }

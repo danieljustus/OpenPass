@@ -20,6 +20,7 @@ import (
 
 	"github.com/danieljustus/OpenPass/internal/mcp"
 	"github.com/danieljustus/OpenPass/internal/metrics"
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -84,7 +85,7 @@ The server can run in HTTP mode or stdio mode.`,
 		}
 
 		if !vaultpkg.IsInitialized(vaultDir) {
-			return fmt.Errorf("vault not initialized. Run 'openpass init' first")
+			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
 		}
 
 		// Unlock vault for HTTP mode (always needed) or stdio with an agent

@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/session"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
@@ -20,11 +21,11 @@ var lockCmd = &cobra.Command{
 		}
 
 		if !vaultpkg.IsInitialized(vaultDir) {
-			return fmt.Errorf("vault not initialized. Run 'openpass init' first")
+			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
 		}
 
 		if err := session.ClearSession(vaultDir); err != nil {
-			return fmt.Errorf("cannot clear session: %w", err)
+			return errorspkg.NewCLIError(errorspkg.ExitGeneralError, "cannot clear session", err)
 		}
 
 		fmt.Fprintln(os.Stderr, "Vault locked")

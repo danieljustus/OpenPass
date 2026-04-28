@@ -13,6 +13,7 @@ import (
 	clipboardpkg "github.com/danieljustus/OpenPass/internal/clipboard"
 	configpkg "github.com/danieljustus/OpenPass/internal/config"
 	vaultcrypto "github.com/danieljustus/OpenPass/internal/crypto"
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -47,7 +48,7 @@ var getCmd = &cobra.Command{
 		}
 
 		if !vaultpkg.IsInitialized(vaultDir) {
-			return fmt.Errorf("vault not initialized. Run 'openpass init' first")
+			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
 		}
 
 		v, err := unlockVault(vaultDir, true)
@@ -80,7 +81,7 @@ var getCmd = &cobra.Command{
 
 			switch len(matches) {
 			case 0:
-				return fmt.Errorf("entry not found: %s", path)
+				return errorspkg.NewCLIError(errorspkg.ExitNotFound, fmt.Sprintf("entry not found: %s", path), errorspkg.ErrEntryNotFound)
 			case 1:
 				path = matches[0].Path
 				entry, err = vaultpkg.ReadEntry(v.Dir, path, v.Identity)
@@ -92,14 +93,14 @@ var getCmd = &cobra.Command{
 				for _, m := range matches {
 					fmt.Fprintf(os.Stderr, "  %s\n", m.Path)
 				}
-				return fmt.Errorf("ambiguous path: %s", path)
+				return errorspkg.NewCLIError(errorspkg.ExitNotFound, fmt.Sprintf("ambiguous path: %s", path), errorspkg.ErrEntryNotFound)
 			}
 		}
 
 		if field != "" {
 			value, ok := entry.Data[field]
 			if !ok {
-				return fmt.Errorf("field not found: %s", field)
+				return errorspkg.NewCLIError(errorspkg.ExitNotFound, fmt.Sprintf("field not found: %s", field), errorspkg.ErrEntryNotFound)
 			}
 
 			strValue := fmt.Sprintf("%v", value)
@@ -130,7 +131,7 @@ var getCmd = &cobra.Command{
 				PrintJSON(strValue)
 				return nil
 			}
-			fmt.Println(strValue)
+			printlnQuietAware(strValue)
 			return nil
 		}
 
@@ -160,9 +161,9 @@ var getCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("Path: %s\n", path)
-		fmt.Printf("Modified: %s\n", entry.Metadata.Updated.Format("2006-01-02 15:04"))
-		fmt.Println()
+		printQuietAware("Path: %s\n", path)
+		printQuietAware("Modified: %s\n", entry.Metadata.Updated.Format("2006-01-02 15:04"))
+		printlnQuietAware()
 
 		keys := make([]string, 0, len(entry.Data))
 		for k := range entry.Data {
@@ -171,7 +172,7 @@ var getCmd = &cobra.Command{
 		sort.Strings(keys)
 
 		for _, k := range keys {
-			fmt.Printf("%s: %v\n", k, entry.Data[k])
+			printQuietAware("%s: %v\n", k, entry.Data[k])
 		}
 
 		if secret, algorithm, digits, period, hasTOTP := vaultpkg.ExtractTOTP(entry.Data); hasTOTP {
@@ -186,7 +187,7 @@ var getCmd = &cobra.Command{
 				now := time.Now().UTC()
 				remaining := period - (now.Unix() % period)
 
-				fmt.Println()
+				printlnQuietAware()
 				fmt.Fprintf(os.Stderr, "TOTP Code: %s (expires in %ds)\n", totpCode.Code, remaining)
 			}
 		}

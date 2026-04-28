@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/danieljustus/OpenPass/internal/config"
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/git"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
@@ -33,7 +34,7 @@ var initCmd = &cobra.Command{
 		}
 
 		if _, statErr := os.Stat(filepath.Join(vaultDir, "config.yaml")); statErr == nil {
-			return fmt.Errorf("vault already initialized at %s", vaultDir)
+			return errorspkg.NewCLIError(errorspkg.ExitGeneralError, fmt.Sprintf("vault already initialized at %s", vaultDir), nil)
 		} else if !os.IsNotExist(statErr) {
 			return fmt.Errorf("cannot check vault directory: %w", statErr)
 		}
@@ -81,8 +82,8 @@ var initCmd = &cobra.Command{
 			return fmt.Errorf("cannot create .gitignore: %w", err)
 		}
 
-		fmt.Printf("Vault initialized at %s\n", vaultDir)
-		fmt.Printf("Public key: %s\n", identity.Recipient().String())
+		printQuietAware("Vault initialized at %s\n", vaultDir)
+		printQuietAware("Public key: %s\n", identity.Recipient().String())
 		return nil
 	},
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -26,7 +27,7 @@ var findCmd = &cobra.Command{
 		}
 
 		if !vaultpkg.IsInitialized(vaultDir) {
-			return fmt.Errorf("vault not initialized. Run 'openpass init' first")
+			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
 		}
 
 		v, err := unlockVault(vaultDir, true)
@@ -40,7 +41,7 @@ var findCmd = &cobra.Command{
 		}
 		matches, err := vaultpkg.FindConcurrent(v.Dir, args[0], workers)
 		if err != nil {
-			return fmt.Errorf("search failed: %w", err)
+			return errorspkg.NewCLIError(errorspkg.ExitGeneralError, "search failed", err)
 		}
 
 		if len(matches) == 0 {
@@ -62,11 +63,11 @@ var findCmd = &cobra.Command{
 		}
 
 		for _, m := range matches {
-			fmt.Printf("%s", m.Path)
+			printQuietAware("%s", m.Path)
 			if len(m.Fields) > 0 {
-				fmt.Printf(" (matches: %s)", strings.Join(m.Fields, ", "))
+				printQuietAware(" (matches: %s)", strings.Join(m.Fields, ", "))
 			}
-			fmt.Println()
+			printlnQuietAware()
 		}
 
 		return nil

@@ -103,11 +103,11 @@ func TestCmdAdd_Interactive(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
 	setPassEnv(t, passphrase)
 	defer setupVaultFlag(t, vaultDir)()
-	restore := pipeStdin(t, "myuser\nsecretpass\n")
+	restore := pipeStdin(t, "myuser\nStrongP@ssw0rd123\n")
 	defer restore()
 	output := captureStdout(func() {
 		rootCmd.SetArgs([]string{"--vault", vaultDir, "add", "interactive-entry",
-			"--url", "https://example.com", "--notes", "some notes", "--totp-secret", "JBSWY3DPEHPK3PXP"})
+			"--url", "https://example.com", "--notes", "some notes", "--totp-secret", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"})
 		_ = rootCmd.Execute()
 		rootCmd.SetArgs(nil)
 	})
@@ -147,7 +147,7 @@ func TestCmdAdd_WithUsernameAndURL(t *testing.T) {
 	setPassEnv(t, passphrase)
 	defer setupVaultFlag(t, vaultDir)()
 	out := execWithStdout("--vault", vaultDir, "add", "tagged-entry",
-		"--value", "secret", "--username", "alice", "--url", "https://example.com")
+		"--value", "StrongP@ssw0rd123", "--username", "alice", "--url", "https://example.com")
 	if !strings.Contains(out, "Entry created") {
 		t.Errorf("expected Entry created, got: %s", out)
 	}
@@ -158,7 +158,7 @@ func TestCmdAdd_WithTOTPFlags(t *testing.T) {
 	setPassEnv(t, passphrase)
 	defer setupVaultFlag(t, vaultDir)()
 	out := execWithStdout("--vault", vaultDir, "add", "totp-entry",
-		"--value", "pass", "--totp-secret", "JBSWY3DPEHPK3PXP", "--totp-issuer", "GitHub", "--totp-account", "alice")
+		"--value", "StrongP@ssw0rd123", "--totp-secret", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "--totp-issuer", "GitHub", "--totp-account", "alice")
 	if !strings.Contains(out, "Entry created") {
 		t.Errorf("expected Entry created, got: %s", out)
 	}
@@ -359,7 +359,7 @@ func TestCmdGet_TOTP(t *testing.T) {
 		Data: map[string]any{
 			"password": "pass",
 			"totp": map[string]any{
-				"secret": "JBSWY3DPEHPK3PXP",
+				"secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
 			},
 		},
 	}
@@ -389,7 +389,7 @@ func TestCmdSet_MergeExisting(t *testing.T) {
 	_ = vaultpkg.WriteEntry(vaultDir, "merge-me", entry, identity.Identity)
 	setPassEnv(t, passphrase)
 	defer setupVaultFlag(t, vaultDir)()
-	out := execWithStdout("--vault", vaultDir, "set", "merge-me", "--value", "updated")
+	out := execWithStdout("--vault", vaultDir, "set", "merge-me", "--value", "StrongP@ssw0rd123")
 	if !strings.Contains(out, "Entry saved") {
 		t.Errorf("expected Entry saved, got: %s", out)
 	}
@@ -399,8 +399,8 @@ func TestCmdSet_TOTP(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
 	setPassEnv(t, passphrase)
 	defer setupVaultFlag(t, vaultDir)()
-	out := execWithStdout("--vault", vaultDir, "set", "totp-set", "--value", "pass",
-		"--totp-secret", "JBSWY3DPEHPK3PXP", "--totp-issuer", "GitHub")
+	out := execWithStdout("--vault", vaultDir, "set", "totp-set", "--value", "StrongP@ssw0rd123",
+		"--totp-secret", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "--totp-issuer", "GitHub")
 	if !strings.Contains(out, "Entry saved") {
 		t.Errorf("expected Entry saved, got: %s", out)
 	}
@@ -442,7 +442,7 @@ func TestCmdSet_Interactive(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
 	setPassEnv(t, passphrase)
 	defer setupVaultFlag(t, vaultDir)()
-	restore := pipeStdin(t, "alice\nmypassword\nhttps://example.com\n\n")
+	restore := pipeStdin(t, "alice\nStrongP@ssw0rd123\nhttps://example.com\n\n")
 	defer restore()
 	out := captureStdout(func() {
 		rootCmd.SetArgs([]string{"--vault", vaultDir, "set", "interactive-set"})
@@ -644,7 +644,7 @@ func TestCmdAdd_Notes(t *testing.T) {
 	setPassEnv(t, passphrase)
 	defer setupVaultFlag(t, vaultDir)()
 	out := execWithStdout("--vault", vaultDir, "add", "notes-entry",
-		"--value", "pass", "--notes", "important note here")
+		"--value", "StrongP@ssw0rd123", "--notes", "important note here")
 	if !strings.Contains(out, "Entry created") {
 		t.Errorf("expected Entry created, got: %s", out)
 	}
@@ -788,12 +788,12 @@ func TestCmdAdd_InteractiveFull(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
 	setPassEnv(t, passphrase)
 	defer setupVaultFlag(t, vaultDir)()
-	restore := pipeStdin(t, "myuser\nmypass\n")
+	restore := pipeStdin(t, "myuser\nStrongP@ssw0rd123\n")
 	defer restore()
 	output := captureStdout(func() {
 		rootCmd.SetArgs([]string{"--vault", vaultDir, "add", "full-interactive",
 			"--url", "https://example.com", "--notes", "important notes",
-			"--totp-secret", "JBSWY3DPEHPK3PXP", "--totp-issuer", "GitHub", "--totp-account", "alice"})
+			"--totp-secret", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "--totp-issuer", "GitHub", "--totp-account", "alice"})
 		_ = rootCmd.Execute()
 		rootCmd.SetArgs(nil)
 	})
@@ -808,8 +808,8 @@ func TestCmdAdd_InteractiveFull(t *testing.T) {
 	if entry.Data["username"] != "myuser" {
 		t.Errorf("expected username myuser, got: %v", entry.Data["username"])
 	}
-	if entry.Data["password"] != "mypass" {
-		t.Errorf("expected password mypass, got: %v", entry.Data["password"])
+	if entry.Data["password"] != "StrongP@ssw0rd123" {
+		t.Errorf("expected password StrongP@ssw0rd123, got: %v", entry.Data["password"])
 	}
 	if entry.Data["url"] != "https://example.com" {
 		t.Errorf("expected url https://example.com, got: %v", entry.Data["url"])
@@ -821,8 +821,8 @@ func TestCmdAdd_InteractiveFull(t *testing.T) {
 	if !ok {
 		t.Fatal("expected totp data in entry")
 	}
-	if totp["secret"] != "JBSWY3DPEHPK3PXP" {
-		t.Errorf("expected totp secret JBSWY3DPEHPK3PXP, got: %v", totp["secret"])
+	if totp["secret"] != "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" {
+		t.Errorf("expected totp secret GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ, got: %v", totp["secret"])
 	}
 	if totp["issuer"] != "GitHub" {
 		t.Errorf("expected totp issuer GitHub, got: %v", totp["issuer"])
@@ -836,11 +836,11 @@ func TestCmdAdd_InteractiveURLPrompt(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
 	setPassEnv(t, passphrase)
 	defer setupVaultFlag(t, vaultDir)()
-	restore := pipeStdin(t, "testuser\ntestpass\n")
+	restore := pipeStdin(t, "testuser\nStrongP@ssw0rd123\n")
 	defer restore()
 	output := captureStdout(func() {
 		rootCmd.SetArgs([]string{"--vault", vaultDir, "add", "url-prompt-entry",
-			"--url", "https://mysite.com", "--totp-secret", "JBSWY3DPEHPK3PXP"})
+			"--url", "https://mysite.com", "--totp-secret", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"})
 		_ = rootCmd.Execute()
 		rootCmd.SetArgs(nil)
 	})
@@ -867,7 +867,7 @@ func TestCmdGet_TOTPDisplay(t *testing.T) {
 		Data: map[string]any{
 			"password": "pass",
 			"totp": map[string]any{
-				"secret": "JBSWY3DPEHPK3PXP",
+				"secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
 			},
 		},
 	}
@@ -932,7 +932,7 @@ func TestCmdSet_InteractiveFull(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
 	setPassEnv(t, passphrase)
 	defer setupVaultFlag(t, vaultDir)()
-	restore := pipeStdin(t, "alice\nmypassword\nhttps://example.com\n\n")
+	restore := pipeStdin(t, "alice\nStrongP@ssw0rd123\nhttps://example.com\n\n")
 	defer restore()
 	out := captureStdout(func() {
 		rootCmd.SetArgs([]string{"--vault", vaultDir, "set", "interactive-full"})
@@ -950,8 +950,8 @@ func TestCmdSet_InteractiveFull(t *testing.T) {
 	if entry.Data["username"] != "alice" {
 		t.Errorf("expected username alice, got: %v", entry.Data["username"])
 	}
-	if entry.Data["password"] != "mypassword" {
-		t.Errorf("expected password mypassword, got: %v", entry.Data["password"])
+	if entry.Data["password"] != "StrongP@ssw0rd123" {
+		t.Errorf("expected password StrongP@ssw0rd123, got: %v", entry.Data["password"])
 	}
 	if entry.Data["url"] != "https://example.com" {
 		t.Errorf("expected url https://example.com, got: %v", entry.Data["url"])
@@ -966,7 +966,7 @@ func TestCmdSet_InteractiveFieldWithTOTP(t *testing.T) {
 	defer restore()
 	out := captureStdout(func() {
 		rootCmd.SetArgs([]string{"--vault", vaultDir, "set", "totpfield.custom",
-			"--totp-secret", "JBSWY3DPEHPK3PXP", "--totp-issuer", "MyService"})
+			"--totp-secret", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "--totp-issuer", "MyService"})
 		_ = rootCmd.Execute()
 		rootCmd.SetArgs(nil)
 	})
@@ -985,7 +985,7 @@ func TestCmdSet_InteractiveFieldWithTOTP(t *testing.T) {
 	if !ok {
 		t.Fatal("expected totp data in entry")
 	}
-	if totp["secret"] != "JBSWY3DPEHPK3PXP" {
+	if totp["secret"] != "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" {
 		t.Errorf("expected totp secret, got: %v", totp["secret"])
 	}
 }
@@ -1069,7 +1069,7 @@ func TestCmdSet_AutoCommitError(t *testing.T) {
 	defer setupVaultFlag(t, vaultDir)()
 
 	stderr := captureStderr(func() {
-		rootCmd.SetArgs([]string{"--vault", vaultDir, "set", "autocommit-set", "--value", "secret"})
+		rootCmd.SetArgs([]string{"--vault", vaultDir, "set", "autocommit-set", "--value", "StrongP@ssw0rd123"})
 		_ = rootCmd.Execute()
 		rootCmd.SetArgs(nil)
 	})
@@ -1085,7 +1085,7 @@ func TestCmdAdd_AutoCommitError(t *testing.T) {
 	defer setupVaultFlag(t, vaultDir)()
 
 	stderr := captureStderr(func() {
-		rootCmd.SetArgs([]string{"--vault", vaultDir, "add", "autocommit-add", "--value", "secret"})
+		rootCmd.SetArgs([]string{"--vault", vaultDir, "add", "autocommit-add", "--value", "StrongP@ssw0rd123"})
 		_ = rootCmd.Execute()
 		rootCmd.SetArgs(nil)
 	})

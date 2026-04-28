@@ -571,12 +571,12 @@ func TestAdd_InteractiveMode(t *testing.T) {
 	// 7. TOTP Account
 	go func() {
 		_, _ = w.WriteString("myuser\n")
-		_, _ = w.WriteString("mypassword\n")
+		_, _ = w.WriteString("StrongP@ssw0rd123\n")
 		_, _ = w.WriteString("https://example.com\n")
 		_, _ = w.WriteString("note1\n")
 		_, _ = w.WriteString("note2\n")
 		_, _ = w.WriteString("\n")
-		_, _ = w.WriteString("JBSWY3DPEHPK3PXP\n")
+		_, _ = w.WriteString("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ\n")
 		_, _ = w.WriteString("Example\n")
 		_, _ = w.WriteString("myaccount\n")
 		_ = w.Close()
@@ -622,9 +622,9 @@ func TestSet_InteractiveMode(t *testing.T) {
 
 	go func() {
 		_, _ = w.WriteString("myuser\n")
-		_, _ = w.WriteString("mypassword\n")
+		_, _ = w.WriteString("StrongP@ssw0rd123\n")
 		_, _ = w.WriteString("https://example.com\n")
-		_, _ = w.WriteString("JBSWY3DPEHPK3PXP\n")
+		_, _ = w.WriteString("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ\n")
 		_ = w.Close()
 	}()
 

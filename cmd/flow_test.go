@@ -68,7 +68,7 @@ func TestCmdSet(t *testing.T) {
 		}
 	}()
 
-	output := execWithStdout("--vault", vaultDir, "set", "demo.password", "--value", "secret123")
+	output := execWithStdout("--vault", vaultDir, "set", "demo.password", "--value", "StrongP@ssw0rd123")
 	if !strings.Contains(output, "Entry saved") {
 		t.Errorf("set output missing success: %s", output)
 	}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -32,7 +33,7 @@ Use --exclude-git to omit the .git/ directory from the backup.`,
 		}
 
 		if !vaultpkg.IsInitialized(vaultDir) {
-			return fmt.Errorf("vault not initialized. Run 'openpass init' first")
+			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
 		}
 
 		archivePath := args[0]
@@ -44,7 +45,7 @@ Use --exclude-git to omit the .git/ directory from the backup.`,
 			return fmt.Errorf("backup failed: %w", err)
 		}
 
-		cmd.Printf("Backup created: %s\n", archivePath)
+		printQuietAware("Backup created: %s\n", archivePath)
 		return nil
 	},
 }
@@ -136,10 +137,10 @@ to ensure all expected files are present.`,
 		}
 
 		if !vaultpkg.IsInitialized(vaultDir) {
-			return fmt.Errorf("restore verification failed: vault is not properly initialized")
+			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
 		}
 
-		cmd.Printf("Vault restored to: %s\n", vaultDir)
+		printQuietAware("Vault restored to: %s\n", vaultDir)
 		return nil
 	},
 }

@@ -82,6 +82,7 @@ var (
 
 var vault string
 var vaultFlag *pflag.Flag
+var quietMode bool
 
 var rootCmd = &cobra.Command{
 	Use:           "openpass",
@@ -99,13 +100,31 @@ var rootCmd = &cobra.Command{
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
+		if !quietMode {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		}
 		osExit(int(errorspkg.ExitCodeFromError(err)))
+	}
+}
+
+// printQuietAware prints to stdout unless quiet mode is enabled
+func printQuietAware(format string, args ...interface{}) {
+	if !quietMode {
+		fmt.Printf(format, args...)
+	}
+}
+
+// printlnQuietAware prints a line to stdout unless quiet mode is enabled
+func printlnQuietAware(args ...interface{}) {
+	if !quietMode {
+		fmt.Println(args...)
 	}
 }
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&vault, "vault", "~/.openpass", "path to the password vault")
 	vaultFlag = rootCmd.PersistentFlags().Lookup("vault")
+	rootCmd.PersistentFlags().BoolVar(&quietMode, "quiet", false, "suppress non-error output")
 }
 
 func vaultPath() (string, error) {
@@ -150,12 +169,12 @@ func unlockVaultWithTTL(vaultDir string, interactive bool, ttlOverride time.Dura
 	}
 	if passphrase == "" {
 		if !interactive {
-			return nil, 0, errorspkg.NewCLIError(errorspkg.ExitVaultLocked, "vault locked: run 'openpass unlock' first, or set OPENPASS_PASSPHRASE", nil)
+			return nil, 0, errorspkg.NewCLIError(errorspkg.ExitLocked, "vault locked: run 'openpass unlock' first, or set OPENPASS_PASSPHRASE", nil)
 		}
 		var readErr error
 		passphrase, readErr = readHiddenInput("Passphrase: ", nil)
 		if readErr != nil {
-			return nil, 0, errorspkg.NewCLIError(errorspkg.ExitVaultLocked, "read passphrase", readErr)
+			return nil, 0, errorspkg.NewCLIError(errorspkg.ExitLocked, "read passphrase", readErr)
 		}
 	}
 

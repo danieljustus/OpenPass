@@ -53,13 +53,13 @@ func TestBinaryE2E_Flow(t *testing.T) {
 		t.Fatalf("init: %v\n%s", err, output)
 	}
 
-	output := runBin(t, binPath, env, "", "--vault", vaultDir, "set", "demo.password", "--value", "secret123")
+	output := runBin(t, binPath, env, "", "--vault", vaultDir, "set", "demo.password", "--value", "StrongP@ssw0rd123")
 	if !strings.Contains(output, "Entry saved") {
 		t.Errorf("set output: %s", output)
 	}
 
 	output = runBin(t, binPath, env, "", "--vault", vaultDir, "get", "demo.password")
-	if strings.TrimSpace(output) != "secret123" {
+	if strings.TrimSpace(output) != "StrongP@ssw0rd123" {
 		t.Errorf("get output: %q", output)
 	}
 
@@ -68,7 +68,7 @@ func TestBinaryE2E_Flow(t *testing.T) {
 		t.Errorf("list output: %s", output)
 	}
 
-	output = runBin(t, binPath, env, "", "--vault", vaultDir, "find", "secret123")
+	output = runBin(t, binPath, env, "", "--vault", vaultDir, "find", "StrongP@ssw0rd123")
 	if !strings.Contains(output, "demo") {
 		t.Errorf("find output: %s", output)
 	}

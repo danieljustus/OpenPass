@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/git"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
@@ -17,6 +18,10 @@ var gitCmd = &cobra.Command{
 		vaultDir, err := vaultPath()
 		if err != nil {
 			return err
+		}
+
+		if !vaultpkg.IsInitialized(vaultDir) {
+			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
 		}
 
 		action := args[0]
@@ -35,13 +40,13 @@ var gitCmd = &cobra.Command{
 			if err := git.Push(vaultDir); err != nil {
 				return fmt.Errorf("push failed: %w", err)
 			}
-			fmt.Println("Pushed to remote")
+			printlnQuietAware("Pushed to remote")
 
 		case "pull":
 			if err := git.Pull(vaultDir); err != nil {
 				return fmt.Errorf("pull failed: %w", err)
 			}
-			fmt.Println("Pulled from remote")
+			printlnQuietAware("Pulled from remote")
 
 		case "log":
 			path := ""
@@ -56,8 +61,8 @@ var gitCmd = &cobra.Command{
 
 			_ = v
 			for _, h := range history {
-				fmt.Printf("%s  %s  %s\n", h.Hash[:7], h.Date.Format("2006-01-02"), h.Message)
-				fmt.Printf("  Author: %s\n", h.Author)
+				printQuietAware("%s  %s  %s\n", h.Hash[:7], h.Date.Format("2006-01-02"), h.Message)
+				printlnQuietAware("  Author: "+h.Author)
 			}
 
 		default:

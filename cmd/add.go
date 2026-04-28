@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/crypto"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
@@ -24,6 +25,7 @@ var (
 	addTOTPSecret  string
 	addTOTPIssuer  string
 	addTOTPAccount string
+	addForce       bool
 )
 
 var addCmd = &cobra.Command{
@@ -48,7 +50,7 @@ Examples:
 		}
 
 		if !vaultpkg.IsInitialized(vaultDir) {
-			return fmt.Errorf("vault not initialized. Run 'openpass init' first")
+			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
 		}
 
 		v, err := unlockVault(vaultDir, true)
@@ -72,6 +74,11 @@ Examples:
 
 		if addValue != "" {
 			data["password"] = addValue
+			if !addForce {
+				if err := crypto.ValidatePasswordStrength(addValue); err != nil {
+					return err
+				}
+			}
 		} else if addGenerate {
 			password, err := generatePassword(addLength, true)
 			if err != nil {
@@ -98,6 +105,11 @@ Examples:
 			}
 			if password != "" {
 				data["password"] = password
+				if !addForce {
+					if err := crypto.ValidatePasswordStrength(password); err != nil {
+						return err
+					}
+				}
 			}
 		}
 
@@ -184,13 +196,27 @@ Examples:
 			}
 		}
 
-		if totpData, ok := data["totp"].(map[string]any); ok {
-			if secret, ok := totpData["secret"].(string); ok && secret != "" {
-				if err := crypto.ValidateTOTPSecret(secret); err != nil {
-					return err
-				}
+	if totpData, ok := data["totp"].(map[string]any); ok {
+		if secret, ok := totpData["secret"].(string); ok && secret != "" {
+			if err := crypto.ValidateTOTPSecret(secret); err != nil {
+				return err
 			}
 		}
+		var algo string
+		var digits, period int
+		if a, ok := totpData["algorithm"].(string); ok {
+			algo = a
+		}
+		if d, ok := totpData["digits"].(float64); ok {
+			digits = int(d)
+		}
+		if p, ok := totpData["period"].(float64); ok {
+			period = int(p)
+		}
+		if err := crypto.ValidateTOTPParams(algo, digits, period); err != nil {
+			return fmt.Errorf("invalid TOTP: %v", err)
+		}
+	}
 
 		entry := &vaultpkg.Entry{
 			Data: data,
@@ -208,7 +234,7 @@ Examples:
 		if err := v.AutoCommit(fmt.Sprintf("Add %s", name)); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: auto-commit failed: %v\n", err)
 		}
-		fmt.Printf("Entry created: %s\n", name)
+		printQuietAware("Entry created: %s\n", name)
 		return nil
 	},
 }
@@ -223,5 +249,6 @@ func init() {
 	addCmd.Flags().StringVar(&addTOTPSecret, "totp-secret", "", "TOTP secret key (base32 encoded)")
 	addCmd.Flags().StringVar(&addTOTPIssuer, "totp-issuer", "", "TOTP issuer/service name")
 	addCmd.Flags().StringVar(&addTOTPAccount, "totp-account", "", "TOTP account name/username")
+	addCmd.Flags().BoolVar(&addForce, "force", false, "Skip password strength validation")
 	rootCmd.AddCommand(addCmd)
 }

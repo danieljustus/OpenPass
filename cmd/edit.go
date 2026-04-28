@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -37,7 +38,7 @@ The editor is determined by the --editor flag or EDITOR environment variable (de
 		}
 
 		if !vaultpkg.IsInitialized(vaultDir) {
-			return fmt.Errorf("vault not initialized. Run 'openpass init' first")
+			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
 		}
 
 		v, err := unlockVault(vaultDir, true)
@@ -49,7 +50,7 @@ The editor is determined by the --editor flag or EDITOR environment variable (de
 
 		entry, err := vaultpkg.ReadEntry(v.Dir, name, v.Identity)
 		if err != nil {
-			return fmt.Errorf("entry not found: %s", name)
+			return errorspkg.NewCLIError(errorspkg.ExitNotFound, fmt.Sprintf("entry not found: %s", name), errorspkg.ErrEntryNotFound)
 		}
 
 		editor := editorFlag
@@ -117,7 +118,7 @@ The editor is determined by the --editor flag or EDITOR environment variable (de
 		if err := v.AutoCommit(fmt.Sprintf("Edit %s", name)); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: auto-commit failed: %v\n", err)
 		}
-		fmt.Printf("Entry updated: %s\n", name)
+		printQuietAware("Entry updated: %s\n", name)
 		return nil
 	},
 }

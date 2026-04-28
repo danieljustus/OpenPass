@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -35,13 +36,13 @@ but should NOT be used on shared machines (visible in process listings).`,
 		}
 
 		if !vaultpkg.IsInitialized(vaultDir) {
-			return fmt.Errorf("vault not initialized. Run 'openpass init' first")
+			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
 		}
 
 		if check {
 			if sessionIsExpired(vaultDir) {
 				cmd.SilenceUsage = true
-				return fmt.Errorf("no active session")
+				return errorspkg.NewCLIError(errorspkg.ExitLocked, "no active session", errorspkg.ErrVaultLocked)
 			}
 			fmt.Fprintln(os.Stderr, "Session active")
 			return nil
