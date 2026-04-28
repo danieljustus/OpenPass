@@ -31,7 +31,7 @@ func TestBetaSmokeFlow(t *testing.T) {
 		t.Fatalf("init vault: %v\n%s", err, output)
 	}
 
-	run := func(args ...string) string {
+		run := func(args ...string) string {
 		t.Helper()
 
 		cmd := exec.Command(binPath, args...)
@@ -40,9 +40,13 @@ func TestBetaSmokeFlow(t *testing.T) {
 			"GOWORK=off",
 			"OPENPASS_PASSPHRASE="+passphrase,
 		)
-		output, err := cmd.CombinedOutput()
+		output, err := cmd.Output()
 		if err != nil {
-			t.Fatalf("%s: %v\n%s", strings.Join(args, " "), err, output)
+			stderr := ""
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				stderr = string(exitErr.Stderr)
+			}
+			t.Fatalf("%s: %v\nstdout: %s\nstderr: %s", strings.Join(args, " "), err, output, stderr)
 		}
 		return string(output)
 	}
