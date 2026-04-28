@@ -1,19 +1,14 @@
-//go:build !cgo
-
 package session
 
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
 )
 
-// memoryKeyring provides an in-memory session cache for builds without CGO.
-// Sessions are encrypted at rest using AES-256-GCM and stored in process memory
-// only. All sessions are lost when the process exits.
+// memoryKeyring stores encrypted sessions in process memory only.
 type memoryKeyring struct {
 	mu    sync.RWMutex
 	store map[string][]byte
@@ -148,15 +143,4 @@ func (m *memoryKeyring) Delete(service, account string) error {
 	}
 
 	return nil
-}
-
-var memoryFallbackActive bool
-
-func init() {
-	mk := &memoryKeyring{}
-	keyringSet = mk.Set
-	keyringGet = mk.Get
-	keyringDelete = mk.Delete
-	memoryFallbackActive = true
-	log.Println("WARNING: CGO disabled. Using memory-only session cache (session will clear on process exit).")
 }
