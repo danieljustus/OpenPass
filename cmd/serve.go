@@ -91,7 +91,14 @@ The server can run in HTTP mode or stdio mode.`,
 		// Unlock vault for HTTP mode (always needed) or stdio with an agent
 		var vault *vaultpkg.Vault
 		if agentName != "" || !stdioFlag {
-			vault, err = serveUnlockVault(vaultDir, !stdioFlag)
+			// If session is active, try non-interactive unlock first (use cached passphrase)
+			if !sessionIsExpired(vaultDir) {
+				vault, err = serveUnlockVault(vaultDir, false)
+			}
+			// If no active session or non-interactive unlock failed, try interactive
+			if vault == nil {
+				vault, err = serveUnlockVault(vaultDir, !stdioFlag)
+			}
 			if err != nil {
 				return err
 			}

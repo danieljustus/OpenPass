@@ -195,7 +195,7 @@ func LoadPassphrase(vaultDir string) (string, error) {
 		return passphrase, nil
 	}
 	if updateErr := keyringSet(serviceName(vaultDir), sessionAccount, string(payload)); updateErr != nil {
-		return "", fmt.Errorf("update session last access: %w", updateErr)
+		return passphrase, nil
 	}
 
 	return passphrase, nil

@@ -549,9 +549,12 @@ func TestLoadPassphrase_UpdateKeyringSetError(t *testing.T) {
 	// Now set a one-shot error for the next keyringSet call (which happens during LoadPassphrase update)
 	fake.setErr = errors.New("keyring update failed")
 
-	_, err := LoadPassphrase(vaultDir)
-	if err == nil {
-		t.Fatal("LoadPassphrase() error = nil, want update session error")
+	loaded, err := LoadPassphrase(vaultDir)
+	if err != nil {
+		t.Fatalf("LoadPassphrase() error = %v, want nil (should not fail on update error)", err)
+	}
+	if loaded != passphrase {
+		t.Errorf("LoadPassphrase() = %q, want %q", loaded, passphrase)
 	}
 }
 

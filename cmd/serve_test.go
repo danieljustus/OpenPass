@@ -18,6 +18,7 @@ import (
 	"github.com/danieljustus/OpenPass/internal/config"
 	"github.com/danieljustus/OpenPass/internal/mcp"
 	"github.com/danieljustus/OpenPass/internal/metrics"
+	"github.com/danieljustus/OpenPass/internal/session"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -793,6 +794,123 @@ func TestServeCommand_StdioOnlyDoesNotStartHTTP(t *testing.T) {
 	}
 	if httpStarted {
 		t.Fatal("http server must not start in stdio-only mode")
+	}
+}
+
+func TestServeCommand_ActiveSessionUsesNonInteractiveUnlock(t *testing.T) {
+	resetCommandTestState()
+	t.Cleanup(resetCommandTestState)
+
+	vaultDir, passphrase := initVault(t)
+	setPassEnv(t, passphrase)
+	defer setupVaultFlag(t, vaultDir)()
+
+	sessionIsExpired = func(string) bool { return false }
+	defer func() { sessionIsExpired = session.IsSessionExpired }()
+
+	var unlockCalls []bool
+	serveUnlockVault = func(_ string, interactive bool) (*vaultpkg.Vault, error) {
+		unlockCalls = append(unlockCalls, interactive)
+		return &vaultpkg.Vault{}, nil
+	}
+
+	runHTTPServerFunc = func(_ context.Context, _ string, _ int, _ *vaultpkg.Vault) error {
+		return nil
+	}
+	serveSignalNotify = func(_ chan<- os.Signal, _ ...os.Signal) {}
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "serve", "--port", "18080"})
+	defer rootCmd.SetArgs(nil)
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("serve command failed: %v", err)
+	}
+
+	if len(unlockCalls) != 1 {
+		t.Fatalf("expected 1 unlock call, got %d: %v", len(unlockCalls), unlockCalls)
+	}
+	if unlockCalls[0] != false {
+		t.Errorf("expected non-interactive unlock (interactive=false) for active session, got interactive=%v", unlockCalls[0])
+	}
+}
+
+func TestServeCommand_ExpiredSessionUsesInteractiveUnlock(t *testing.T) {
+	resetCommandTestState()
+	t.Cleanup(resetCommandTestState)
+
+	vaultDir, passphrase := initVault(t)
+	setPassEnv(t, passphrase)
+	defer setupVaultFlag(t, vaultDir)()
+
+	sessionIsExpired = func(string) bool { return true }
+	defer func() { sessionIsExpired = session.IsSessionExpired }()
+
+	var unlockCalls []bool
+	serveUnlockVault = func(_ string, interactive bool) (*vaultpkg.Vault, error) {
+		unlockCalls = append(unlockCalls, interactive)
+		return nil, nil
+	}
+
+	runHTTPServerFunc = func(_ context.Context, _ string, _ int, _ *vaultpkg.Vault) error {
+		return nil
+	}
+	serveSignalNotify = func(_ chan<- os.Signal, _ ...os.Signal) {}
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "serve", "--port", "18081"})
+	defer rootCmd.SetArgs(nil)
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("serve command failed: %v", err)
+	}
+
+	if len(unlockCalls) != 1 {
+		t.Fatalf("expected 1 unlock call, got %d: %v", len(unlockCalls), unlockCalls)
+	}
+	if unlockCalls[0] != true {
+		t.Errorf("expected interactive unlock (interactive=true) for expired session, got interactive=%v", unlockCalls[0])
+	}
+}
+
+func TestServeCommand_ActiveSessionFallbackToInteractive(t *testing.T) {
+	resetCommandTestState()
+	t.Cleanup(resetCommandTestState)
+
+	vaultDir, passphrase := initVault(t)
+	setPassEnv(t, passphrase)
+	defer setupVaultFlag(t, vaultDir)()
+
+	sessionIsExpired = func(string) bool { return false }
+	defer func() { sessionIsExpired = session.IsSessionExpired }()
+
+	var unlockCalls []bool
+	serveUnlockVault = func(_ string, interactive bool) (*vaultpkg.Vault, error) {
+		unlockCalls = append(unlockCalls, interactive)
+		if !interactive {
+			return nil, fmt.Errorf("non-interactive unlock failed")
+		}
+		return nil, nil
+	}
+
+	runHTTPServerFunc = func(_ context.Context, _ string, _ int, _ *vaultpkg.Vault) error {
+		return nil
+	}
+	serveSignalNotify = func(_ chan<- os.Signal, _ ...os.Signal) {}
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "serve", "--port", "18082"})
+	defer rootCmd.SetArgs(nil)
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("serve command failed: %v", err)
+	}
+
+	if len(unlockCalls) != 2 {
+		t.Fatalf("expected 2 unlock calls (non-interactive + fallback), got %d: %v", len(unlockCalls), unlockCalls)
+	}
+	if unlockCalls[0] != false {
+		t.Errorf("expected first call to be non-interactive, got interactive=%v", unlockCalls[0])
+	}
+	if unlockCalls[1] != true {
+		t.Errorf("expected second call to be interactive fallback, got interactive=%v", unlockCalls[1])
 	}
 }
 
