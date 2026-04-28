@@ -189,10 +189,7 @@ func isTLSCertificateError(err error) bool {
 		return true
 	}
 	var unknownAuthorityErr x509.UnknownAuthorityError
-	if errors.As(err, &unknownAuthorityErr) {
-		return true
-	}
-	return false
+	return errors.As(err, &unknownAuthorityErr)
 }
 
 func parseStableVersion(raw string) (stableVersion, bool) {

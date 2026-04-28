@@ -88,8 +88,8 @@ var setCmd = &cobra.Command{
 				}
 				data["password"] = password
 				if !setForce {
-					if err := crypto.ValidatePasswordStrength(password); err != nil {
-						return err
+					if validateErr := crypto.ValidatePasswordStrength(password); validateErr != nil {
+						return validateErr
 					}
 				}
 
@@ -145,7 +145,7 @@ var setCmd = &cobra.Command{
 				period = int(p)
 			}
 			if err := crypto.ValidateTOTPParams(algo, digits, period); err != nil {
-				return fmt.Errorf("invalid TOTP: %v", err)
+				return fmt.Errorf("invalid TOTP: %w", err)
 			}
 		}
 

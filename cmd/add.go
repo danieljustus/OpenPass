@@ -214,7 +214,7 @@ Examples:
 				period = int(p)
 			}
 			if err := crypto.ValidateTOTPParams(algo, digits, period); err != nil {
-				return fmt.Errorf("invalid TOTP: %v", err)
+				return fmt.Errorf("invalid TOTP: %w", err)
 			}
 		}
 

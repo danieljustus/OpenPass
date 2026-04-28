@@ -42,8 +42,9 @@ func TestNewSecureClient_RejectsTLS12(t *testing.T) {
 	transport := client.Transport.(*http.Transport)
 	transport.TLSClientConfig.InsecureSkipVerify = true
 
-	_, err := client.Get(server.URL)
+	resp, err := client.Get(server.URL)
 	if err == nil {
+		resp.Body.Close()
 		t.Fatal("expected TLS 1.2-only server to be rejected")
 	}
 	if !strings.Contains(err.Error(), "protocol version") {
