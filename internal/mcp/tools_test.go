@@ -372,7 +372,7 @@ func TestHandleGetMetadata_VersionIncrementedAfterUpdate(t *testing.T) {
 		Arguments: map[string]any{
 			"path":  "github",
 			"field": "password",
-			"value": "updatedpass",
+			"value": "StrongP@ssw0rd123",
 		},
 	}
 	_, err = srv.handleSet(context.Background(), setReq)
@@ -682,7 +682,7 @@ func TestHandleSet_Success(t *testing.T) {
 		Arguments: map[string]any{
 			"path":  "github",
 			"field": "password",
-			"value": "newpass",
+			"value": "StrongP@ssw0rd123",
 		},
 	}
 
@@ -702,8 +702,8 @@ func TestHandleSet_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadEntry() error = %v", err)
 	}
-	if entry.Data["password"] != "newpass" {
-		t.Errorf("password = %v, want newpass", entry.Data["password"])
+	if entry.Data["password"] != "StrongP@ssw0rd123" {
+		t.Errorf("password = %v, want StrongP@ssw0rd123", entry.Data["password"])
 	}
 }
 
@@ -804,7 +804,7 @@ func TestHandleSet_NewEntry(t *testing.T) {
 		Arguments: map[string]any{
 			"path":  "newentry",
 			"field": "password",
-			"value": "newpass123",
+			"value": "StrongP@ssw0rd123",
 		},
 	}
 
@@ -911,6 +911,153 @@ func TestHandleSet_InvalidTOTPJSON(t *testing.T) {
 	}
 	if !result.IsError {
 		t.Error("handleSet() expected error for invalid TOTP JSON")
+	}
+}
+
+func TestHandleSet_TOTPInvalidAlgorithm(t *testing.T) {
+	vaultDir, identity := mockVault(t)
+	srv := newTestServerWithVault(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		CanWrite:     true,
+	}, "stdio", vaultDir)
+	srv.vault.Identity = identity
+
+	totpJSON := `{"secret":"GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ","algorithm":"MD5","digits":6,"period":30}`
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"path":  "github",
+			"field": "totp",
+			"value": totpJSON,
+		},
+	}
+
+	result, err := srv.handleSet(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleSet() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("handleSet() returned nil result")
+	}
+	if !result.IsError {
+		t.Error("handleSet() expected error for invalid TOTP algorithm")
+	}
+	if !strings.Contains(result.Text, "invalid TOTP") {
+		t.Errorf("handleSet() error text = %q, want to contain 'invalid TOTP'", result.Text)
+	}
+}
+
+func TestHandleSet_TOTPInvalidDigits(t *testing.T) {
+	vaultDir, identity := mockVault(t)
+	srv := newTestServerWithVault(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		CanWrite:     true,
+	}, "stdio", vaultDir)
+	srv.vault.Identity = identity
+
+	totpJSON := `{"secret":"GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ","algorithm":"SHA1","digits":7,"period":30}`
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"path":  "github",
+			"field": "totp",
+			"value": totpJSON,
+		},
+	}
+
+	result, err := srv.handleSet(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleSet() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("handleSet() returned nil result")
+	}
+	if !result.IsError {
+		t.Error("handleSet() expected error for invalid TOTP digits")
+	}
+	if !strings.Contains(result.Text, "invalid TOTP") {
+		t.Errorf("handleSet() error text = %q, want to contain 'invalid TOTP'", result.Text)
+	}
+}
+
+func TestHandleSet_TOTPInvalidPeriod(t *testing.T) {
+	vaultDir, identity := mockVault(t)
+	srv := newTestServerWithVault(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		CanWrite:     true,
+	}, "stdio", vaultDir)
+	srv.vault.Identity = identity
+
+	totpJSON := `{"secret":"GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ","algorithm":"SHA1","digits":6,"period":5000}`
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"path":  "github",
+			"field": "totp",
+			"value": totpJSON,
+		},
+	}
+
+	result, err := srv.handleSet(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleSet() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("handleSet() returned nil result")
+	}
+	if !result.IsError {
+		t.Error("handleSet() expected error for invalid TOTP period")
+	}
+	if !strings.Contains(result.Text, "invalid TOTP") {
+		t.Errorf("handleSet() error text = %q, want to contain 'invalid TOTP'", result.Text)
+	}
+}
+
+func TestHandleSet_TOTPValidParams(t *testing.T) {
+	vaultDir, identity := mockVault(t)
+	srv := newTestServerWithVault(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		CanWrite:     true,
+	}, "stdio", vaultDir)
+	srv.vault.Identity = identity
+
+	totpJSON := `{"secret":"GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ","algorithm":"SHA1","digits":6,"period":30}`
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"path":  "newentry",
+			"field": "totp",
+			"value": totpJSON,
+		},
+	}
+
+	result, err := srv.handleSet(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleSet() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("handleSet() returned nil result")
+	}
+	if result.IsError {
+		t.Fatalf("handleSet() returned error: %s", result.Text)
+	}
+
+	entry, err := vault.ReadEntry(vaultDir, "newentry", identity)
+	if err != nil {
+		t.Fatalf("ReadEntry() error = %v", err)
+	}
+	totpData, ok := entry.Data["totp"].(map[string]any)
+	if !ok {
+		t.Fatal("totp field should be map[string]any")
+	}
+	if totpData["algorithm"] != "SHA1" {
+		t.Errorf("totp.algorithm = %v, want SHA1", totpData["algorithm"])
+	}
+	if totpData["digits"] != float64(6) {
+		t.Errorf("totp.digits = %v, want 6", totpData["digits"])
+	}
+	if totpData["period"] != float64(30) {
+		t.Errorf("totp.period = %v, want 30", totpData["period"])
 	}
 }
 
@@ -1803,7 +1950,7 @@ func TestHandleSet_WriteEntryFails(t *testing.T) {
 		Arguments: map[string]any{
 			"path":  "new-entry-that-does-not-exist",
 			"field": "password",
-			"value": "newpass",
+			"value": "StrongP@ssw0rd123",
 		},
 	}
 
@@ -1957,7 +2104,7 @@ func TestHandleSet_PreservesMultiRecipientAccess(t *testing.T) {
 		Arguments: map[string]any{
 			"path":  "shared-entry",
 			"field": "password",
-			"value": "secret123",
+			"value": "StrongP@ssw0rd123",
 		},
 	}
 	_, err = srv.handleSet(context.Background(), req)
@@ -1969,8 +2116,8 @@ func TestHandleSet_PreservesMultiRecipientAccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadEntry() with second identity error = %v", err)
 	}
-	if entry.Data["password"] != "secret123" {
-		t.Errorf("password = %v, want secret123", entry.Data["password"])
+	if entry.Data["password"] != "StrongP@ssw0rd123" {
+		t.Errorf("password = %v, want StrongP@ssw0rd123", entry.Data["password"])
 	}
 }
 
@@ -2032,7 +2179,7 @@ func TestHandleSet_MergePreservesMultiRecipientAccess(t *testing.T) {
 		Arguments: map[string]any{
 			"path":  "existing-entry",
 			"field": "password",
-			"value": "newpassword",
+			"value": "StrongP@ssw0rd123",
 		},
 	}
 	_, err = srv.handleSet(context.Background(), req)
@@ -2044,8 +2191,8 @@ func TestHandleSet_MergePreservesMultiRecipientAccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadEntry() with second identity error = %v", err)
 	}
-	if entry.Data["password"] != "newpassword" {
-		t.Errorf("password = %v, want newpassword", entry.Data["password"])
+	if entry.Data["password"] != "StrongP@ssw0rd123" {
+		t.Errorf("password = %v, want StrongP@ssw0rd123", entry.Data["password"])
 	}
 	if entry.Data["username"] != "testuser" {
 		t.Errorf("username = %v, want testuser", entry.Data["username"])

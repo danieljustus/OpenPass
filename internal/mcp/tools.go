@@ -200,9 +200,27 @@ func (s *Server) handleSet(ctx context.Context, req CallToolRequest) (*CallToolR
 		if err := json.Unmarshal([]byte(value), &totpData); err != nil {
 			return NewToolResultError(fmt.Sprintf("invalid TOTP JSON: %v", err)), nil
 		}
+		algo, _ := totpData["algorithm"].(string)
+		digits := 0
+		if d, ok := totpData["digits"].(float64); ok {
+			digits = int(d)
+		}
+		period := 0
+		if p, ok := totpData["period"].(float64); ok {
+			period = int(p)
+		}
+		if err := crypto.ValidateTOTPParams(algo, digits, period); err != nil {
+			return NewToolResultError(fmt.Sprintf("invalid TOTP: %v", err)), nil
+		}
 		partialData[field] = totpData
 	} else {
 		partialData[field] = value
+	}
+
+	if field == "password" {
+		if err := crypto.ValidatePasswordStrength(value); err != nil {
+			return NewToolResultError(err.Error()), nil
+		}
 	}
 
 	if err := s.upsertEntry(path, partialData, "set"); err != nil {

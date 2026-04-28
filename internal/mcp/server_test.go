@@ -822,7 +822,7 @@ func TestExecuteTool_SetEntryField(t *testing.T) {
 	}, "stdio", vaultDir)
 	srv.vault.Identity = identity
 
-	args := json.RawMessage(`{"path": "github", "field": "password", "value": "newpass"}`)
+	args := json.RawMessage(`{"path": "github", "field": "password", "value": "StrongP@ssw0rd123"}`)
 	result, err := srv.executeTool(context.Background(), "set_entry_field", args)
 	if err != nil {
 		t.Fatalf("executeTool() error = %v", err)
