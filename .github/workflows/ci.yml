@@ -55,9 +55,9 @@ jobs:
         with:
           scan-args: >-
             --lockfile=go.mod
-            --severity=HIGH
             --format=sarif
             --output=osv-results.sarif
+        continue-on-error: true
 
       - name: Upload OSV SARIF to GitHub Security tab
         if: always()

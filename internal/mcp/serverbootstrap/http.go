@@ -1,3 +1,4 @@
+// Package serverbootstrap provides HTTP and stdio server initialization for the MCP server.
 package serverbootstrap
 
 import (
@@ -39,7 +40,7 @@ func RunHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault
 	if err != nil {
 		return fmt.Errorf("create auth audit logger: %w", err)
 	}
-	defer authAuditLog.Close()
+	defer func() { _ = authAuditLog.Close() }()
 
 	rateLimit := 60
 	var trustedProxyIPs []string

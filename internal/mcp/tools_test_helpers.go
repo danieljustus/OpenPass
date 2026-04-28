@@ -91,7 +91,7 @@ func TestRegisterTools(t *testing.T) {
 	}
 }
 
-func TestExecuteTool_UnknownTool(t *testing.T) {
+func TestExecuteToolUnknownTool(t *testing.T) {
 	srv := newTestServerWithVault(t, config.AgentProfile{
 		Name:         "test",
 		AllowedPaths: []string{"*"},
