@@ -47,10 +47,10 @@ func TestBetaSmokeFlow(t *testing.T) {
 		return string(output)
 	}
 
-	run("--vault", vaultDir, "set", "demo.password", "--value", "hunter2")
+	run("--vault", vaultDir, "set", "demo.password", "--value", "xK9#mP2$vL7@nQ4")
 
-	if output := strings.TrimSpace(run("--vault", vaultDir, "get", "demo.password")); output != "hunter2" {
-		t.Fatalf("get demo.password = %q, want hunter2", output)
+	if output := strings.TrimSpace(run("--vault", vaultDir, "get", "demo.password")); output != "xK9#mP2$vL7@nQ4" {
+		t.Fatalf("get demo.password = %q, want xK9#mP2$vL7@nQ4", output)
 	}
 
 	listOutput := run("--vault", vaultDir, "list")
@@ -58,7 +58,7 @@ func TestBetaSmokeFlow(t *testing.T) {
 		t.Fatalf("list output missing entry: %s", listOutput)
 	}
 
-	findOutput := run("--vault", vaultDir, "find", "hunter2")
+	findOutput := run("--vault", vaultDir, "find", "xK9#mP2$vL7@nQ4")
 	if !strings.Contains(findOutput, "demo") {
 		t.Fatalf("find output missing match: %s", findOutput)
 	}
