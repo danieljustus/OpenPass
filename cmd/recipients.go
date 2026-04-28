@@ -76,9 +76,9 @@ var recipientsListCmd = &cobra.Command{
 			if !r.Valid {
 				status = "✗"
 			}
-			printlnQuietAware("  "+status+" "+r.Normalized)
+			printlnQuietAware("  " + status + " " + r.Normalized)
 			if !r.Valid {
-				printlnQuietAware("    Error: "+r.Error)
+				printlnQuietAware("    Error: " + r.Error)
 			}
 		}
 

@@ -10,8 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/crypto"
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -196,27 +196,27 @@ Examples:
 			}
 		}
 
-	if totpData, ok := data["totp"].(map[string]any); ok {
-		if secret, ok := totpData["secret"].(string); ok && secret != "" {
-			if err := crypto.ValidateTOTPSecret(secret); err != nil {
-				return err
+		if totpData, ok := data["totp"].(map[string]any); ok {
+			if secret, ok := totpData["secret"].(string); ok && secret != "" {
+				if err := crypto.ValidateTOTPSecret(secret); err != nil {
+					return err
+				}
+			}
+			var algo string
+			var digits, period int
+			if a, ok := totpData["algorithm"].(string); ok {
+				algo = a
+			}
+			if d, ok := totpData["digits"].(float64); ok {
+				digits = int(d)
+			}
+			if p, ok := totpData["period"].(float64); ok {
+				period = int(p)
+			}
+			if err := crypto.ValidateTOTPParams(algo, digits, period); err != nil {
+				return fmt.Errorf("invalid TOTP: %v", err)
 			}
 		}
-		var algo string
-		var digits, period int
-		if a, ok := totpData["algorithm"].(string); ok {
-			algo = a
-		}
-		if d, ok := totpData["digits"].(float64); ok {
-			digits = int(d)
-		}
-		if p, ok := totpData["period"].(float64); ok {
-			period = int(p)
-		}
-		if err := crypto.ValidateTOTPParams(algo, digits, period); err != nil {
-			return fmt.Errorf("invalid TOTP: %v", err)
-		}
-	}
 
 		entry := &vaultpkg.Entry{
 			Data: data,

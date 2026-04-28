@@ -62,7 +62,7 @@ var gitCmd = &cobra.Command{
 			_ = v
 			for _, h := range history {
 				printQuietAware("%s  %s  %s\n", h.Hash[:7], h.Date.Format("2006-01-02"), h.Message)
-				printlnQuietAware("  Author: "+h.Author)
+				printlnQuietAware("  Author: " + h.Author)
 			}
 
 		default:

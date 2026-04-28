@@ -18,9 +18,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/mcp"
 	"github.com/danieljustus/OpenPass/internal/metrics"
-	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
