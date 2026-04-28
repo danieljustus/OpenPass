@@ -112,12 +112,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
 
 	"filippo.io/age"
+	"golang.org/x/exp/slices"
 )
 
 type Match struct {
@@ -369,8 +370,9 @@ func FindWithOptions(vaultDir string, query string, opts FindOptions) ([]Match, 
 // Performance: Uses path-only fast path to avoid decrypting entries when possible.
 // If query appears in a path, entry is included without decryption.
 // Only entries where path doesn't match are decrypted to search field content.
+// Uses FindConcurrent with runtime.NumCPU() workers for parallel decryption.
 func Find(vaultDir string, query string) ([]Match, error) {
-	return FindWithOptions(vaultDir, query, FindOptions{})
+	return FindConcurrent(vaultDir, query, runtime.NumCPU())
 }
 
 func hasField(fields []string, want string) bool {

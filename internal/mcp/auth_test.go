@@ -22,7 +22,7 @@ func pollWithTimeout(t *testing.T, condition func() bool, timeout time.Duration,
 }
 
 func TestBearerAuthRejects401WithoutToken(t *testing.T) {
-	handler := BearerAuthMiddleware("secret-token", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BearerAuthMiddleware("secret-token", nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -36,7 +36,7 @@ func TestBearerAuthRejects401WithoutToken(t *testing.T) {
 }
 
 func TestBearerAuthRejectsWhenConfiguredTokenEmpty(t *testing.T) {
-	handler := BearerAuthMiddleware("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BearerAuthMiddleware("", nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -51,7 +51,7 @@ func TestBearerAuthRejectsWhenConfiguredTokenEmpty(t *testing.T) {
 }
 
 func TestBearerAuthRejects401WithWrongToken(t *testing.T) {
-	handler := BearerAuthMiddleware("secret-token", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BearerAuthMiddleware("secret-token", nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -66,7 +66,7 @@ func TestBearerAuthRejects401WithWrongToken(t *testing.T) {
 }
 
 func TestBearerAuthAcceptsValidToken(t *testing.T) {
-	handler := BearerAuthMiddleware("secret-token", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BearerAuthMiddleware("secret-token", nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -726,16 +726,12 @@ func TestIsLoopbackHost(t *testing.T) {
 }
 
 func TestLogAuthFailure_NilLogger(t *testing.T) {
-	original := authAuditLogger
-	authAuditLogger = nil
-	defer func() { authAuditLogger = original }()
-
 	req := httptest.NewRequest("POST", "/mcp", nil)
-	logAuthFailure(req, "test", "detail")
+	logAuthFailure(nil, req, "test", "detail")
 }
 
 func TestBearerAuthMissingBearerPrefix(t *testing.T) {
-	handler := BearerAuthMiddleware("secret-token", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BearerAuthMiddleware("secret-token", nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 

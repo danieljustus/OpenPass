@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"testing"
@@ -11,6 +12,8 @@ import (
 
 	vaultcrypto "github.com/danieljustus/OpenPass/internal/crypto"
 	"github.com/danieljustus/OpenPass/internal/mcp"
+	"github.com/danieljustus/OpenPass/internal/mcp/serverbootstrap"
+	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
 func TestMain(m *testing.M) {
@@ -26,9 +29,13 @@ func resetCommandTestState() {
 	resetCommandEnv()
 	osExit = os.Exit
 	serveSignalNotify = signal.Notify
-	mcpFactory.New = mcp.New
-	runStdioServerFunc = runStdioServer
-	runHTTPServerFunc = runHTTPServer
+	runStdioServerFunc = func(ctx context.Context, vault *vaultpkg.Vault, agentName string) error {
+		return serverbootstrap.RunStdioServer(ctx, vault, agentName, mcp.New)
+	}
+	runHTTPServerFunc = func(ctx context.Context, bind string, port int, vault *vaultpkg.Vault) error {
+		vaultDir, _ := vaultPath()
+		return serverbootstrap.RunHTTPServer(ctx, bind, port, vault, vaultDir, Version, mcp.New)
+	}
 	serveUnlockVault = unlockVault
 }
 

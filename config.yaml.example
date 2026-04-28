@@ -88,3 +88,12 @@ update:
 clipboard:
   # Seconds before copied secrets are cleared. Set 0 to disable auto-clear.
   auto_clear_duration: 30
+
+# Audit log configuration.
+audit:
+  # Maximum size of a single audit log file in MB before rotation.
+  maxSizeMb: 100
+  # Number of rotated backup files to retain.
+  maxBackups: 5
+  # Maximum age of rotated backup files in days before deletion.
+  maxAgeDays: 30

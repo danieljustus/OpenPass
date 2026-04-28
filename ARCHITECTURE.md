@@ -258,9 +258,13 @@ Logs all MCP tool calls with:
 
 Shared utilities for testing.
 
-### `clipboardpkg/` — Clipboard Support
+### `clipboardpkg/` — Clipboard Workspace Module
 
-Separate Go workspace module for clipboard functionality. Referenced via `go.work`.
+Separate Go workspace module that provides a minimal buildable stub for `github.com/atotto/clipboard`. Referenced via `go.work` replace directive. Used only to satisfy build constraints when the real clipboard dependency is replaced in the workspace; not imported directly by application code.
+
+### `internal/clipboard/` — Clipboard Application Logic
+
+Application-level clipboard utilities: auto-clear timer, countdown display, and cross-platform clipboard integration. Imported by CLI commands (e.g., `cmd/get.go`) as `clipboardapp`.
 
 ## Data Flow
 

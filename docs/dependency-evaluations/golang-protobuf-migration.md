@@ -196,7 +196,16 @@ Acknowledge the deprecated transitive dependency, document it, and move on. Re-a
 
 ---
 
-## 8. References
+## 8. Quarterly Re-Evaluation Log
+
+| Date | Evaluator | Status | Notes |
+|------|-----------|--------|-------|
+| 2026-04-20 | Sisyphus-Junior | DEFER | groupcache issue #150 still open; no upstream migration |
+| 2026-04-28 | Sisyphus | DEFER | Quarterly check: no upstream changes; scheduled workflow active |
+
+---
+
+## 9. References
 
 ### Upstream Issues
 - [golang/groupcache #150 — Migrate protobuf to google.golang.org](https://github.com/golang/groupcache/issues/150) (Open since 2021-08-05)

@@ -1,0 +1,43 @@
+package serverbootstrap
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/danieljustus/OpenPass/internal/mcp"
+	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
+)
+
+// RunStdioServer starts the stdio MCP server.
+func RunStdioServer(ctx context.Context, vault *vaultpkg.Vault, agentName string, factory func(*vaultpkg.Vault, string, string) (*mcp.Server, error)) error {
+	var mcpServer *mcp.Server
+	if vault != nil && agentName != "" {
+		var err error
+		mcpServer, err = factory(vault, agentName, "stdio")
+		if err != nil {
+			return fmt.Errorf("failed to create MCP server: %w", err)
+		}
+		defer func() { _ = mcpServer.Close() }()
+	}
+
+	transport := mcp.NewStdioTransport()
+	handler := mcp.NewProtocolHandler("openpass", "1.0.0", mcpServer)
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- transport.Start(ctx, handler.HandleMessage)
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		select {
+		case err := <-errCh:
+			return err
+		case <-time.After(2 * time.Second):
+			return fmt.Errorf("stdio server shutdown timeout")
+		}
+	}
+}

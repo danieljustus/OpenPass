@@ -452,7 +452,7 @@ func newHTTPMCPTestHandler() http.Handler {
 
 	return RateLimiterMiddleware(
 		NewRateLimiter(100, time.Minute),
-		BearerAuthMiddleware(token, AgentHeaderMiddleware(mcpHandler)),
+		BearerAuthMiddleware(token, nil, AgentHeaderMiddleware(mcpHandler)),
 	)
 }
 

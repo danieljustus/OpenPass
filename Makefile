@@ -77,9 +77,9 @@ test-bench:
 
 # Clean build artifacts and coverage files
 clean:
-	rm -f $(BINARY_NAME)
-	rm -rf $(COVERAGE_DIR)
-	$(GO) clean -cache
+	rm -f $(BINARY_NAME) *.test *.out *_output.txt
+	rm -rf $(COVERAGE_DIR) dist/ coverage.html vault_coverage.html
+	$(GO) clean -cache -testcache
 
 # Run linter
 lint:
@@ -180,6 +180,23 @@ docs-check:
 			echo "Found deprecated tool name: $$tool"; \
 			errors=$$((errors + 1)); \
 		fi; \
+	done; \
+	echo "Checking README.md links..."; \
+	for link in $$(grep -oE '\[([^]]+)\]\(([^)]+)\)' README.md | grep -v '^http' | grep -v '^#' | sed 's/.*](\([^)]*\)).*/\1/'); do \
+		case "$$link" in \
+			CODE_OF_CONDUCT.md|CONTRIBUTING.md|LICENSE|SECURITY.md|config.yaml.example) \
+				if [ ! -f "$$link" ]; then \
+					echo "Broken link in README.md: $$link"; \
+					errors=$$((errors + 1)); \
+				fi; \
+				;; \
+			docs/*) \
+				if [ ! -f "$$link" ]; then \
+					echo "Broken link in README.md: $$link"; \
+					errors=$$((errors + 1)); \
+				fi; \
+				;; \
+		esac; \
 	done; \
 	if [ $$errors -gt 0 ]; then \
 		echo "Found $$errors documentation issues."; \

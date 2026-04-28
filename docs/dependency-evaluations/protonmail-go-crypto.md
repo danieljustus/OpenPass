@@ -136,6 +136,15 @@ All Git remotes are **user-configured** (typically the user's own private reposi
 
 ---
 
+## Quarterly Re-Evaluation Log
+
+| Date | Evaluator | Status | Notes |
+|------|-----------|--------|-------|
+| 2026-04-27 | Sisyphus-Junior | DEFER | go-git v5.18.0 still on v1.1.6; v6 adopted v1.4.1 |
+| 2026-04-28 | Sisyphus | DEFER | Quarterly check: no upstream changes; scheduled workflow active |
+
+---
+
 ## Appendix: Dependency Graph
 
 ```

@@ -17,6 +17,7 @@ import (
 
 	"github.com/danieljustus/OpenPass/internal/config"
 	"github.com/danieljustus/OpenPass/internal/mcp"
+	"github.com/danieljustus/OpenPass/internal/mcp/serverbootstrap"
 	"github.com/danieljustus/OpenPass/internal/metrics"
 	"github.com/danieljustus/OpenPass/internal/session"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
@@ -60,13 +61,14 @@ func newTestVault(t *testing.T) *vaultpkg.Vault {
 	return v
 }
 
-func runHTTPServerAsyncWithBind(ctx context.Context, t *testing.T, bind string, port int, v *vaultpkg.Vault) func() {
+func runHTTPServerAsyncWithFactory(ctx context.Context, t *testing.T, bind string, port int, v *vaultpkg.Vault, factory func(*vaultpkg.Vault, string, string) (*mcp.Server, error)) func() {
 	t.Helper()
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := runHTTPServer(ctx, bind, port, v); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		vaultDir, _ := vaultPath()
+		if err := serverbootstrap.RunHTTPServer(ctx, bind, port, v, vaultDir, "dev", factory); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			t.Errorf("runHTTPServer error: %v", err)
 		}
 	}()
@@ -74,8 +76,12 @@ func runHTTPServerAsyncWithBind(ctx context.Context, t *testing.T, bind string, 
 	return wg.Wait
 }
 
+func runHTTPServerAsyncWithBind(ctx context.Context, t *testing.T, bind string, port int, v *vaultpkg.Vault) func() {
+	return runHTTPServerAsyncWithFactory(ctx, t, bind, port, v, mcp.New)
+}
+
 func runHTTPServerAsync(ctx context.Context, t *testing.T, port int, v *vaultpkg.Vault) func() {
-	return runHTTPServerAsyncWithBind(ctx, t, "127.0.0.1", port, v)
+	return runHTTPServerAsyncWithFactory(ctx, t, "127.0.0.1", port, v, mcp.New)
 }
 
 func testMCPToken(t *testing.T) string {
@@ -514,14 +520,12 @@ func TestRunHTTPServer_HandlerCreationError(t *testing.T) {
 	v := newTestVault(t)
 	port := findFreePort(t)
 
-	origNew := mcpFactory.New
-	mcpFactory.New = func(_ *vaultpkg.Vault, _ string, _ string) (*mcp.Server, error) {
+	factory := func(_ *vaultpkg.Vault, _ string, _ string) (*mcp.Server, error) {
 		return nil, errors.New("agent not found")
 	}
-	t.Cleanup(func() { mcpFactory.New = origNew })
 
 	ctx, cancel := context.WithCancel(context.Background())
-	waitForServer := runHTTPServerAsync(ctx, t, port, v)
+	waitForServer := runHTTPServerAsyncWithFactory(ctx, t, "127.0.0.1", port, v, factory)
 	defer func() {
 		cancel()
 		waitForServer()
@@ -580,15 +584,13 @@ func TestRunHTTPServer_HandlerCacheHit(t *testing.T) {
 	port := findFreePort(t)
 
 	var callCount int
-	origNew := mcpFactory.New
-	mcpFactory.New = func(vault *vaultpkg.Vault, agentName string, transport string) (*mcp.Server, error) {
+	factory := func(vault *vaultpkg.Vault, agentName string, transport string) (*mcp.Server, error) {
 		callCount++
-		return origNew(vault, agentName, transport)
+		return mcp.New(vault, agentName, transport)
 	}
-	t.Cleanup(func() { mcpFactory.New = origNew })
 
 	ctx, cancel := context.WithCancel(context.Background())
-	waitForServer := runHTTPServerAsync(ctx, t, port, v)
+	waitForServer := runHTTPServerAsyncWithFactory(ctx, t, "127.0.0.1", port, v, factory)
 	defer func() {
 		cancel()
 		waitForServer()
@@ -640,7 +642,7 @@ func TestRunHTTPServer_HandlerCacheHit(t *testing.T) {
 	_ = resp2.Body.Close()
 
 	if callCount != 1 {
-		t.Errorf("mcpFactory.New called %d times, want 1 (cache hit expected)", callCount)
+		t.Errorf("factory called %d times, want 1 (cache hit expected)", callCount)
 	}
 }
 
@@ -921,13 +923,13 @@ func TestRunStdioServer_WithNilVault(t *testing.T) {
 		defer wg.Done()
 		// Cancel immediately so transport.Start returns quickly
 		cancel()
-		_ = runStdioServer(ctx, nil, "")
+		_ = serverbootstrap.RunStdioServer(ctx, nil, "", mcp.New)
 	}()
 
 	select {
 	case <-ctx.Done():
 	case <-time.After(2 * time.Second):
-		t.Fatal("runStdioServer did not return in time")
+		t.Fatal("RunStdioServer did not return in time")
 	}
 
 	wg.Wait()

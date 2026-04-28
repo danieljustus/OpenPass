@@ -61,7 +61,15 @@ func New(v *vault.Vault, agentName string, transport string) (*Server, error) {
 	}
 	agent.Name = agentName
 
-	auditLog, err := audit.New(agentName)
+	if cfg.Audit != nil {
+		audit.SetConfig(&audit.Config{
+			MaxFileSize: cfg.Audit.MaxFileSize,
+			MaxBackups:  cfg.Audit.MaxBackups,
+			MaxAgeDays:  cfg.Audit.MaxAgeDays,
+		})
+	}
+
+	auditLog, err := audit.New(agentName, v.Dir)
 	if err != nil {
 		return nil, err
 	}

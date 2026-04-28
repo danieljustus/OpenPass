@@ -50,6 +50,13 @@ type ClipboardConfig struct {
 	AutoClearDuration int `yaml:"auto_clear_duration,omitempty"` // seconds, 0 = disabled
 }
 
+// AuditConfig holds audit log rotation configuration.
+type AuditConfig struct {
+	MaxFileSize int64 `yaml:"maxSizeMb,omitempty"` // bytes (stored as MB in YAML)
+	MaxBackups  int   `yaml:"maxBackups,omitempty"`
+	MaxAgeDays  int   `yaml:"maxAgeDays,omitempty"`
+}
+
 // defaultVaultConfig returns the default vault configuration.
 func defaultVaultConfig() VaultConfig {
 	return VaultConfig{
@@ -97,6 +104,15 @@ func defaultClipboardConfig() ClipboardConfig {
 	}
 }
 
+// defaultAuditConfig returns the default audit log configuration.
+func defaultAuditConfig() AuditConfig {
+	return AuditConfig{
+		MaxFileSize: 100 * 1024 * 1024,
+		MaxBackups:  5,
+		MaxAgeDays:  30,
+	}
+}
+
 // fileVaultConfig is the file-based vault configuration with pointer fields
 // for optional YAML unmarshaling.
 type fileVaultConfig struct {
@@ -141,6 +157,14 @@ type fileUpdateConfig struct {
 // for optional YAML unmarshaling.
 type fileClipboardConfig struct {
 	AutoClearDuration *int `yaml:"auto_clear_duration,omitempty"`
+}
+
+// fileAuditConfig is the file-based audit configuration with pointer fields
+// for optional YAML unmarshaling.
+type fileAuditConfig struct {
+	MaxFileSize *int64 `yaml:"maxSizeMb,omitempty"`
+	MaxBackups  *int   `yaml:"maxBackups,omitempty"`
+	MaxAgeDays  *int   `yaml:"maxAgeDays,omitempty"`
 }
 
 // MergeFileVaultConfig merges file config with defaults, returning the final
@@ -252,6 +276,25 @@ func MergeFileClipboardConfig(fileCfg *fileClipboardConfig, defaults ClipboardCo
 	result := defaults
 	if fileCfg.AutoClearDuration != nil {
 		result.AutoClearDuration = *fileCfg.AutoClearDuration
+	}
+	return result
+}
+
+// MergeFileAuditConfig merges file config with defaults, returning the final
+// AuditConfig. If fileCfg is nil, defaults are returned unchanged.
+func MergeFileAuditConfig(fileCfg *fileAuditConfig, defaults AuditConfig) AuditConfig {
+	if fileCfg == nil {
+		return defaults
+	}
+	result := defaults
+	if fileCfg.MaxFileSize != nil {
+		result.MaxFileSize = *fileCfg.MaxFileSize * 1024 * 1024
+	}
+	if fileCfg.MaxBackups != nil {
+		result.MaxBackups = *fileCfg.MaxBackups
+	}
+	if fileCfg.MaxAgeDays != nil {
+		result.MaxAgeDays = *fileCfg.MaxAgeDays
 	}
 	return result
 }

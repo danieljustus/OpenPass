@@ -55,9 +55,9 @@ jobs:
         with:
           scan-args: >-
             --lockfile=go.mod
+            --severity=HIGH
             --format=sarif
             --output=osv-results.sarif
-        continue-on-error: true
 
       - name: Upload OSV SARIF to GitHub Security tab
         if: always()
@@ -80,6 +80,15 @@ jobs:
           go-version: '1.26'
           cache: true
 
+      - name: Cache Go build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
+
       - name: Check formatting
         run: make fmt-check
 
@@ -92,7 +101,7 @@ jobs:
 
       - name: Run gosec SAST scanner
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.21.4
           gosec -fmt sarif -out gosec.sarif ./...
 
       - name: Upload gosec SARIF report
@@ -111,9 +120,10 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
         go-version: ['1.26']
     steps:
       - name: Checkout code
@@ -125,15 +135,30 @@ jobs:
           go-version: ${{ matrix.go-version }}
           cache: true
 
+      - name: Cache Go build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
+
       - name: Install dependencies
         run: |
           go mod download
 
       - name: Run tests
-        # GOWORK=off validates the release path without local workspace replacements
-        run: GOWORK=off go test -v -race -timeout=30m -coverprofile=coverage.out ./...
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+            GOWORK=off go test -v -race -timeout=30m -coverprofile=coverage.out ./...
+          else
+            GOWORK=off go test -v -timeout=30m ./...
+          fi
 
       - name: Verify release dependency graph
+        if: matrix.os == 'ubuntu-latest'
         run: |
           clipboard_dir="$(GOWORK=off go list -f '{{ .Dir }}' github.com/atotto/clipboard)"
           clipboard_version="$(GOWORK=off go list -m -f '{{ .Version }}' github.com/atotto/clipboard)"
@@ -149,6 +174,7 @@ jobs:
           esac
 
       - name: Check coverage threshold
+        if: matrix.os == 'ubuntu-latest'
         run: |
           COVERAGE_THRESHOLD=75
           echo "Checking coverage threshold: ${COVERAGE_THRESHOLD}%"
@@ -166,9 +192,11 @@ jobs:
         run: GOWORK=off go test -v -timeout=15m -tags smoke ./...
 
       - name: Generate coverage report
+        if: matrix.os == 'ubuntu-latest'
         run: go tool cover -html=coverage.out -o coverage.html
 
       - name: Upload coverage artifact
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v7
         with:
           name: coverage-report
@@ -210,6 +238,15 @@ jobs:
           go-version: '1.26'
           cache: true
 
+      - name: Cache Go build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-${{ matrix.goos }}-${{ matrix.goarch }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.goos }}-${{ matrix.goarch }}-go-
+
       - name: Build binary
         env:
           GOOS: ${{ matrix.goos }}
@@ -242,6 +279,15 @@ jobs:
           go-version: '1.26'
           cache: true
 
+      - name: Cache Go build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
+
       - name: Install dependencies
         run: |
           go mod download
@@ -256,6 +302,37 @@ jobs:
           # Run tests with longer timeout for integration tests
           # GOWORK=off validates the release path without local workspace replacements
           GOWORK=off go test -v -timeout=10m ./... -run Integration 2>&1
+        env:
+          CI: true
+
+  test-flow:
+    name: Flow Tests (no -short)
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Cache Go build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run flow tests
+        run: GOWORK=off go test -v -timeout=30m ./cmd/... -run 'TestFlow|TestBinaryE2E|TestServe_RunE_StdioWithAgent'
         env:
           CI: true
 

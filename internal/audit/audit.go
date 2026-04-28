@@ -28,36 +28,44 @@ const (
 	envMaxAgeDays = "OPENPASS_AUDIT_MAX_AGE_DAYS"
 )
 
-// AuditConfig holds the configuration for audit log rotation.
-// These values are set at package initialization from environment variables.
-type AuditConfig struct {
-	// MaxFileSize is the maximum size of a single audit log file before rotation.
+// Config holds the configuration for audit log rotation.
+type Config struct {
 	MaxFileSize int64
-
-	// MaxBackups is the maximum number of rotated backup files to retain.
-	MaxBackups int
-
-	// MaxAgeDays is the maximum age of a rotated backup file in days before deletion.
-	MaxAgeDays int
+	MaxBackups  int
+	MaxAgeDays  int
 }
 
 // config holds the parsed audit configuration.
-var config = parseAuditConfig()
+var config = parseAuditConfig(nil)
+
+// SetConfig overrides the global audit configuration with values from config.yaml.
+// Environment variables still take precedence over config file values.
+func SetConfig(cfg *Config) {
+	config = parseAuditConfig(cfg)
+}
 
 // ReloadConfig re-parses configuration from environment variables.
 // Exported for testing purposes.
 func ReloadConfig() {
-	config = parseAuditConfig()
+	config = parseAuditConfig(nil)
 }
 
-func parseAuditConfig() AuditConfig {
-	cfg := AuditConfig{
-		// Default: 100MB per the task requirement
+// GetConfig returns the current audit configuration.
+func GetConfig() Config {
+	return config
+}
+
+func parseAuditConfig(base *Config) Config {
+	cfg := Config{
 		MaxFileSize: 100 * 1024 * 1024,
-		// Default: 5 backups per the task requirement
-		MaxBackups: 5,
-		// Default: 30 days per the task requirement
-		MaxAgeDays: 30,
+		MaxBackups:  5,
+		MaxAgeDays:  30,
+	}
+
+	if base != nil {
+		cfg.MaxFileSize = base.MaxFileSize
+		cfg.MaxBackups = base.MaxBackups
+		cfg.MaxAgeDays = base.MaxAgeDays
 	}
 
 	if val := os.Getenv(envMaxSizeMB); val != "" {
@@ -79,11 +87,6 @@ func parseAuditConfig() AuditConfig {
 	}
 
 	return cfg
-}
-
-// GetConfig returns the current audit configuration.
-func GetConfig() AuditConfig {
-	return config
 }
 
 // HealthStatus represents the health status of audit logging.
@@ -129,7 +132,7 @@ type Logger struct {
 	mu        sync.Mutex
 }
 
-func New(agentName string) (*Logger, error) {
+func New(agentName string, vaultDir string) (*Logger, error) {
 	if strings.Contains(agentName, "/") || strings.Contains(agentName, "\\") || agentName == ".." || agentName == "." {
 		return nil, errors.New("agent name must not contain path separators or traversal patterns")
 	}
@@ -137,28 +140,35 @@ func New(agentName string) (*Logger, error) {
 		return nil, errors.New("agent name must not contain path traversal patterns")
 	}
 
-	home := os.Getenv("HOME")
-	if home == "" {
-		resolved, err := os.UserHomeDir()
-		if err != nil {
-			return nil, err
+	var auditDir string
+	if vaultDir != "" {
+		cleanVaultDir := filepath.Clean(vaultDir)
+		info, err := os.Stat(cleanVaultDir)
+		if err != nil || !info.IsDir() {
+			return nil, fmt.Errorf("vault directory does not exist: %s", cleanVaultDir)
 		}
-		home = resolved
+		auditDir = cleanVaultDir
+	} else {
+		home := os.Getenv("HOME")
+		if home == "" {
+			resolved, err := os.UserHomeDir()
+			if err != nil {
+				return nil, err
+			}
+			home = resolved
+		}
+		cleanHome := filepath.Clean(home)
+		auditDir = filepath.Join(cleanHome, defaultDirName)
 	}
 
-	cleanHome := filepath.Clean(home)
-	auditDir := filepath.Join(cleanHome, defaultDirName)
 	cleanAuditDir := filepath.Clean(auditDir)
-	if !strings.HasPrefix(cleanAuditDir, cleanHome+string(filepath.Separator)) {
-		return nil, errors.New("invalid audit directory path")
-	}
 	if err := os.MkdirAll(cleanAuditDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create audit dir: %w", err)
 	}
 
 	path := filepath.Join(cleanAuditDir, fmt.Sprintf(defaultFileNamePattern, agentName))
 	cleanPath := filepath.Clean(path)
-	if !strings.HasPrefix(cleanPath, cleanAuditDir+string(filepath.Separator)) {
+	if !strings.HasPrefix(cleanPath, cleanAuditDir+string(filepath.Separator)) && cleanPath != cleanAuditDir {
 		return nil, errors.New("agent name resulted in path outside audit directory")
 	}
 

@@ -12,6 +12,7 @@ import (
 	"golang.org/x/term"
 
 	configpkg "github.com/danieljustus/OpenPass/internal/config"
+	cryptopkg "github.com/danieljustus/OpenPass/internal/crypto"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/session"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
@@ -177,6 +178,10 @@ func unlockVaultWithTTL(vaultDir string, interactive bool, ttlOverride time.Dura
 			return nil, 0, errorspkg.NewCLIError(errorspkg.ExitLocked, "read passphrase", readErr)
 		}
 	}
+	defer func() {
+		// Overwrite passphrase in memory after use
+		cryptopkg.Wipe([]byte(passphrase))
+	}()
 
 	v, err := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	if err != nil {

@@ -27,6 +27,7 @@ type Config struct {
 	MCP            *MCPConfig              `yaml:"mcp,omitempty"`
 	Update         *UpdateConfig           `yaml:"update,omitempty"`
 	Clipboard      *ClipboardConfig        `yaml:"clipboard,omitempty"`
+	Audit          *AuditConfig            `yaml:"audit,omitempty"`
 	VaultDir       string                  `yaml:"vaultDir"`
 	DefaultAgent   string                  `yaml:"defaultAgent"`
 	SessionTimeout time.Duration           `yaml:"sessionTimeout"`
@@ -40,6 +41,7 @@ type fileConfig struct {
 	MCP            *fileMCPConfig              `yaml:"mcp,omitempty"`
 	Update         *fileUpdateConfig           `yaml:"update,omitempty"`
 	Clipboard      *fileClipboardConfig        `yaml:"clipboard,omitempty"`
+	Audit          *fileAuditConfig            `yaml:"audit,omitempty"`
 	VaultDir       string                      `yaml:"vaultDir,omitempty"`
 	DefaultAgent   string                      `yaml:"defaultAgent,omitempty"`
 	SessionTimeout time.Duration               `yaml:"sessionTimeout,omitempty"`
@@ -200,6 +202,11 @@ func Load(path string) (*Config, error) {
 		merged := MergeFileClipboardConfig(raw.Clipboard, defaults)
 		cfg.Clipboard = &merged
 	}
+	if raw.Audit != nil {
+		defaults := defaultAuditConfig()
+		merged := MergeFileAuditConfig(raw.Audit, defaults)
+		cfg.Audit = &merged
+	}
 
 	if cfg.MCP != nil && cfg.MCP.Bind == "" {
 		return nil, fmt.Errorf("mcp.bind must not be empty")
@@ -280,6 +287,16 @@ func (c *Config) Save() error {
 		autoClear := c.Clipboard.AutoClearDuration
 		raw.Clipboard = &fileClipboardConfig{
 			AutoClearDuration: &autoClear,
+		}
+	}
+	if c.Audit != nil {
+		maxFileSize := c.Audit.MaxFileSize / (1024 * 1024)
+		maxBackups := c.Audit.MaxBackups
+		maxAgeDays := c.Audit.MaxAgeDays
+		raw.Audit = &fileAuditConfig{
+			MaxFileSize: &maxFileSize,
+			MaxBackups:  &maxBackups,
+			MaxAgeDays:  &maxAgeDays,
 		}
 	}
 	for name, profile := range c.Agents {

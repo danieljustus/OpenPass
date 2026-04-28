@@ -121,7 +121,7 @@ chmod 600 ~/.openpass/identity.age
 
 #### Metrics Endpoint
 
-The `/metrics` endpoint exposes Prometheus-format metrics.
+The `/metrics` endpoint exposes Prometheus-format metrics for **local monitoring only**. This is not outbound telemetry — metrics are served on-request to local monitoring tools and never transmitted to external services.
 
 - On loopback binds (`127.0.0.1`, `::1`, `localhost`), `/metrics` is accessible without authentication
 - On non-loopback binds, `/metrics` requires bearer token authentication by default
@@ -290,6 +290,7 @@ As a password manager handling highly sensitive credentials, we believe telemetr
 - **No in-app analytics**: We don't track user behavior, command usage, or feature adoption
 - **No error reporting services**: User errors stay local; no data exfiltration to third parties
 - **No network phoning home**: OpenPass operates entirely offline after installation
+- **Local metrics only**: The `/metrics` endpoint serves Prometheus metrics locally on request; no metrics are pushed or transmitted to external services
 
 ### What Stays Local
 

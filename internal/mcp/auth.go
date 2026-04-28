@@ -20,14 +20,6 @@ type contextKey string
 
 const agentContextKey contextKey = "openpass-agent"
 
-var authAuditLogger *audit.Logger
-
-func init() {
-	if l, err := audit.New("auth-failures"); err == nil {
-		authAuditLogger = l
-	}
-}
-
 type RateLimiter struct {
 	attempts       map[string]*rateLimitEntry
 	mu             sync.Mutex
@@ -148,11 +140,11 @@ func RateLimiterMiddleware(rl *RateLimiter, next http.Handler) http.Handler {
 	})
 }
 
-func logAuthFailure(r *http.Request, reason, detail string) {
-	if authAuditLogger == nil {
+func logAuthFailure(logger *audit.Logger, r *http.Request, reason, detail string) {
+	if logger == nil {
 		return
 	}
-	authAuditLogger.LogEntry(audit.LogEntry{
+	logger.LogEntry(audit.LogEntry{
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Agent:     r.Header.Get("X-OpenPass-Agent"),
 		Action:    "auth_failure",
@@ -216,22 +208,22 @@ func isTrustedProxy(remoteAddr string, trustedProxies []string) bool {
 	return false
 }
 
-func BearerAuthMiddleware(token string, next http.Handler) http.Handler {
+func BearerAuthMiddleware(token string, auditLog *audit.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if token == "" {
-			logAuthFailure(r, "missing_token", "token not configured")
+			logAuthFailure(auditLog, r, "missing_token", "token not configured")
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		auth := r.Header.Get("Authorization")
 		if !strings.HasPrefix(auth, "Bearer ") {
-			logAuthFailure(r, "missing_bearer", "authorization header missing or malformed")
+			logAuthFailure(auditLog, r, "missing_bearer", "authorization header missing or malformed")
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		provided := strings.TrimPrefix(auth, "Bearer ")
 		if subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
-			logAuthFailure(r, "invalid_token", "token mismatch")
+			logAuthFailure(auditLog, r, "invalid_token", "token mismatch")
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -281,31 +273,6 @@ func isAllowedOrigin(origin string, requestHost string, serverAddr string) bool 
 		return true
 	}
 	return isLoopbackHost(originHost) && (isLoopbackHost(reqHost) || isLoopbackHost(bindHost))
-}
-
-func stripPort(hostport string) string {
-	hostport = strings.TrimSpace(hostport)
-	if hostport == "" {
-		return ""
-	}
-	if host, _, err := net.SplitHostPort(hostport); err == nil {
-		return host
-	}
-	if strings.Count(hostport, ":") == 1 {
-		if host, _, ok := strings.Cut(hostport, ":"); ok {
-			return host
-		}
-	}
-	return strings.Trim(hostport, "[]")
-}
-
-func isLoopbackHost(host string) bool {
-	host = strings.Trim(strings.ToLower(host), "[]")
-	if host == "localhost" {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
 }
 
 func AgentFromContext(ctx context.Context) string {

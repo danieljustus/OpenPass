@@ -645,8 +645,9 @@ func TestCmdServe_MissingAgentInStdioMode(t *testing.T) {
 // TestServe_RunE_StdioWithAgent is skipped because stdio mode requires
 // proper JSON-RPC message handling which is difficult to test in isolation.
 // The runStdioServer function itself is tested via integration tests.
+// TODO(#42): Implement stdio transport unit test with mock JSON-RPC stdin/stdout.
 func TestServe_RunE_StdioWithAgent(t *testing.T) {
-	t.Skip("stdio transport requires proper JSON-RPC message handling - tested via integration")
+	t.Skip("TODO(#42): stdio transport requires mock JSON-RPC stdin/stdout — covered by integration tests")
 }
 
 func TestServe_RunE_HTTPWithAgent(t *testing.T) {

@@ -188,6 +188,19 @@ nfpms:
     priority: optional
 
 
+sboms:
+  - artifacts: archive
+    documents:
+      - "${artifact}.sbom.json"
+    cmd: syft
+    args: ["$artifact", "--output", "cyclonedx-json=$document"]
+
+signs:
+  - cmd: cosign
+    certificate: "${artifact}.pem"
+    args: ["sign-blob", "--oidc-issuer=https://token.actions.githubusercontent.com", "--output-certificate=${certificate}", "--output-signature=${signature}", "${artifact}"]
+    artifacts: all
+
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
 

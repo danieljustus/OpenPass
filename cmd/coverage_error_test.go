@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -9,7 +10,6 @@ import (
 	"time"
 
 	"github.com/danieljustus/OpenPass/internal/config"
-	"github.com/danieljustus/OpenPass/internal/mcp"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -948,11 +948,11 @@ func TestServe_StdioError(t *testing.T) {
 
 	port := findFreePort(t)
 
-	origNew := mcpFactory.New
-	mcpFactory.New = func(_ *vaultpkg.Vault, _ string, _ string) (*mcp.Server, error) {
-		return nil, fmt.Errorf("mock stdio error")
+	origRunStdio := runStdioServerFunc
+	runStdioServerFunc = func(_ context.Context, _ *vaultpkg.Vault, _ string) error {
+		return fmt.Errorf("mock stdio error")
 	}
-	defer func() { mcpFactory.New = origNew }()
+	defer func() { runStdioServerFunc = origRunStdio }()
 
 	rootCmd.SetArgs([]string{"--vault", tmpDir, "serve", "--stdio", "--agent", "test-agent", "--port", fmt.Sprintf("%d", port)})
 	defer rootCmd.SetArgs(nil)

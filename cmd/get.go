@@ -10,7 +10,7 @@ import (
 	"github.com/atotto/clipboard"
 	"github.com/spf13/cobra"
 
-	clipboardpkg "github.com/danieljustus/OpenPass/internal/clipboard"
+	clipboardapp "github.com/danieljustus/OpenPass/internal/clipboard"
 	configpkg "github.com/danieljustus/OpenPass/internal/config"
 	vaultcrypto "github.com/danieljustus/OpenPass/internal/crypto"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
@@ -113,10 +113,10 @@ var getCmd = &cobra.Command{
 				autoClearDuration := getAutoClearDuration()
 				if autoClearDuration > 0 {
 					cancelCh := make(chan struct{})
-					go clipboardpkg.Countdown(autoClearDuration, func(remaining int) {
+					go clipboardapp.Countdown(autoClearDuration, func(remaining int) {
 						fmt.Fprintf(os.Stderr, "\r[clearing clipboard in %ds] ", remaining)
 					}, cancelCh)
-					go clipboardpkg.StartAutoClear(autoClearDuration, func() {
+					go clipboardapp.StartAutoClear(autoClearDuration, func() {
 						close(cancelCh)
 						if err := getClipboardWriteAll(""); err != nil {
 							fmt.Fprintf(os.Stderr, "Warning: failed to clear clipboard: %v\n", err)
