@@ -27,9 +27,13 @@ func runBin(t *testing.T, binPath string, env []string, stdin string, args ...st
 	if stdin != "" {
 		cmd.Stdin = strings.NewReader(stdin)
 	}
-	output, err := cmd.CombinedOutput()
+	output, err := cmd.Output()
 	if err != nil {
-		t.Fatalf("%s: %v\n%s", strings.Join(args, " "), err, output)
+		stderr := ""
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderr = string(exitErr.Stderr)
+		}
+		t.Fatalf("%s: %v\nstdout: %s\nstderr: %s", strings.Join(args, " "), err, output, stderr)
 	}
 	return string(output)
 }

@@ -3,6 +3,7 @@
 package session
 
 import (
+	"errors"
 	"log"
 	"sync"
 
@@ -51,7 +52,7 @@ func getWithFallback(service, account string) (string, error) {
 
 	val, err := keyring.Get(service, account)
 	if err != nil {
-		if err == keyring.ErrNotFound {
+		if errors.Is(err, keyring.ErrNotFound) {
 			return "", err
 		}
 		return getFallback().Get(service, account)
@@ -65,7 +66,7 @@ func deleteWithFallback(service, account string) error {
 	}
 
 	if err := keyring.Delete(service, account); err != nil {
-		if err == keyring.ErrNotFound {
+		if errors.Is(err, keyring.ErrNotFound) {
 			return nil
 		}
 		return getFallback().Delete(service, account)
