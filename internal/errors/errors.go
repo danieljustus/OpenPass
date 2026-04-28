@@ -15,14 +15,25 @@ const (
 	ExitSuccess ExitCode = 0
 	// ExitGeneralError indicates a general error.
 	ExitGeneralError ExitCode = 1
-	// ExitUsageError indicates a command-line usage error.
-	ExitUsageError ExitCode = 2
-	// ExitVaultLocked indicates the vault is locked or passphrase is missing.
-	ExitVaultLocked ExitCode = 3
+	// ExitNotFound indicates the requested entry was not found.
+	ExitNotFound ExitCode = 2
 	// ExitNotInitialized indicates the vault is not initialized.
-	ExitNotInitialized ExitCode = 4
-	// ExitMCPError indicates an MCP server error.
-	ExitMCPError ExitCode = 5
+	ExitNotInitialized ExitCode = 3
+	// ExitLocked indicates the vault is locked or passphrase is missing.
+	ExitLocked ExitCode = 4
+	// ExitPermissionDenied indicates a permission denied error.
+	ExitPermissionDenied ExitCode = 5
+)
+
+var (
+	// ErrEntryNotFound is returned when a requested entry does not exist.
+	ErrEntryNotFound = errors.New("entry not found")
+	// ErrVaultNotInitialized is returned when the vault has not been initialized.
+	ErrVaultNotInitialized = errors.New("vault not initialized")
+	// ErrVaultLocked is returned when the vault is locked or passphrase is missing.
+	ErrVaultLocked = errors.New("vault locked")
+	// ErrPermissionDenied is returned when an operation is not permitted.
+	ErrPermissionDenied = errors.New("permission denied")
 )
 
 // CLIError is a structured error with an exit code and user-friendly message.
@@ -55,11 +66,23 @@ func NewCLIError(code ExitCode, msg string, cause error) *CLIError {
 }
 
 // ExitCodeFromError extracts the exit code from an error.
-// If the error is a *CLIError, it returns the embedded code.
-// Otherwise, it returns ExitGeneralError.
+// It checks typed sentinel errors first, then falls back to *CLIError.
+// If neither matches, it returns ExitGeneralError.
 func ExitCodeFromError(err error) ExitCode {
 	if err == nil {
 		return ExitSuccess
+	}
+	if errors.Is(err, ErrEntryNotFound) {
+		return ExitNotFound
+	}
+	if errors.Is(err, ErrVaultNotInitialized) {
+		return ExitNotInitialized
+	}
+	if errors.Is(err, ErrVaultLocked) {
+		return ExitLocked
+	}
+	if errors.Is(err, ErrPermissionDenied) {
+		return ExitPermissionDenied
 	}
 	var cliErr *CLIError
 	if errors.As(err, &cliErr) {
