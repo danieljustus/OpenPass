@@ -160,6 +160,11 @@ func TestVaultSessionCaching_Integration(t *testing.T) {
 	if err := session.SavePassphrase(probeDir, "probe", time.Second); err != nil {
 		t.Skipf("OS keyring not available in test environment: %v", err)
 	}
+	// Verify the keyring can also load back what was saved; some CI
+	// environments allow writes but reads return ErrNotFound.
+	if _, err := session.LoadPassphrase(probeDir); err != nil {
+		t.Skipf("OS keyring inconsistent in test environment: %v", err)
+	}
 	_ = session.ClearSession(probeDir)
 
 	vaultDir := t.TempDir()
