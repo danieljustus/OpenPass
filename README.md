@@ -127,7 +127,7 @@ mv openpass ~/bin/
 
 **Notes:**
 - **Windows arm64**: Requires Windows 11 on ARM or Windows 10 on ARM. The PowerShell installer auto-detects architecture.
-- **FreeBSD**: Prebuilt binaries are compiled with `CGO_ENABLED=0`, which disables OS keyring integration entirely (`zalando/go-keyring` requires CGO on FreeBSD). Session caching is unavailable; you must enter your passphrase for every command. Building from source with `CGO_ENABLED=1` may enable keyring support if a D-Bus secret service is installed.
+- **FreeBSD**: Prebuilt binaries are compiled with `CGO_ENABLED=0`, which disables OS keyring integration (`zalando/go-keyring` requires CGO on FreeBSD). Instead, OpenPass uses an **in-memory encrypted session cache** (AES-256-GCM) with a 15-minute TTL. The passphrase is cached in process memory and expires after the TTL or when you run `openpass lock`. This is less secure than the OS keyring but enables session caching without CGO. Building from source with `CGO_ENABLED=1` may enable native keyring support if a D-Bus secret service is installed.
 - All binaries are built with `CGO_ENABLED=0` for consistent cross-compilation.
 
 ## Quick Start

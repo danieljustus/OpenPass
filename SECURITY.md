@@ -72,6 +72,24 @@ On macOS, use `shasum -a 256 --check OpenPass_VERSION_checksums.txt` if
 
 ## Security-Related Configuration
 
+### Update Checker TLS Configuration
+
+The `openpass update check` command queries the GitHub API for the latest release.
+All outbound HTTPS connections from the update checker enforce **TLS 1.3** as the
+minimum protocol version. Connections to servers that do not support TLS 1.3
+will be rejected.
+
+TLS certificate verification errors produce a user-friendly error message:
+
+```
+update check failed: TLS certificate verification error - ...
+```
+
+This ensures that:
+- Downgrade attacks to TLS 1.2 or earlier are prevented
+- Certificate validation failures are clearly communicated
+- The update channel cannot be intercepted by malicious endpoints with weak TLS configurations
+
 ### Vault Permissions
 
 Ensure your vault directory has appropriate access controls:

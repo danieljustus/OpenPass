@@ -12,7 +12,7 @@ OpenPass is distributed through multiple channels to support different platforms
 | FreeBSD | amd64, arm64 | tar.gz |
 
 **Notes:**
-- **FreeBSD**: Prebuilt binaries are built with `CGO_ENABLED=0`, which disables OS keyring integration. Session caching is unavailable; see [docs/troubleshooting.md](troubleshooting.md#freebsd) for workarounds.
+- **FreeBSD**: Prebuilt binaries are built with `CGO_ENABLED=0`, which disables OS keyring integration. Instead, OpenPass uses an in-memory encrypted session cache (AES-256-GCM) with a 15-minute TTL. See [docs/troubleshooting.md](troubleshooting.md#freebsd) for details.
 
 ## First-Class Channels
 

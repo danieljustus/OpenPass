@@ -275,31 +275,40 @@ ls -la ~/.openpass/
 
 ### FreeBSD
 
-**Session caching is unavailable in prebuilt binaries:**
+**Session caching uses in-memory fallback in prebuilt binaries:**
 
-OpenPass release binaries (including those from GitHub Releases and `go install`) are built with `CGO_ENABLED=0`. On FreeBSD, the `zalando/go-keyring` dependency requires CGO to access the D-Bus Secret Service API. When CGO is disabled, the keyring library compiles a fallback provider that returns `ErrUnsupportedPlatform` for all operations.
+OpenPass release binaries (including those from GitHub Releases and `go install`) are built with `CGO_ENABLED=0`. On FreeBSD, the `zalando/go-keyring` dependency requires CGO to access the D-Bus Secret Service API. When CGO is disabled, OpenPass falls back to an **in-memory encrypted session cache**.
 
-**Verified behavior:**
+**Behavior:**
 
-- **`openpass unlock` fails** after passphrase entry. The vault decrypts successfully, but `session.SavePassphrase()` returns `unsupported platform: freebsd`, causing the command to exit with an error.
-- **`openpass lock` fails** with the same `unsupported platform: freebsd` error.
-- **There is no memory-only fallback.** The codebase does not implement an in-memory session cache; it delegates entirely to the OS keyring.
-- **Every vault command will prompt for the passphrase** (or require `OPENPASS_PASSPHRASE`) because the session cannot be persisted.
+- **`openpass unlock`** caches the passphrase in process memory (encrypted with AES-256-GCM)
+- **Subsequent commands** use the cached passphrase without prompting (within the TTL period)
+- **Cache TTL** defaults to 15 minutes; override with `--ttl` flag or config
+- **`openpass lock`** clears the in-memory cache and securely zeroes the memory
+- **Process exit** clears all cached sessions automatically
+
+**Security note:** The in-memory cache is less secure than the OS keyring because:
+- Sessions exist in process memory (not in a separate keyring process)
+- Memory could potentially be read by other processes with the same user privileges (e.g., via `/proc/<pid>/mem` on systems where it is accessible, or via debuggers)
+- No system-level access control beyond standard Unix permissions
+
+For higher security, build from source with CGO enabled to use the native OS keyring.
 
 **User impact:**
 
 | Scenario | Behavior |
 |----------|----------|
-| `openpass unlock` | Errors after passphrase entry; vault is decrypted but session is not saved |
-| `openpass lock` | Errors because session cannot be cleared from the (non-functional) keyring |
-| `openpass get <entry>` | Prompts for passphrase on every invocation |
-| MCP server | Prompts for passphrase on every start (stdio mode) or requires `OPENPASS_PASSPHRASE` |
+| `openpass unlock` | Caches passphrase in memory; prompts again after TTL expires |
+| `openpass lock` | Clears cached passphrase from memory |
+| `openpass get <entry>` | Uses cached passphrase if within TTL; prompts otherwise |
+| MCP server | Uses cached passphrase across requests while process is running |
 
-**Workarounds:**
+**Options:**
 
-1. **Use `OPENPASS_PASSPHRASE`** (less secure, visible in `ps` and `/proc/<pid>/environ`):
+1. **Use the prebuilt binary with in-memory cache** (default, works out of the box):
    ```bash
-   OPENPASS_PASSPHRASE="your-passphrase" openpass get github.password
+   openpass unlock
+   openpass get github.password  # uses cached passphrase
    ```
 
 2. **Build from source with CGO enabled** (requires a FreeBSD desktop environment with D-Bus and a Secret Service provider such as GNOME Keyring or KWallet):
@@ -309,7 +318,7 @@ OpenPass release binaries (including those from GitHub Releases and `go install`
 
 **Verification status:**
 
-This behavior was determined by code inspection of `github.com/zalando/go-keyring@v0.2.8` (build tag `(freebsd && cgo)` in `keyring_unix.go`) and OpenPass `.goreleaser.yml` (`CGO_ENABLED=0`). We do not have a physical FreeBSD environment to test runtime behavior; if you observe different behavior on FreeBSD, please open an issue.
+The in-memory fallback is implemented in `internal/session/memory.go` (build tag `//go:build !cgo`). We do not have a physical FreeBSD environment to test runtime behavior; if you observe different behavior on FreeBSD, please open an issue.
 
 ### Windows
 
