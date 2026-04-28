@@ -196,26 +196,8 @@ Examples:
 			}
 		}
 
-		if totpData, ok := data["totp"].(map[string]any); ok {
-			if secret, ok := totpData["secret"].(string); ok && secret != "" {
-				if err := crypto.ValidateTOTPSecret(secret); err != nil {
-					return err
-				}
-			}
-			var algo string
-			var digits, period int
-			if a, ok := totpData["algorithm"].(string); ok {
-				algo = a
-			}
-			if d, ok := totpData["digits"].(float64); ok {
-				digits = int(d)
-			}
-			if p, ok := totpData["period"].(float64); ok {
-				period = int(p)
-			}
-			if err := crypto.ValidateTOTPParams(algo, digits, period); err != nil {
-				return fmt.Errorf("invalid TOTP: %w", err)
-			}
+		if err := crypto.ValidateTOTPData(data); err != nil {
+			return err
 		}
 
 		entry := &vaultpkg.Entry{

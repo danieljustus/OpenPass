@@ -127,26 +127,8 @@ var setCmd = &cobra.Command{
 			data["totp"] = totpData
 		}
 
-		if totpData, ok := data["totp"].(map[string]any); ok {
-			if secret, ok := totpData["secret"].(string); ok && secret != "" {
-				if err := crypto.ValidateTOTPSecret(secret); err != nil {
-					return err
-				}
-			}
-			var algo string
-			var digits, period int
-			if a, ok := totpData["algorithm"].(string); ok {
-				algo = a
-			}
-			if d, ok := totpData["digits"].(float64); ok {
-				digits = int(d)
-			}
-			if p, ok := totpData["period"].(float64); ok {
-				period = int(p)
-			}
-			if err := crypto.ValidateTOTPParams(algo, digits, period); err != nil {
-				return fmt.Errorf("invalid TOTP: %w", err)
-			}
+		if err := crypto.ValidateTOTPData(data); err != nil {
+			return err
 		}
 
 		existing, readErr := vaultpkg.ReadEntry(v.Dir, path, v.Identity)
@@ -156,7 +138,14 @@ var setCmd = &cobra.Command{
 				return fmt.Errorf("cannot write entry: %w", err)
 			}
 		} else {
-			entry := &vaultpkg.Entry{Data: data, Metadata: vaultpkg.EntryMetadata{Created: time.Now().UTC(), Updated: time.Now().UTC(), Version: 0}}
+			entry := &vaultpkg.Entry{
+				Data: data,
+				Metadata: vaultpkg.EntryMetadata{
+					Created: time.Now().UTC(),
+					Updated: time.Now().UTC(),
+					Version: 0,
+				},
+			}
 			if err := vaultpkg.WriteEntryWithRecipients(v.Dir, entryPath, entry, v.Identity); err != nil {
 				return fmt.Errorf("cannot write entry: %w", err)
 			}

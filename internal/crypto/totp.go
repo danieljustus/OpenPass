@@ -84,6 +84,32 @@ func ValidateTOTPParams(algorithm string, digits, period int) error {
 	return nil
 }
 
+// ValidateTOTPData extracts and validates TOTP configuration from entry data.
+func ValidateTOTPData(data map[string]any) error {
+	if totpData, ok := data["totp"].(map[string]any); ok {
+		if secret, ok := totpData["secret"].(string); ok && secret != "" {
+			if err := ValidateTOTPSecret(secret); err != nil {
+				return err
+			}
+		}
+		var algo string
+		var digits, period int
+		if a, ok := totpData["algorithm"].(string); ok {
+			algo = a
+		}
+		if d, ok := totpData["digits"].(float64); ok {
+			digits = int(d)
+		}
+		if p, ok := totpData["period"].(float64); ok {
+			period = int(p)
+		}
+		if err := ValidateTOTPParams(algo, digits, period); err != nil {
+			return fmt.Errorf("invalid TOTP: %w", err)
+		}
+	}
+	return nil
+}
+
 // GenerateTOTP generates a TOTP code from the given secret and configuration
 // This is a standard TOTP implementation per RFC 6238
 func GenerateTOTP(secret string, algorithm string, digits int, period int) (*TOTPCode, error) {

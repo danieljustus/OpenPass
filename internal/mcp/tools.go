@@ -210,7 +210,7 @@ func (s *Server) handleSet(ctx context.Context, req CallToolRequest) (*CallToolR
 			period = int(p)
 		}
 		if err := crypto.ValidateTOTPParams(algo, digits, period); err != nil {
-			return NewToolResultError(fmt.Sprintf("invalid TOTP: %v", err)), nil
+			return NewToolResultError(fmt.Errorf("invalid TOTP: %w", err).Error()), nil
 		}
 		partialData[field] = totpData
 	} else {

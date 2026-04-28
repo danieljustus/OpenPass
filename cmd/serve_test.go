@@ -797,13 +797,26 @@ func TestServeCommand_StdioOnlyDoesNotStartHTTP(t *testing.T) {
 	}
 }
 
-func TestServeCommand_ActiveSessionUsesNonInteractiveUnlock(t *testing.T) {
+// setupServeCommandTest prepares the common test infrastructure for serve command
+// session tests. It returns the vault directory and a cleanup function that must
+// be deferred by the caller.
+func setupServeCommandTest(t *testing.T) (vaultDir string, cleanup func()) {
+	t.Helper()
 	resetCommandTestState()
 	t.Cleanup(resetCommandTestState)
-
 	vaultDir, passphrase := initVault(t)
 	setPassEnv(t, passphrase)
-	defer setupVaultFlag(t, vaultDir)()
+	cleanup = setupVaultFlag(t, vaultDir)
+	runHTTPServerFunc = func(_ context.Context, _ string, _ int, _ *vaultpkg.Vault) error {
+		return nil
+	}
+	serveSignalNotify = func(_ chan<- os.Signal, _ ...os.Signal) {}
+	return vaultDir, cleanup
+}
+
+func TestServeCommand_ActiveSessionUsesNonInteractiveUnlock(t *testing.T) {
+	vaultDir, cleanup := setupServeCommandTest(t)
+	defer cleanup()
 
 	sessionIsExpired = func(string) bool { return false }
 	defer func() { sessionIsExpired = session.IsSessionExpired }()
@@ -813,11 +826,6 @@ func TestServeCommand_ActiveSessionUsesNonInteractiveUnlock(t *testing.T) {
 		unlockCalls = append(unlockCalls, interactive)
 		return &vaultpkg.Vault{}, nil
 	}
-
-	runHTTPServerFunc = func(_ context.Context, _ string, _ int, _ *vaultpkg.Vault) error {
-		return nil
-	}
-	serveSignalNotify = func(_ chan<- os.Signal, _ ...os.Signal) {}
 
 	rootCmd.SetArgs([]string{"--vault", vaultDir, "serve", "--port", "18080"})
 	defer rootCmd.SetArgs(nil)
@@ -835,12 +843,8 @@ func TestServeCommand_ActiveSessionUsesNonInteractiveUnlock(t *testing.T) {
 }
 
 func TestServeCommand_ExpiredSessionUsesInteractiveUnlock(t *testing.T) {
-	resetCommandTestState()
-	t.Cleanup(resetCommandTestState)
-
-	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
-	defer setupVaultFlag(t, vaultDir)()
+	vaultDir, cleanup := setupServeCommandTest(t)
+	defer cleanup()
 
 	sessionIsExpired = func(string) bool { return true }
 	defer func() { sessionIsExpired = session.IsSessionExpired }()
@@ -850,11 +854,6 @@ func TestServeCommand_ExpiredSessionUsesInteractiveUnlock(t *testing.T) {
 		unlockCalls = append(unlockCalls, interactive)
 		return nil, nil
 	}
-
-	runHTTPServerFunc = func(_ context.Context, _ string, _ int, _ *vaultpkg.Vault) error {
-		return nil
-	}
-	serveSignalNotify = func(_ chan<- os.Signal, _ ...os.Signal) {}
 
 	rootCmd.SetArgs([]string{"--vault", vaultDir, "serve", "--port", "18081"})
 	defer rootCmd.SetArgs(nil)
@@ -872,12 +871,8 @@ func TestServeCommand_ExpiredSessionUsesInteractiveUnlock(t *testing.T) {
 }
 
 func TestServeCommand_ActiveSessionFallbackToInteractive(t *testing.T) {
-	resetCommandTestState()
-	t.Cleanup(resetCommandTestState)
-
-	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
-	defer setupVaultFlag(t, vaultDir)()
+	vaultDir, cleanup := setupServeCommandTest(t)
+	defer cleanup()
 
 	sessionIsExpired = func(string) bool { return false }
 	defer func() { sessionIsExpired = session.IsSessionExpired }()
@@ -890,11 +885,6 @@ func TestServeCommand_ActiveSessionFallbackToInteractive(t *testing.T) {
 		}
 		return nil, nil
 	}
-
-	runHTTPServerFunc = func(_ context.Context, _ string, _ int, _ *vaultpkg.Vault) error {
-		return nil
-	}
-	serveSignalNotify = func(_ chan<- os.Signal, _ ...os.Signal) {}
 
 	rootCmd.SetArgs([]string{"--vault", vaultDir, "serve", "--port", "18082"})
 	defer rootCmd.SetArgs(nil)
