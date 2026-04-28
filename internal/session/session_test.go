@@ -867,15 +867,6 @@ func TestSavePassphrase_UpdatesLastAccessOnLoad(t *testing.T) {
 	}
 }
 
-type marshalingKeyring struct {
-	*fakeKeyring
-	marshalErr error
-}
-
-func (m *marshalingKeyring) set(service, account, value string) error {
-	return m.fakeKeyring.set(service, account, value)
-}
-
 func TestSavePassphrase_EncryptFails(t *testing.T) {
 	fake := newFakeKeyring()
 	stubKeyring(t, fake)

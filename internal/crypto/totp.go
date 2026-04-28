@@ -42,25 +42,10 @@ func ValidateTOTPSecret(secret string) error {
 		return fmt.Errorf("TOTP secret too short: minimum 16 bytes required (26 base32 characters)")
 	}
 
-	allSame := true
-	for i := 1; i < len(decoded); i++ {
-		if decoded[i] != decoded[0] {
-			allSame = false
-			break
-		}
-	}
-	if allSame {
+	if allBytesSame(decoded) {
 		return fmt.Errorf("TOTP secret is trivially weak: all bytes identical")
 	}
-
-	sequential := true
-	for i := 1; i < len(decoded); i++ {
-		if decoded[i] != decoded[i-1]+1 {
-			sequential = false
-			break
-		}
-	}
-	if sequential {
+	if bytesSequential(decoded) {
 		return fmt.Errorf("TOTP secret is trivially weak: bytes are sequential")
 	}
 
@@ -189,6 +174,24 @@ func GenerateTOTP(secret string, algorithm string, digits int, period int) (*TOT
 		ExpiresAt: expiresAt,
 		Period:    period,
 	}, nil
+}
+
+func allBytesSame(b []byte) bool {
+	for i := 1; i < len(b); i++ {
+		if b[i] != b[0] {
+			return false
+		}
+	}
+	return true
+}
+
+func bytesSequential(b []byte) bool {
+	for i := 1; i < len(b); i++ {
+		if b[i] != b[i-1]+1 {
+			return false
+		}
+	}
+	return true
 }
 
 // power10 returns 10^n

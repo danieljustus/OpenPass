@@ -18,6 +18,12 @@ func vaultDirFromService(service string) string {
 	return strings.TrimPrefix(service, "openpass:")
 }
 
+func zeroBytes(b []byte) {
+	for i := range b {
+		b[i] = 0
+	}
+}
+
 func (m *memoryKeyring) Set(service, account, value string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -49,9 +55,7 @@ func (m *memoryKeyring) Set(service, account, value string) error {
 	key := service + "|" + account
 
 	if old, ok := m.store[key]; ok {
-		for i := range old {
-			old[i] = 0
-		}
+		zeroBytes(old)
 	}
 
 	m.store[key] = append([]byte(nil), payload...)
@@ -80,9 +84,7 @@ func (m *memoryKeyring) Get(service, account string) (string, error) {
 	}
 
 	if sess.TTL <= 0 {
-		for i := range payload {
-			payload[i] = 0
-		}
+		zeroBytes(payload)
 		delete(m.store, key)
 		return "", fmt.Errorf("not found")
 	}
@@ -92,18 +94,14 @@ func (m *memoryKeyring) Get(service, account string) (string, error) {
 		lastActivity = sess.SavedAt
 	}
 	if time.Since(lastActivity) > time.Duration(sess.TTL) {
-		for i := range payload {
-			payload[i] = 0
-		}
+		zeroBytes(payload)
 		delete(m.store, key)
 		return "", fmt.Errorf("not found")
 	}
 
 	if sess.EncryptedPassphrase != "" && sess.Nonce != "" {
 		if _, err := decryptPassphrase(sess.EncryptedPassphrase, sess.Nonce, vaultDirFromService(service)); err != nil {
-			for i := range payload {
-				payload[i] = 0
-			}
+			zeroBytes(payload)
 			delete(m.store, key)
 			return "", fmt.Errorf("not found")
 		}
@@ -118,9 +116,7 @@ func (m *memoryKeyring) Get(service, account string) (string, error) {
 		return "", fmt.Errorf("not found")
 	}
 
-	for i := range payload {
-		payload[i] = 0
-	}
+	zeroBytes(payload)
 	m.store[key] = append([]byte(nil), newPayload...)
 
 	return string(newPayload), nil
@@ -136,9 +132,7 @@ func (m *memoryKeyring) Delete(service, account string) error {
 
 	key := service + "|" + account
 	if payload, ok := m.store[key]; ok {
-		for i := range payload {
-			payload[i] = 0
-		}
+		zeroBytes(payload)
 		delete(m.store, key)
 	}
 
