@@ -2,7 +2,10 @@ package update
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -11,6 +14,18 @@ import (
 )
 
 const DefaultLatestReleaseURL = "https://api.github.com/repos/danieljustus/OpenPass/releases/latest"
+
+// newSecureClient returns an HTTP client with TLS 1.3 minimum version.
+func newSecureClient() *http.Client {
+	return &http.Client{
+		Timeout: 3 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				MinVersion: tls.VersionTLS13,
+			},
+		},
+	}
+}
 
 type httpDoer interface {
 	Do(req *http.Request) (*http.Response, error)
@@ -45,7 +60,7 @@ type stableVersion struct {
 
 func NewChecker(client httpDoer) *Checker {
 	if client == nil {
-		client = &http.Client{Timeout: 3 * time.Second}
+		client = newSecureClient()
 	}
 
 	return &Checker{
@@ -117,7 +132,7 @@ func (c *Checker) fetchLatestRelease(ctx context.Context, currentVersion string)
 
 	client := c.HTTPClient
 	if client == nil {
-		client = &http.Client{Timeout: 3 * time.Second}
+		client = newSecureClient()
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -130,6 +145,9 @@ func (c *Checker) fetchLatestRelease(ctx context.Context, currentVersion string)
 
 	resp, err := client.Do(req)
 	if err != nil {
+		if isTLSCertificateError(err) {
+			return nil, fmt.Errorf("update check failed: TLS certificate verification error - %w", err)
+		}
 		return nil, fmt.Errorf("request latest release: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -157,6 +175,24 @@ func (c *Checker) fetchLatestRelease(ctx context.Context, currentVersion string)
 	}
 
 	return &release, nil
+}
+
+// isTLSCertificateError reports whether an error is caused by a TLS
+// certificate verification failure.
+func isTLSCertificateError(err error) bool {
+	var certErr *x509.CertificateInvalidError
+	if errors.As(err, &certErr) {
+		return true
+	}
+	var hostnameErr x509.HostnameError
+	if errors.As(err, &hostnameErr) {
+		return true
+	}
+	var unknownAuthorityErr x509.UnknownAuthorityError
+	if errors.As(err, &unknownAuthorityErr) {
+		return true
+	}
+	return false
 }
 
 func parseStableVersion(raw string) (stableVersion, bool) {
