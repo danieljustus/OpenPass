@@ -24,7 +24,7 @@ before:
       echo "Secret/artifact gate passed"'
 
 builds:
-  - id: openpass
+  - id: openpass-static
     main: .
     binary: openpass
     env:
@@ -32,7 +32,6 @@ builds:
       - GOWORK=off
     goos:
       - linux
-      - darwin
       - windows
       - freebsd
     goarch:
@@ -42,6 +41,26 @@ builds:
       - v1
     goarm:
       - "7"
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+      - -X main.builtBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+  - id: openpass-darwin
+    main: .
+    binary: openpass
+    env:
+      - CGO_ENABLED=1
+      - GOWORK=off
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    goamd64:
+      - v1
     ldflags:
       - -s -w
       - -X main.version={{.Version}}

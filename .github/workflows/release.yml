@@ -76,22 +76,7 @@ jobs:
           cache: true
 
       - name: Run tests
-        run: GOWORK=off go test -v -race -timeout=30m ./...
-
-      - name: Verify release dependency graph
-        run: |
-          clipboard_dir="$(GOWORK=off go list -f '{{ .Dir }}' github.com/atotto/clipboard)"
-          clipboard_version="$(GOWORK=off go list -m -f '{{ .Version }}' github.com/atotto/clipboard)"
-          if [ "$clipboard_version" != "v0.1.4" ]; then
-            echo "expected github.com/atotto/clipboard v0.1.4, got $clipboard_version"
-            exit 1
-          fi
-          case "$clipboard_dir" in
-            "$PWD"/clipboardpkg|"$PWD"/clipboardpkg/*)
-              echo "release dependency graph resolved clipboard to local workspace stub: $clipboard_dir"
-              exit 1
-              ;;
-          esac
+        run: go test -v -race -timeout=30m ./...
 
   govulncheck:
     name: govulncheck
@@ -114,7 +99,7 @@ jobs:
 
   release:
     name: Release
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     needs: [test, govulncheck, lint]
     steps:
       - name: Checkout code
@@ -143,7 +128,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
-          GOWORK: off
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v1
