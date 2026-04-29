@@ -179,7 +179,7 @@ scoops:
     repository:
       owner: danieljustus
       name: scoop-bucket
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+      token: "{{ .Env.SCOOP_BUCKET_GITHUB_TOKEN }}"
     directory: bucket
     homepage: "https://github.com/danieljustus/OpenPass"
     description: "Modern CLI password manager with age encryption"
