@@ -144,6 +144,9 @@ func TestVaultPathWithTilde(t *testing.T) {
 }
 
 func TestVaultPathWithAbsolute(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: path format differs")
+	}
 	vault = "/absolute/path"
 	got, _ := vaultPath()
 

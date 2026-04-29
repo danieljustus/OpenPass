@@ -593,61 +593,59 @@ func TestRunHTTPServer_NonLoopbackMetricsRequiresAuth(t *testing.T) {
 	}
 }
 
-func TestRunHTTPServer_UnsupportedProtocolHeader(t *testing.T) {
-	v := newTestVault(t)
-	port := findFreePort(t)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	waitForServer := runHTTPServerAsync(ctx, t, "127.0.0.1", port, v, mcp.New)
-	defer func() {
-		cancel()
-		waitForServer()
-	}()
-
-	token := testMCPToken(t, v.Dir)
-	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
-
-	req, _ := http.NewRequest(http.MethodPost, baseURL+"/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
-	setValidMCPHeaders(req, token)
-	req.Header.Set("MCP-Protocol-Version", "1999-01-01")
-
-	resp, err := newTestHTTPClient().Do(req)
-	if err != nil {
-		t.Fatalf("unsupported protocol request failed: %v", err)
+func TestRunHTTPServer_SecurityHeaders(t *testing.T) {
+	cases := []struct {
+		name        string
+		body        string
+		headerName  string
+		headerValue string
+		wantStatus  int
+	}{
+		{
+			name:        "unsupported protocol version",
+			body:        `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`,
+			headerName:  "MCP-Protocol-Version",
+			headerValue: "1999-01-01",
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "bad origin forbidden",
+			body:        `{"jsonrpc":"2.0","id":1,"method":"initialize"}`,
+			headerName:  "Origin",
+			headerValue: "https://evil.example",
+			wantStatus:  http.StatusForbidden,
+		},
 	}
-	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("unsupported protocol status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
-	}
-}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestVault(t)
+			port := findFreePort(t)
 
-func TestRunHTTPServer_BadOriginForbidden(t *testing.T) {
-	v := newTestVault(t)
-	port := findFreePort(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			waitForServer := runHTTPServerAsync(ctx, t, "127.0.0.1", port, v, mcp.New)
+			defer func() {
+				cancel()
+				waitForServer()
+			}()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	waitForServer := runHTTPServerAsync(ctx, t, "127.0.0.1", port, v, mcp.New)
-	defer func() {
-		cancel()
-		waitForServer()
-	}()
+			token := testMCPToken(t, v.Dir)
+			baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 
-	token := testMCPToken(t, v.Dir)
-	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+			req, _ := http.NewRequest(http.MethodPost, baseURL+"/mcp", strings.NewReader(tc.body))
+			setValidMCPHeaders(req, token)
+			req.Header.Set(tc.headerName, tc.headerValue)
 
-	req, _ := http.NewRequest(http.MethodPost, baseURL+"/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize"}`))
-	setValidMCPHeaders(req, token)
-	req.Header.Set("Origin", "https://evil.example")
+			resp, err := newTestHTTPClient().Do(req)
+			if err != nil {
+				t.Fatalf("request failed: %v", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
 
-	resp, err := newTestHTTPClient().Do(req)
-	if err != nil {
-		t.Fatalf("bad origin request failed: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("bad Origin status = %d, want %d", resp.StatusCode, http.StatusForbidden)
+			if resp.StatusCode != tc.wantStatus {
+				t.Errorf("status = %d, want %d", resp.StatusCode, tc.wantStatus)
+			}
+		})
 	}
 }
 

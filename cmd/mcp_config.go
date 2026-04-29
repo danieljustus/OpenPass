@@ -69,22 +69,13 @@ Use --token-only to output just the raw token (for use in scripts).`,
 			if httpMode {
 				return outputAgentHTTPConfig(agentName, serverName, "claude_desktop_config", redactToken)
 			}
-			return outputAgentStdioConfig(agentName, serverName, "claude-code")
-		case "codex":
-			if httpMode {
-				return outputAgentHTTPConfig(agentName, serverName, "openapi", redactToken)
-			}
-			return outputAgentStdioConfig(agentName, serverName, "codex")
-		case "opencode":
-			if httpMode {
-				return outputAgentHTTPConfig(agentName, serverName, "opencode", redactToken)
-			}
-			return outputAgentStdioConfig(agentName, serverName, "opencode")
-		case "openclaw":
-			if httpMode {
-				return outputAgentHTTPConfig(agentName, serverName, "openclaw", redactToken)
-			}
-			return outputAgentStdioConfig(agentName, serverName, "openclaw")
+		return outputAgentStdioConfig(agentName, serverName)
+	case "codex":
+		return outputAgentStdioConfig(agentName, serverName)
+	case "opencode":
+		return outputAgentStdioConfig(agentName, serverName)
+	case "openclaw":
+		return outputAgentStdioConfig(agentName, serverName)
 		default:
 			return fmt.Errorf("unsupported mcp config format %q (valid: generic, hermes, claude-code, codex, opencode, openclaw)", format)
 		}
@@ -317,7 +308,7 @@ func outputHermesHTTPConfig(agentName, serverName string, redact bool) error {
 // agentName is passed to openpass serve (e.g., "claude-code", "codex").
 //
 // Verification: openpass mcp-config claude-code --format claude-code | paste into Claude Desktop config
-func outputAgentStdioConfig(agentName, serverKey, displayName string) error {
+func outputAgentStdioConfig(agentName, serverKey string) error {
 	config := map[string]any{
 		"mcp_servers": map[string]any{
 			serverKey: map[string]any{

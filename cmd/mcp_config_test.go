@@ -101,6 +101,9 @@ func TestOutputAgentHTTPConfig_Success(t *testing.T) {
 }
 
 func TestOutputAgentHTTPConfig_ResolveError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: HOME env behavior differs")
+	}
 	origHome := os.Getenv("HOME")
 	_ = os.Unsetenv("HOME")
 	_ = os.Unsetenv("OPENPASS_VAULT")
@@ -140,6 +143,9 @@ func TestOutputTokenOnly_Success(t *testing.T) {
 }
 
 func TestOutputTokenOnly_VaultPathError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: HOME env behavior differs")
+	}
 	origHome := os.Getenv("HOME")
 	_ = os.Unsetenv("HOME")
 	_ = os.Unsetenv("OPENPASS_VAULT")
@@ -337,6 +343,9 @@ func TestCmdMCPConfig_HermesHTTP(t *testing.T) {
 }
 
 func TestOutputHTTPConfig_VaultPathError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: HOME env behavior differs")
+	}
 	// Test outputHTTPConfig directly (bypassing rootCmd which has PersistentPreRun
 	// that also calls vaultPath, causing a panic before our function is reached).
 	origHome := os.Getenv("HOME")
