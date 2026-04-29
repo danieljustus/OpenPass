@@ -47,7 +47,7 @@ func TestOutputHermesStdioConfig_StdoutError(t *testing.T) {
 
 func TestOutputAgentStdioConfig_Success(t *testing.T) {
 	output := captureStdout(func() {
-		err := outputAgentStdioConfig("claude-code", "claude_code", "claude-code")
+		err := outputAgentStdioConfig("claude-code", "claude_code")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -68,7 +68,7 @@ func TestOutputAgentStdioConfig_StdoutError(t *testing.T) {
 	_ = r.Close()
 	defer func() { os.Stdout = oldStdout }()
 
-	err := outputAgentStdioConfig("claude-code", "claude_code", "claude-code")
+	err := outputAgentStdioConfig("claude-code", "claude_code")
 	if err == nil {
 		t.Fatal("expected error when stdout is closed")
 	}
