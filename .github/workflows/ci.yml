@@ -100,10 +100,8 @@ jobs:
           args: --timeout=5m --verbose
 
       - name: Run gosec SAST scanner
-        env:
-          GOTOOLCHAIN: go1.23.4
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.21.4
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.22.0
           gosec -fmt sarif -out gosec.sarif ./...
 
       - name: Upload gosec SARIF report
@@ -127,6 +125,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         go-version: ['1.26']
+      fail-fast: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
