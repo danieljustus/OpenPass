@@ -69,13 +69,13 @@ Use --token-only to output just the raw token (for use in scripts).`,
 			if httpMode {
 				return outputAgentHTTPConfig(agentName, serverName, "claude_desktop_config", redactToken)
 			}
-		return outputAgentStdioConfig(agentName, serverName)
-	case "codex":
-		return outputAgentStdioConfig(agentName, serverName)
-	case "opencode":
-		return outputAgentStdioConfig(agentName, serverName)
-	case "openclaw":
-		return outputAgentStdioConfig(agentName, serverName)
+			return outputAgentStdioConfig(agentName, serverName)
+		case "codex":
+			return outputAgentStdioConfig(agentName, serverName)
+		case "opencode":
+			return outputAgentStdioConfig(agentName, serverName)
+		case "openclaw":
+			return outputAgentStdioConfig(agentName, serverName)
 		default:
 			return fmt.Errorf("unsupported mcp config format %q (valid: generic, hermes, claude-code, codex, opencode, openclaw)", format)
 		}
