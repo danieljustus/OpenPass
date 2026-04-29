@@ -100,6 +100,8 @@ jobs:
           args: --timeout=5m --verbose
 
       - name: Run gosec SAST scanner
+        env:
+          GOTOOLCHAIN: go1.23.4
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@v2.21.4
           gosec -fmt sarif -out gosec.sarif ./...

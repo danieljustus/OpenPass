@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -495,6 +496,9 @@ func TestNormalizeConfigWithNilAgents(t *testing.T) {
 func TestInitWithReadOnlyDirectory(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("running as root; chmod 0 has no effect")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not support Unix-style directory permissions for this test")
 	}
 	parent := t.TempDir()
 	if err := os.Chmod(parent, 0o500); err != nil {
