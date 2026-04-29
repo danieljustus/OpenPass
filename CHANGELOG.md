@@ -137,6 +137,62 @@ MCP, vault search, and backup hardening release.
 - Hardened backup restore against symlink and permission vulnerabilities
 - Fixed additional integer overflow findings in backup restore handling
 
+## [v2.0.0] - 2026-04-28
+
+Platform expansion, transport hardening, and developer experience release.
+
+### Added
+
+- FreeBSD support with in-memory encrypted session cache fallback (AES-256-GCM)
+- Scoop distribution channel for Windows
+- TLS configuration support for update checker and HTTP MCP
+- Batch MCP operations for efficient multi-entry workflows
+- Quiet mode flag (`-q` / `--quiet`) for script-friendly output
+- Sentinel errors and restructured exit codes for reliable automation
+- Password normalization and enhanced TOTP metadata support
+- Improved in-memory session cache with configurable expiration
+- Graceful OS keyring fallback to memory cache when keyring is unavailable
+
+### Changed
+
+- Go version bumped to 1.26.2
+- Comprehensive CI documentation with lint gates and FreeBSD guidance
+
+### Fixed
+
+- FreeBSD cross-compilation by isolating go-keyring imports
+- golangci-lint findings across bodyclose, errorlint, shadow, and staticcheck
+- Session prompt logic now checks active session before requesting passphrase
+
+## [v2.1.0] - 2026-04-29
+
+Interactive TUI, vault management, and observability release.
+
+### Added
+
+- Interactive TUI using bubbletea for intuitive vault browsing and management
+- Import command for migrating from 1Password, Bitwarden, pass, and CSV
+- Config command with JSON schema validation for structured settings
+- Profile command for multi-vault management and switching
+- Auth command for passphrase and biometric (Touch ID) authentication setup
+- Vault service layer for cleaner separation of concerns
+- OpenTelemetry tracing support for operation observability
+- Structured logging package with configurable verbosity
+- Diag command for runtime metrics and environment inspection
+- Windows path sanitization in importer to strip invalid characters
+
+### Changed
+
+- Refactored MCP server into focused files for maintainability
+- Moved clipboard package to `internal/clipboard` for better organization
+- Updated project documentation and generated man pages
+
+### Fixed
+
+- Resolved golangci-lint v2 compatibility issues
+- Fixed Ubuntu CI session caching test flakiness
+- Corrected release workflow environment variable duplication
+
 [v1.0.0]: https://github.com/danieljustus/OpenPass/releases/tag/v1.0.0
 [v1.1.0]: https://github.com/danieljustus/OpenPass/releases/tag/v1.1.0
 [v1.1.1]: https://github.com/danieljustus/OpenPass/releases/tag/v1.1.1
@@ -145,3 +201,5 @@ MCP, vault search, and backup hardening release.
 [v1.1.4]: https://github.com/danieljustus/OpenPass/releases/tag/v1.1.4
 [v1.2.0]: https://github.com/danieljustus/OpenPass/releases/tag/v1.2.0
 [v1.3.0]: https://github.com/danieljustus/OpenPass/releases/tag/v1.3.0
+[v2.0.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.0.0
+[v2.1.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.1.0

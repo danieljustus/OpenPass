@@ -1,0 +1,67 @@
+name: Installation problem
+description: Report trouble installing or setting up OpenPass.
+title: "install: "
+labels:
+  - installation
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting an installation issue. Do not include passwords, tokens, or other secrets.
+  - type: dropdown
+    id: method
+    attributes:
+      label: Installation method
+      description: How did you try to install OpenPass?
+      options:
+        - Quick install script (curl / PowerShell)
+        - Homebrew
+        - Scoop
+        - Go install
+        - Linux package (.deb / .rpm / .apk)
+        - Manual download from GitHub Releases
+        - Build from source
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: OpenPass version
+      description: If known. Run `openpass version` after installation, or provide the release tag you tried.
+      placeholder: "v2.1.0"
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and architecture
+      placeholder: "macOS 15.4 arm64, Ubuntu 24.04 amd64, Windows 11 amd64"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What did you do?
+      description: Describe the exact steps you followed.
+      placeholder: |
+        1. Ran `curl -sSfL ... | sh`
+        2. Saw error ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What actually happened?
+      description: Paste the full error output or describe the failure. Redact paths and usernames if needed.
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Go version (if building from source), shell, terminal emulator, or anything else that might help.

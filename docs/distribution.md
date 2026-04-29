@@ -8,7 +8,7 @@ OpenPass is distributed through multiple channels to support different platforms
 |----|------|---------|
 | Linux | amd64, arm64 | tar.gz, deb, rpm, apk |
 | macOS | amd64, arm64 | tar.gz, Homebrew |
-| Windows | amd64 | zip |
+| Windows | amd64, arm64 | zip |
 | FreeBSD | amd64, arm64 | tar.gz |
 
 **Notes:**
@@ -24,7 +24,7 @@ Pre-built binaries are published to GitHub Releases on every tagged release.
 
 Each release includes:
 - `OpenPass_<version>_<os>_<arch>.tar.gz` (Linux/macOS)
-- `OpenPass_<version>_windows_amd64.zip` (Windows)
+- `OpenPass_<version>_windows_<arch>.zip` (Windows)
 - `openpass_<version>_<os>_<arch>.deb` (Debian/Ubuntu)
 - `openpass_<version>_<os>_<arch>.rpm` (Fedora/RHEL)
 - `openpass_<version>_<os>_<arch>.apk` (Alpine)
@@ -89,8 +89,8 @@ tar xzf OpenPass_<version>_<os>_<arch>.tar.gz
 sudo mv OpenPass_<version>_<os>_<arch>/openpass /usr/local/bin/
 
 # Windows (PowerShell)
-Expand-Archive OpenPass_<version>_windows_amd64.zip
-Move-Item OpenPass_<version>_windows_amd64\openpass.exe C:\Windows\System32\
+Expand-Archive OpenPass_<version>_windows_<arch>.zip
+Move-Item OpenPass_<version>_windows_<arch>\openpass.exe C:\Windows\System32\
 ```
 
 ### Go Install

@@ -345,7 +345,7 @@ For **feature requests**:
 
 For security vulnerabilities, **do not** file a public issue. Instead:
 
-1. Email the maintainers directly
+1. Submit a private vulnerability report via [GitHub Security Advisories](https://github.com/danieljustus/OpenPass/security/advisories/new)
 2. Wait for acknowledgment
 3. Coordinate disclosure timeline
 
