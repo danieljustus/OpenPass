@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -18,6 +19,8 @@ const (
 	defaultConfigFile     = "config.yaml"
 	defaultAgentName      = "default"
 	defaultSessionTimeout = 15 * time.Minute
+	AuthMethodPassphrase  = "passphrase"
+	AuthMethodTouchID     = "touchid"
 )
 
 type Config struct {
@@ -28,10 +31,14 @@ type Config struct {
 	Update         *UpdateConfig           `yaml:"update,omitempty"`
 	Clipboard      *ClipboardConfig        `yaml:"clipboard,omitempty"`
 	Audit          *AuditConfig            `yaml:"audit,omitempty"`
+	Logging        *LoggingConfig          `yaml:"logging,omitempty"`
 	VaultDir       string                  `yaml:"vaultDir"`
 	DefaultAgent   string                  `yaml:"defaultAgent"`
 	SessionTimeout time.Duration           `yaml:"sessionTimeout"`
-	UseTouchID     bool                    `yaml:"useTouchID"`
+	AuthMethod     string                  `yaml:"authMethod,omitempty"`
+	UseTouchID     bool                    `yaml:"useTouchID,omitempty"`
+	Profiles       map[string]*Profile     `yaml:"profiles,omitempty"`
+	DefaultProfile string                  `yaml:"defaultProfile,omitempty"`
 }
 
 type fileConfig struct {
@@ -42,10 +49,14 @@ type fileConfig struct {
 	Update         *fileUpdateConfig           `yaml:"update,omitempty"`
 	Clipboard      *fileClipboardConfig        `yaml:"clipboard,omitempty"`
 	Audit          *fileAuditConfig            `yaml:"audit,omitempty"`
+	Logging        *fileLoggingConfig          `yaml:"logging,omitempty"`
 	VaultDir       string                      `yaml:"vaultDir,omitempty"`
 	DefaultAgent   string                      `yaml:"defaultAgent,omitempty"`
 	SessionTimeout time.Duration               `yaml:"sessionTimeout,omitempty"`
-	UseTouchID     bool                        `yaml:"useTouchID,omitempty"`
+	AuthMethod     string                      `yaml:"authMethod,omitempty"`
+	UseTouchID     *bool                       `yaml:"useTouchID,omitempty"`
+	Profiles       map[string]fileProfile      `yaml:"profiles,omitempty"`
+	DefaultProfile string                      `yaml:"defaultProfile,omitempty"`
 }
 
 type AgentProfile struct {
@@ -54,6 +65,7 @@ type AgentProfile struct {
 	AllowedPaths    []string      `yaml:"allowedPaths"`
 	RedactFields    []string      `yaml:"redactFields,omitempty"`
 	CanWrite        bool          `yaml:"canWrite"`
+	CanManageConfig bool          `yaml:"canManageConfig,omitempty"`
 	RequireApproval bool          `yaml:"requireApproval"`
 	ApprovalTimeout time.Duration `yaml:"approvalTimeout,omitempty"`
 }
@@ -61,10 +73,15 @@ type AgentProfile struct {
 type fileAgentProfile struct {
 	ApprovalTimeout *time.Duration `yaml:"approvalTimeout,omitempty"`
 	CanWrite        *bool          `yaml:"canWrite,omitempty"`
+	CanManageConfig *bool          `yaml:"canManageConfig,omitempty"`
 	RequireApproval *bool          `yaml:"requireApproval,omitempty"`
 	ApprovalMode    *string        `yaml:"approvalMode,omitempty"`
 	AllowedPaths    []string       `yaml:"allowedPaths,omitempty"`
 	RedactFields    []string       `yaml:"redactFields,omitempty"`
+}
+
+type fileProfile struct {
+	VaultPath string `yaml:"vault,omitempty"`
 }
 
 func Default() *Config {
@@ -77,6 +94,7 @@ func Default() *Config {
 		VaultDir:       filepath.Join(home, defaultConfigDir),
 		DefaultAgent:   defaultAgentName,
 		SessionTimeout: defaultSessionTimeout,
+		AuthMethod:     AuthMethodPassphrase,
 		Agents:         builtinAgentProfiles(),
 	}
 }
@@ -118,7 +136,31 @@ func Load(path string) (*Config, error) {
 	if raw.SessionTimeout > 0 {
 		cfg.SessionTimeout = raw.SessionTimeout
 	}
-	cfg.UseTouchID = raw.UseTouchID
+	if raw.AuthMethod != "" {
+		authMethod, err := NormalizeAuthMethod(raw.AuthMethod)
+		if err != nil {
+			return nil, err
+		}
+		cfg.AuthMethod = authMethod
+	}
+	if raw.UseTouchID != nil {
+		cfg.UseTouchID = *raw.UseTouchID
+		if raw.AuthMethod == "" && *raw.UseTouchID {
+			cfg.AuthMethod = AuthMethodTouchID
+		}
+	}
+
+	if raw.DefaultProfile != "" {
+		cfg.DefaultProfile = raw.DefaultProfile
+	}
+	if raw.Profiles != nil {
+		cfg.Profiles = make(map[string]*Profile, len(raw.Profiles))
+		for name, fp := range raw.Profiles {
+			cfg.Profiles[name] = &Profile{
+				VaultPath: fp.VaultPath,
+			}
+		}
+	}
 
 	if raw.Agents != nil {
 		for name, profile := range raw.Agents {
@@ -134,6 +176,9 @@ func Load(path string) (*Config, error) {
 			}
 			if profile.CanWrite != nil {
 				current.CanWrite = *profile.CanWrite
+			}
+			if profile.CanManageConfig != nil {
+				current.CanManageConfig = *profile.CanManageConfig
 			}
 			if profile.RequireApproval != nil {
 				current.RequireApproval = *profile.RequireApproval
@@ -181,6 +226,19 @@ func Load(path string) (*Config, error) {
 	if raw.Vault != nil {
 		defaults := defaultVaultConfig()
 		merged := MergeFileVaultConfig(raw.Vault, defaults)
+		if raw.Vault.AuthMethod != nil {
+			authMethod, err := NormalizeAuthMethod(*raw.Vault.AuthMethod)
+			if err != nil {
+				return nil, err
+			}
+			merged.AuthMethod = authMethod
+			if raw.AuthMethod == "" {
+				cfg.AuthMethod = authMethod
+			}
+		}
+		if raw.AuthMethod == "" && raw.Vault.AuthMethod == nil && raw.Vault.UseTouchID != nil && *raw.Vault.UseTouchID {
+			cfg.AuthMethod = AuthMethodTouchID
+		}
 		cfg.Vault = &merged
 	}
 	if raw.Git != nil {
@@ -208,10 +266,17 @@ func Load(path string) (*Config, error) {
 		merged := MergeFileAuditConfig(raw.Audit, defaults)
 		cfg.Audit = &merged
 	}
+	if raw.Logging != nil {
+		defaults := defaultLoggingConfig()
+		merged := MergeFileLoggingConfig(raw.Logging, defaults)
+		cfg.Logging = &merged
+	}
 
 	if cfg.MCP != nil && cfg.MCP.Bind == "" {
 		return nil, fmt.Errorf("mcp.bind must not be empty")
 	}
+
+	cfg.UseTouchID = cfg.EffectiveAuthMethod() == AuthMethodTouchID
 
 	return cfg, nil
 }
@@ -225,27 +290,43 @@ func (c *Config) Save() error {
 	if err != nil {
 		return err
 	}
+	return c.SaveTo(path)
+}
+
+func (c *Config) SaveTo(path string) error {
+	if c == nil {
+		return errors.New("config is nil")
+	}
+	if err := validateConfigPath(path); err != nil {
+		return err
+	}
 
 	if mkdirErr := os.MkdirAll(filepath.Dir(path), 0o700); mkdirErr != nil {
 		return mkdirErr
 	}
 
+	authMethod := c.EffectiveAuthMethod()
 	raw := fileConfig{
 		VaultDir:       c.VaultDir,
 		DefaultAgent:   c.DefaultAgent,
 		SessionTimeout: c.SessionTimeout,
-		UseTouchID:     c.UseTouchID,
+		AuthMethod:     authMethod,
+		Profiles:       make(map[string]fileProfile, len(c.Profiles)),
+		DefaultProfile: c.DefaultProfile,
 		Agents:         make(map[string]fileAgentProfile, len(c.Agents)),
 	}
 
 	if c.Vault != nil {
 		confirmRemove := c.Vault.ConfirmRemove
-		useTouchID := c.Vault.UseTouchID
+		vaultAuthMethod := c.Vault.AuthMethod
+		if vaultAuthMethod == "" && authMethod != "" {
+			vaultAuthMethod = authMethod
+		}
 		raw.Vault = &fileVaultConfig{
 			Path:              c.Vault.Path,
 			DefaultRecipients: append([]string(nil), c.Vault.DefaultRecipients...),
 			ConfirmRemove:     &confirmRemove,
-			UseTouchID:        &useTouchID,
+			AuthMethod:        &vaultAuthMethod,
 		}
 	}
 
@@ -300,13 +381,23 @@ func (c *Config) Save() error {
 			MaxAgeDays:  &maxAgeDays,
 		}
 	}
+	if c.Logging != nil {
+		level := c.Logging.Level
+		format := c.Logging.Format
+		raw.Logging = &fileLoggingConfig{
+			Level:  &level,
+			Format: &format,
+		}
+	}
 	for name, profile := range c.Agents {
 		allowed := append([]string(nil), profile.AllowedPaths...)
 		canWrite := profile.CanWrite
+		canManageConfig := profile.CanManageConfig
 		requireApproval := profile.RequireApproval
 		fap := fileAgentProfile{
 			AllowedPaths:    allowed,
 			CanWrite:        &canWrite,
+			CanManageConfig: &canManageConfig,
 			RequireApproval: &requireApproval,
 		}
 		if profile.ApprovalMode != "" {
@@ -322,6 +413,11 @@ func (c *Config) Save() error {
 		}
 		raw.Agents[name] = fap
 	}
+	for name, profile := range c.Profiles {
+		if profile != nil {
+			raw.Profiles[name] = fileProfile{VaultPath: profile.VaultPath}
+		}
+	}
 
 	data, err := yaml.Marshal(&raw)
 	if err != nil {
@@ -336,6 +432,58 @@ func defaultConfigPath() (string, error) {
 		return "", errors.New("unable to determine home directory")
 	}
 	return filepath.Join(home, defaultConfigDir, defaultConfigFile), nil
+}
+
+func NormalizeAuthMethod(method string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(method)) {
+	case "", AuthMethodPassphrase:
+		return AuthMethodPassphrase, nil
+	case AuthMethodTouchID, "touch-id", "touch_id", "biometric", "biometrics":
+		return AuthMethodTouchID, nil
+	default:
+		return "", fmt.Errorf("invalid authMethod %q (valid: passphrase, touchid)", method)
+	}
+}
+
+func (c *Config) EffectiveAuthMethod() string {
+	if c == nil {
+		return AuthMethodPassphrase
+	}
+	if c.AuthMethod != "" {
+		method, err := NormalizeAuthMethod(c.AuthMethod)
+		if err == nil {
+			return method
+		}
+	}
+	if c.UseTouchID {
+		return AuthMethodTouchID
+	}
+	if c.Vault != nil {
+		if c.Vault.AuthMethod != "" {
+			method, err := NormalizeAuthMethod(c.Vault.AuthMethod)
+			if err == nil {
+				return method
+			}
+		}
+		if c.Vault.UseTouchID {
+			return AuthMethodTouchID
+		}
+	}
+	return AuthMethodPassphrase
+}
+
+func (c *Config) SetAuthMethod(method string) error {
+	normalized, err := NormalizeAuthMethod(method)
+	if err != nil {
+		return err
+	}
+	c.AuthMethod = normalized
+	c.UseTouchID = normalized == AuthMethodTouchID
+	if c.Vault != nil {
+		c.Vault.AuthMethod = normalized
+		c.Vault.UseTouchID = c.UseTouchID
+	}
+	return nil
 }
 
 func newDefaultAgentProfile(name string) AgentProfile {
@@ -356,4 +504,64 @@ func builtinAgentProfiles() map[string]AgentProfile {
 		"openclaw":    {Name: "openclaw", AllowedPaths: []string{"*"}, CanWrite: true, ApprovalMode: "none"},
 		"opencode":    {Name: "opencode", AllowedPaths: []string{"*"}, CanWrite: false, ApprovalMode: "none"},
 	}
+}
+
+func (c *Config) Validate() error {
+	var errs error
+
+	if strings.TrimSpace(c.VaultDir) == "" {
+		errs = errors.Join(errs, errors.New("vaultDir: must not be empty"))
+	}
+
+	if c.SessionTimeout <= 0 {
+		errs = errors.Join(errs, errors.New("sessionTimeout: must be greater than 0"))
+	}
+
+	if c.AuthMethod != "" {
+		if _, err := NormalizeAuthMethod(c.AuthMethod); err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}
+	if c.Vault != nil && c.Vault.AuthMethod != "" {
+		if _, err := NormalizeAuthMethod(c.Vault.AuthMethod); err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}
+	if c.AuthMethod == "" && (c.Vault == nil || c.Vault.AuthMethod == "") {
+		if _, err := NormalizeAuthMethod(c.EffectiveAuthMethod()); err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}
+
+	if c.DefaultAgent != "" {
+		if _, ok := c.Agents[c.DefaultAgent]; !ok {
+			errs = errors.Join(errs, fmt.Errorf("defaultAgent: %q not found in agents", c.DefaultAgent))
+		}
+	}
+
+	for name, agent := range c.Agents {
+		switch agent.ApprovalMode {
+		case "", "none", "deny", "prompt", "auto":
+		default:
+			errs = errors.Join(errs, fmt.Errorf("agents.%s.approvalMode: invalid value %q (valid: none, deny, prompt, auto)", name, agent.ApprovalMode))
+		}
+	}
+
+	for name, agent := range c.Agents {
+		for i, path := range agent.AllowedPaths {
+			if _, err := filepath.Match(path, ""); err != nil {
+				errs = errors.Join(errs, fmt.Errorf("agents.%s.allowedPaths[%d]: invalid glob pattern %q", name, i, path))
+			}
+		}
+	}
+
+	if c.Audit != nil && c.Audit.MaxFileSize <= 0 {
+		errs = errors.Join(errs, errors.New("audit.maxFileSize: must be greater than 0"))
+	}
+
+	if c.Clipboard != nil && c.Clipboard.AutoClearDuration < 0 {
+		errs = errors.Join(errs, errors.New("clipboard.autoClearDuration: must be non-negative"))
+	}
+
+	return errs
 }

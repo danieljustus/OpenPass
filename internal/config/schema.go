@@ -14,6 +14,7 @@ type VaultConfig struct {
 	Path              string   `yaml:"path,omitempty"`
 	DefaultRecipients []string `yaml:"default_recipients,omitempty"`
 	ConfirmRemove     bool     `yaml:"confirm_remove,omitempty"`
+	AuthMethod        string   `yaml:"authMethod,omitempty"`
 	UseTouchID        bool     `yaml:"useTouchID,omitempty"`
 }
 
@@ -57,11 +58,26 @@ type AuditConfig struct {
 	MaxAgeDays  int   `yaml:"maxAgeDays,omitempty"`
 }
 
+// LoggingConfig holds logging configuration.
+// Level and Format are primarily driven by environment variables
+// (OPENPASS_LOG_LEVEL, OPENPASS_LOG_FORMAT) and are included here
+// for documentation and future file-based configuration.
+type LoggingConfig struct {
+	Level  string `yaml:"level,omitempty"`
+	Format string `yaml:"format,omitempty"`
+}
+
+// Profile holds a named vault profile configuration.
+type Profile struct {
+	VaultPath string `yaml:"vault,omitempty"`
+}
+
 // defaultVaultConfig returns the default vault configuration.
 func defaultVaultConfig() VaultConfig {
 	return VaultConfig{
 		Path:              "",
 		DefaultRecipients: []string{},
+		AuthMethod:        AuthMethodPassphrase,
 	}
 }
 
@@ -113,10 +129,19 @@ func defaultAuditConfig() AuditConfig {
 	}
 }
 
+// defaultLoggingConfig returns the default logging configuration.
+func defaultLoggingConfig() LoggingConfig {
+	return LoggingConfig{
+		Level:  "warn",
+		Format: "text",
+	}
+}
+
 // fileVaultConfig is the file-based vault configuration with pointer fields
 // for optional YAML unmarshaling.
 type fileVaultConfig struct {
 	ConfirmRemove     *bool    `yaml:"confirm_remove,omitempty"`
+	AuthMethod        *string  `yaml:"authMethod,omitempty"`
 	UseTouchID        *bool    `yaml:"useTouchID,omitempty"`
 	Path              string   `yaml:"path,omitempty"`
 	DefaultRecipients []string `yaml:"default_recipients,omitempty"`
@@ -182,6 +207,9 @@ func MergeFileVaultConfig(fileCfg *fileVaultConfig, defaults VaultConfig) VaultC
 	}
 	if fileCfg.ConfirmRemove != nil {
 		result.ConfirmRemove = *fileCfg.ConfirmRemove
+	}
+	if fileCfg.AuthMethod != nil {
+		result.AuthMethod = *fileCfg.AuthMethod
 	}
 	if fileCfg.UseTouchID != nil {
 		result.UseTouchID = *fileCfg.UseTouchID
@@ -297,4 +325,43 @@ func MergeFileAuditConfig(fileCfg *fileAuditConfig, defaults AuditConfig) AuditC
 		result.MaxAgeDays = *fileCfg.MaxAgeDays
 	}
 	return result
+}
+
+// fileLoggingConfig is the file-based logging configuration.
+type fileLoggingConfig struct {
+	Level  *string `yaml:"level,omitempty"`
+	Format *string `yaml:"format,omitempty"`
+}
+
+// MergeFileLoggingConfig merges file config with defaults, returning the final
+// LoggingConfig. If fileCfg is nil, defaults are returned unchanged.
+func MergeFileLoggingConfig(fileCfg *fileLoggingConfig, defaults LoggingConfig) LoggingConfig {
+	if fileCfg == nil {
+		return defaults
+	}
+	result := defaults
+	if fileCfg.Level != nil {
+		result.Level = *fileCfg.Level
+	}
+	if fileCfg.Format != nil {
+		result.Format = *fileCfg.Format
+	}
+	return result
+}
+
+// ProfileForName returns the profile with the given name, or nil if not found.
+func (c *Config) ProfileForName(name string) *Profile {
+	if c.Profiles == nil {
+		return nil
+	}
+	return c.Profiles[name]
+}
+
+// VaultDirForProfile returns the vault directory for a profile, or empty string if not found.
+func (c *Config) VaultDirForProfile(name string) string {
+	profile := c.ProfileForName(name)
+	if profile == nil {
+		return ""
+	}
+	return profile.VaultPath
 }

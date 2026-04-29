@@ -11,6 +11,11 @@ defaultAgent: default
 # OS keyring cache TTL for unlocked vault passphrases.
 sessionTimeout: 15m
 
+# Unlock method for this vault. Use "touchid" on macOS to allow Touch ID
+# unlock after the passphrase has been stored in the biometric Keychain item.
+# Change with: openpass auth set passphrase|touchid
+authMethod: passphrase
+
 # Agent profiles for MCP access.
 agents:
   default:
@@ -18,6 +23,8 @@ agents:
     allowedPaths: ["*"]
     # Whether the agent can create, update, or delete entries.
     canWrite: false
+    # Whether the agent may change OpenPass auth/config settings through MCP.
+    canManageConfig: false
     # none allows configured operations, deny rejects writes, prompt degrades to
     # deny in MCP contexts where interactive approval is unavailable.
     approvalMode: none
@@ -37,6 +44,7 @@ agents:
   hermes:
     allowedPaths: ["*"]
     canWrite: true
+    canManageConfig: false
     approvalMode: none
 
 # Vault-specific settings. These can also live inside <vault>/config.yaml.
@@ -48,6 +56,8 @@ vault:
   #  - age1...
   # Ask for confirmation before removing recipients.
   confirm_remove: true
+  # Optional per-vault override for authMethod.
+  # authMethod: touchid
 
 # Git integration for automatic commits and optional pushes.
 git:

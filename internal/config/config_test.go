@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -1464,5 +1465,280 @@ func TestMergeFileMCPConfig_AllTimeouts(t *testing.T) {
 	}
 	if result.ApprovalTimeout != 45*time.Second {
 		t.Errorf("ApprovalTimeout = %v, want 45s", result.ApprovalTimeout)
+	}
+}
+
+// --- Validate() Tests ---
+
+func TestValidate_ValidConfigPasses(t *testing.T) {
+	t.Parallel()
+	cfg := Default()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() on default config = %v, want nil", err)
+	}
+}
+
+func TestValidate_EmptyVaultDirFails(t *testing.T) {
+	t.Parallel()
+	cfg := Default()
+	cfg.VaultDir = ""
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() with empty VaultDir = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "vaultDir") {
+		t.Errorf("error = %q, should mention vaultDir", err.Error())
+	}
+}
+
+func TestValidate_ZeroSessionTimeoutFails(t *testing.T) {
+	t.Parallel()
+	cfg := Default()
+	cfg.SessionTimeout = 0
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() with zero SessionTimeout = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "sessionTimeout") {
+		t.Errorf("error = %q, should mention sessionTimeout", err.Error())
+	}
+}
+
+func TestValidate_MissingDefaultAgentFails(t *testing.T) {
+	t.Parallel()
+	cfg := Default()
+	cfg.DefaultAgent = "nonexistent"
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() with missing defaultAgent = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "defaultAgent") {
+		t.Errorf("error = %q, should mention defaultAgent", err.Error())
+	}
+}
+
+func TestValidate_InvalidApprovalModeFails(t *testing.T) {
+	t.Parallel()
+	cfg := Default()
+	cfg.Agents["test"] = AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		ApprovalMode: "invalid",
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() with invalid approvalMode = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "approvalMode") {
+		t.Errorf("error = %q, should mention approvalMode", err.Error())
+	}
+}
+
+func TestValidate_InvalidGlobPatternFails(t *testing.T) {
+	t.Parallel()
+	cfg := Default()
+	cfg.Agents["test"] = AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"["}, // invalid glob
+		ApprovalMode: "none",
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() with invalid glob = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "allowedPaths") {
+		t.Errorf("error = %q, should mention allowedPaths", err.Error())
+	}
+}
+
+func TestValidate_MultipleErrorsAggregated(t *testing.T) {
+	t.Parallel()
+	cfg := Default()
+	cfg.VaultDir = ""
+	cfg.SessionTimeout = 0
+	cfg.DefaultAgent = "missing"
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() with multiple errors = nil, want error")
+	}
+	errStr := err.Error()
+	if !strings.Contains(errStr, "vaultDir") {
+		t.Error("missing vaultDir error")
+	}
+	if !strings.Contains(errStr, "sessionTimeout") {
+		t.Error("missing sessionTimeout error")
+	}
+	if !strings.Contains(errStr, "defaultAgent") {
+		t.Error("missing defaultAgent error")
+	}
+}
+
+func TestValidate_AcceptsAllValidApprovalModes(t *testing.T) {
+	t.Parallel()
+	validModes := []string{"none", "deny", "prompt", "auto"}
+	for _, mode := range validModes {
+		cfg := Default()
+		cfg.Agents["test"] = AgentProfile{
+			Name:         "test",
+			AllowedPaths: []string{"*"},
+			ApprovalMode: mode,
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("Validate() with approvalMode %q = %v, want nil", mode, err)
+		}
+	}
+}
+
+func TestValidate_NegativeAuditMaxFileSizeFails(t *testing.T) {
+	t.Parallel()
+	cfg := Default()
+	cfg.Audit = &AuditConfig{MaxFileSize: -1}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() with negative MaxFileSize = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "audit.maxFileSize") {
+		t.Errorf("error = %q, should mention audit.maxFileSize", err.Error())
+	}
+}
+
+func TestValidate_NegativeClipboardAutoClearFails(t *testing.T) {
+	t.Parallel()
+	cfg := Default()
+	cfg.Clipboard = &ClipboardConfig{AutoClearDuration: -1}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() with negative AutoClearDuration = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "clipboard.autoClearDuration") {
+		t.Errorf("error = %q, should mention clipboard.autoClearDuration", err.Error())
+	}
+}
+
+func TestValidate_ZeroClipboardAutoClearPasses(t *testing.T) {
+	t.Parallel()
+	cfg := Default()
+	cfg.Clipboard = &ClipboardConfig{AutoClearDuration: 0}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() with zero AutoClearDuration = %v, want nil", err)
+	}
+}
+
+// --- Profile Tests ---
+
+func TestLoad_Profiles(t *testing.T) {
+	t.Parallel()
+	yaml := `profiles:
+  work:
+    vault: ~/.openpass-work
+  family:
+    vault: ~/vaults/family
+defaultProfile: work
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if len(cfg.Profiles) != 2 {
+		t.Fatalf("Profiles len = %d, want 2", len(cfg.Profiles))
+	}
+	if cfg.DefaultProfile != "work" {
+		t.Errorf("DefaultProfile = %q, want work", cfg.DefaultProfile)
+	}
+	work := cfg.ProfileForName("work")
+	if work == nil {
+		t.Fatal("ProfileForName(work) = nil")
+	}
+	if work.VaultPath != "~/.openpass-work" {
+		t.Errorf("work.VaultPath = %q, want ~/.openpass-work", work.VaultPath)
+	}
+}
+
+func TestLoad_ProfileMissingVaultPath(t *testing.T) {
+	t.Parallel()
+	yaml := `profiles:
+  empty:
+    vault: ""
+`
+	path := writeTempFile(t, []byte(yaml))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	empty := cfg.ProfileForName("empty")
+	if empty == nil {
+		t.Fatal("ProfileForName(empty) = nil")
+	}
+	if empty.VaultPath != "" {
+		t.Errorf("empty.VaultPath = %q, want empty", empty.VaultPath)
+	}
+}
+
+func TestLoad_NoProfiles(t *testing.T) {
+	t.Parallel()
+	path := writeTempFile(t, []byte("{}\n"))
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Profiles != nil && len(cfg.Profiles) != 0 {
+		t.Errorf("Profiles = %v, want nil or empty", cfg.Profiles)
+	}
+}
+
+func TestSave_Profiles(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: HOME env behavior differs")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	cfg := Default()
+	cfg.Profiles = map[string]*Profile{
+		"work": {VaultPath: "~/.openpass-work"},
+	}
+	cfg.DefaultProfile = "work"
+
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	loaded, err := Load(filepath.Join(home, ".openpass", "config.yaml"))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if len(loaded.Profiles) != 1 {
+		t.Fatalf("Profiles len = %d, want 1", len(loaded.Profiles))
+	}
+	if loaded.DefaultProfile != "work" {
+		t.Errorf("DefaultProfile = %q, want work", loaded.DefaultProfile)
+	}
+	work := loaded.ProfileForName("work")
+	if work == nil || work.VaultPath != "~/.openpass-work" {
+		t.Errorf("work profile = %v, want VaultPath=~/.openpass-work", work)
+	}
+}
+
+func TestVaultDirForProfile(t *testing.T) {
+	t.Parallel()
+	cfg := Default()
+	cfg.Profiles = map[string]*Profile{
+		"work": {VaultPath: "~/.openpass-work"},
+	}
+	if got := cfg.VaultDirForProfile("work"); got != "~/.openpass-work" {
+		t.Errorf("VaultDirForProfile(work) = %q, want ~/.openpass-work", got)
+	}
+	if got := cfg.VaultDirForProfile("missing"); got != "" {
+		t.Errorf("VaultDirForProfile(missing) = %q, want empty", got)
+	}
+}
+
+func TestProfileForName_NilProfiles(t *testing.T) {
+	t.Parallel()
+	cfg := Default()
+	cfg.Profiles = nil
+	if got := cfg.ProfileForName("work"); got != nil {
+		t.Errorf("ProfileForName with nil Profiles = %v, want nil", got)
 	}
 }

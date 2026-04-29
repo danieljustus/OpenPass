@@ -1,0 +1,278 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openpass.dev/config.schema.json",
+  "properties": {
+    "Agents": {
+      "additionalProperties": {
+        "properties": {
+          "Name": {
+            "type": "string"
+          },
+          "ApprovalMode": {
+            "type": "string"
+          },
+          "AllowedPaths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "RedactFields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "CanWrite": {
+            "type": "boolean"
+          },
+          "CanManageConfig": {
+            "type": "boolean"
+          },
+          "RequireApproval": {
+            "type": "boolean"
+          },
+          "ApprovalTimeout": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "Name",
+          "ApprovalMode",
+          "AllowedPaths",
+          "RedactFields",
+          "CanWrite",
+          "CanManageConfig",
+          "RequireApproval",
+          "ApprovalTimeout"
+        ]
+      },
+      "type": "object"
+    },
+    "Vault": {
+      "properties": {
+        "Path": {
+          "type": "string"
+        },
+        "DefaultRecipients": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ConfirmRemove": {
+          "type": "boolean"
+        },
+        "AuthMethod": {
+          "type": "string"
+        },
+        "UseTouchID": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "Path",
+        "DefaultRecipients",
+        "ConfirmRemove",
+        "AuthMethod",
+        "UseTouchID"
+      ]
+    },
+    "Git": {
+      "properties": {
+        "CommitTemplate": {
+          "type": "string"
+        },
+        "AutoPush": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "CommitTemplate",
+        "AutoPush"
+      ]
+    },
+    "MCP": {
+      "properties": {
+        "Bind": {
+          "type": "string"
+        },
+        "HTTPTokenFile": {
+          "type": "string"
+        },
+        "Port": {
+          "type": "integer"
+        },
+        "Stdio": {
+          "type": "boolean"
+        },
+        "ApprovalRequired": {
+          "type": "boolean"
+        },
+        "ReadHeaderTimeout": {
+          "type": "integer"
+        },
+        "ReadTimeout": {
+          "type": "integer"
+        },
+        "WriteTimeout": {
+          "type": "integer"
+        },
+        "ShutdownTimeout": {
+          "type": "integer"
+        },
+        "ApprovalTimeout": {
+          "type": "integer"
+        },
+        "RateLimit": {
+          "type": "integer"
+        },
+        "TrustedProxyIPs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "MetricsAuthRequired": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "Bind",
+        "HTTPTokenFile",
+        "Port",
+        "Stdio",
+        "ApprovalRequired",
+        "ReadHeaderTimeout",
+        "ReadTimeout",
+        "WriteTimeout",
+        "ShutdownTimeout",
+        "ApprovalTimeout",
+        "RateLimit",
+        "TrustedProxyIPs",
+        "MetricsAuthRequired"
+      ]
+    },
+    "Update": {
+      "properties": {
+        "CacheTTL": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "CacheTTL"
+      ]
+    },
+    "Clipboard": {
+      "properties": {
+        "AutoClearDuration": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "AutoClearDuration"
+      ]
+    },
+    "Audit": {
+      "properties": {
+        "MaxFileSize": {
+          "type": "integer"
+        },
+        "MaxBackups": {
+          "type": "integer"
+        },
+        "MaxAgeDays": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "MaxFileSize",
+        "MaxBackups",
+        "MaxAgeDays"
+      ]
+    },
+    "Logging": {
+      "properties": {
+        "Level": {
+          "type": "string"
+        },
+        "Format": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "Level",
+        "Format"
+      ]
+    },
+    "VaultDir": {
+      "type": "string"
+    },
+    "DefaultAgent": {
+      "type": "string"
+    },
+    "SessionTimeout": {
+      "type": "integer"
+    },
+    "AuthMethod": {
+      "type": "string"
+    },
+    "UseTouchID": {
+      "type": "boolean"
+    },
+    "Profiles": {
+      "additionalProperties": {
+        "properties": {
+          "VaultPath": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "VaultPath"
+        ]
+      },
+      "type": "object"
+    },
+    "DefaultProfile": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "Agents",
+    "Vault",
+    "Git",
+    "MCP",
+    "Update",
+    "Clipboard",
+    "Audit",
+    "Logging",
+    "VaultDir",
+    "DefaultAgent",
+    "SessionTimeout",
+    "AuthMethod",
+    "UseTouchID",
+    "Profiles",
+    "DefaultProfile"
+  ],
+  "description": "OpenPass configuration schema"
+}
