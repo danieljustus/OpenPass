@@ -105,7 +105,7 @@ func encryptPassphrase(plaintext string, vaultIdentity string) (string, string, 
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", "", fmt.Errorf("generate nonce: %w", err)
 	}
-	ciphertext := gcm.Seal(nil, nonce, []byte(plaintext), nil)
+	ciphertext := gcm.Seal(nil, nonce, []byte(plaintext), nil) // #nosec G407 // nonce randomly generated above
 	return base64.StdEncoding.EncodeToString(ciphertext), base64.StdEncoding.EncodeToString(nonce), nil
 }
 

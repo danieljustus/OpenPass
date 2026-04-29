@@ -132,7 +132,7 @@ func GenerateTOTP(secret string, algorithm string, digits int, period int) (*TOT
 	if unixTime < 0 {
 		return nil, fmt.Errorf("system time is before Unix epoch")
 	}
-	counter := uint64(unixTime) / uint64(period)
+	counter := uint64(unixTime) / uint64(period) // #nosec G115 // unixTime checked negative above
 
 	// Calculate next expiration time
 	expiresAt := now.Add(time.Duration(period) * time.Second)
