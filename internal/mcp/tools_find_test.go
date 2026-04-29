@@ -167,7 +167,7 @@ func TestFindEntries(t *testing.T) {
 	}, "stdio", vaultDir)
 	srv.vault.Identity = identity
 
-	matches, err := srv.findEntries("test")
+	matches, err := srv.findEntries(context.Background(), "test")
 	if err != nil {
 		t.Fatalf("findEntries() error = %v", err)
 	}
@@ -187,7 +187,7 @@ func TestFindEntries_NoResults(t *testing.T) {
 	}, "stdio", vaultDir)
 	srv.vault.Identity = identity
 
-	matches, err := srv.findEntries("zzzzz_nomatch")
+	matches, err := srv.findEntries(context.Background(), "zzzzz_nomatch")
 	if err != nil {
 		t.Fatalf("findEntries() error = %v", err)
 	}
@@ -213,7 +213,7 @@ func TestFindEntries_ListFails(t *testing.T) {
 
 	srv.vault.Dir = filepath.Join(vaultDir, "nonexistent")
 
-	_, err = srv.findEntries("test")
+	_, err = srv.findEntries(context.Background(), "test")
 	if err == nil {
 		t.Fatal("findEntries() expected error for nonexistent dir, got nil")
 	}

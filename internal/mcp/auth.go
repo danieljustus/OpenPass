@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
@@ -26,7 +26,7 @@ type RateLimiter struct {
 	limit          int
 	window         time.Duration
 	cleanupCount   int64
-	log            *log.Logger
+	log            *slog.Logger
 	trustedProxies []string
 }
 
@@ -115,7 +115,7 @@ func (rl *RateLimiter) cleanupOnce() {
 	}
 	rl.cleanupCount += int64(cleaned)
 	if cleaned > 0 && rl.log != nil {
-		rl.log.Printf("[DEBUG] rate limiter: cleaned %d expired entries", cleaned)
+		rl.log.Debug("rate limiter cleaned expired entries", "count", cleaned)
 	}
 }
 

@@ -128,12 +128,15 @@ func TestHandleDelete_NotFound(t *testing.T) {
 		Arguments: map[string]any{"path": "nonexistent"},
 	}
 
-	_, err := srv.handleDelete(context.Background(), req)
-	if err == nil {
-		t.Fatal("handleDelete() expected error for nonexistent entry, got nil")
+	result, err := srv.handleDelete(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleDelete() error = %v", err)
 	}
-	if !strings.Contains(err.Error(), "not found") {
-		t.Fatalf("handleDelete() error = %v, want 'not found'", err)
+	if result == nil || !result.IsError {
+		t.Fatal("handleDelete() expected error result for nonexistent entry")
+	}
+	if !strings.Contains(result.Text, "not found") {
+		t.Fatalf("handleDelete() result = %v, want 'not found'", result.Text)
 	}
 }
 

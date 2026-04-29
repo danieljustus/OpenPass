@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/danieljustus/OpenPass/internal/mcp"
+	"github.com/danieljustus/OpenPass/internal/metrics"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -20,6 +21,16 @@ func RunStdioServer(ctx context.Context, vault *vaultpkg.Vault, agentName string
 		}
 		defer func() { _ = mcpServer.Close() }()
 	}
+
+	shutdownTracing, err := metrics.InitTracing("", "")
+	if err != nil {
+		return fmt.Errorf("init tracing: %w", err)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = shutdownTracing(ctx)
+		cancel()
+	}()
 
 	transport := mcp.NewStdioTransport()
 	handler := mcp.NewProtocolHandler("openpass", "1.0.0", mcpServer)

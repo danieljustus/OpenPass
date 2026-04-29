@@ -143,9 +143,12 @@ func TestHandleGenerateTOTP_EntryNotFound(t *testing.T) {
 		Arguments: map[string]any{"path": "nonexistent"},
 	}
 
-	_, err := srv.handleGenerateTOTP(context.Background(), req)
-	if err == nil {
-		t.Fatal("handleGenerateTOTP() expected error for nonexistent entry, got nil")
+	result, err := srv.handleGenerateTOTP(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleGenerateTOTP() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatal("handleGenerateTOTP() expected error result for nonexistent entry")
 	}
 }
 

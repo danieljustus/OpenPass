@@ -109,9 +109,12 @@ func TestHandleGet_NotFound(t *testing.T) {
 		Arguments: map[string]any{"path": "nonexistent"},
 	}
 
-	_, err := srv.handleGet(context.Background(), req)
-	if err == nil {
-		t.Fatal("handleGet() expected error for nonexistent entry, got nil")
+	result, err := srv.handleGet(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleGet() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatal("handleGet() expected error result for nonexistent entry")
 	}
 }
 
@@ -447,9 +450,12 @@ func TestHandleGetMetadata_NotFound(t *testing.T) {
 		Arguments: map[string]any{"path": "nonexistent"},
 	}
 
-	_, err := srv.handleGetMetadata(context.Background(), req)
-	if err == nil {
-		t.Fatal("handleGetMetadata() expected error for nonexistent entry, got nil")
+	result, err := srv.handleGetMetadata(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleGetMetadata() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatal("handleGetMetadata() expected error result for nonexistent entry")
 	}
 }
 

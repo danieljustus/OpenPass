@@ -129,6 +129,20 @@ func toolDefinitions() []toolDefinition {
 			Handler:     (*Server).handleHealth,
 		},
 		{
+			Name:        "get_auth_status",
+			Description: "Return OpenPass unlock authentication status",
+			InputSchema: objectSchema(nil, map[string]schemaProperty{}),
+			Handler:     (*Server).handleGetAuthStatus,
+		},
+		{
+			Name:        "set_auth_method",
+			Description: "Set OpenPass unlock authentication method (requires canManageConfig)",
+			InputSchema: objectSchema([]string{"method"}, map[string]schemaProperty{
+				"method": {Type: "string", Description: "Authentication method: passphrase or touchid"},
+			}),
+			Handler: (*Server).handleSetAuthMethod,
+		},
+		{
 			Name:        "secure_input",
 			Description: "Prompt the user for sensitive data via an interactive TTY and store it without exposing the value to the agent",
 			InputSchema: objectSchema([]string{"path", "field"}, map[string]schemaProperty{

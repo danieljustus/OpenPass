@@ -943,9 +943,12 @@ func TestExecuteTool_HandlerError(t *testing.T) {
 	srv.vault.Identity = identity
 
 	args := json.RawMessage(`{"path": "nonexistent"}`)
-	_, err := srv.executeTool(context.Background(), "get_entry", args)
-	if err == nil {
-		t.Fatal("executeTool() expected error from handler, got nil")
+	result, err := srv.executeTool(context.Background(), "get_entry", args)
+	if err != nil {
+		t.Fatalf("executeTool() error = %v", err)
+	}
+	if result["isError"] != true {
+		t.Fatalf("executeTool() expected tool error result, got %#v", result)
 	}
 }
 

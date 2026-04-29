@@ -23,6 +23,16 @@ import (
 //
 //nolint:gocyclo // Complex server initialization: auth, middleware, metrics, graceful shutdown
 func RunHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault, vaultDir string, version string, factory func(*vaultpkg.Vault, string, string) (*mcp.Server, error)) error {
+	shutdownTracing, err := metrics.InitTracing("", "")
+	if err != nil {
+		return fmt.Errorf("init tracing: %w", err)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = shutdownTracing(ctx)
+		cancel()
+	}()
+
 	addr := fmt.Sprintf("%s:%d", bind, port)
 
 	tokenPath := filepath.Join(vaultDir, "mcp-token")
