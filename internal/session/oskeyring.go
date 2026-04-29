@@ -1,12 +1,12 @@
-//go:build cgo
+//go:build darwin || linux || windows || netbsd || openbsd || ((freebsd || dragonfly) && cgo)
 
 package session
 
 import (
 	"errors"
-	"log"
 	"sync"
 
+	"github.com/danieljustus/OpenPass/internal/logging"
 	"github.com/zalando/go-keyring"
 )
 
@@ -22,7 +22,7 @@ func getFallback() *memoryKeyring {
 
 	if fallback == nil {
 		fallback = &memoryKeyring{}
-		log.Println("WARNING: OS keyring unavailable. Using memory-only session cache (session will clear on process exit).")
+		logging.Default().Warn("OS keyring unavailable. Using memory-only session cache (session will clear on process exit).")
 	}
 	fallbackActive = true
 	return fallback
@@ -78,4 +78,18 @@ func init() {
 	keyringSet = setWithFallback
 	keyringGet = getWithFallback
 	keyringDelete = deleteWithFallback
+	cacheStatusProvider = func() CacheStatus {
+		if isFallbackActive() {
+			return CacheStatus{
+				Backend:    CacheBackendMemory,
+				Persistent: false,
+				Message:    "OS keyring unavailable. Sessions are stored in process memory only.",
+			}
+		}
+		return CacheStatus{
+			Backend:    CacheBackendOSKeyring,
+			Persistent: true,
+			Message:    "OS keyring session cache is available.",
+		}
+	}
 }

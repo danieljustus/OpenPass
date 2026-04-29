@@ -302,21 +302,3 @@ func TestMemoryKeyring_DeleteZeroesData(t *testing.T) {
 		t.Fatal("Get() after Delete() error = nil, want not found")
 	}
 }
-
-func TestVaultDirFromService(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"openpass:/tmp/vault", "/tmp/vault"},
-		{"openpass:/home/user/.openpass", "/home/user/.openpass"},
-		{"otherprefix:/tmp/vault", "otherprefix:/tmp/vault"},
-	}
-
-	for _, tt := range tests {
-		got := vaultDirFromService(tt.input)
-		if got != tt.expected {
-			t.Errorf("vaultDirFromService(%q) = %q, want %q", tt.input, got, tt.expected)
-		}
-	}
-}

@@ -11,12 +11,48 @@ type mockBiometricAuthenticator struct {
 	available bool
 }
 
+type mockBiometricPassphraseStore struct {
+	available  bool
+	passphrase string
+	err        error
+}
+
 func (m *mockBiometricAuthenticator) Authenticate(ctx context.Context, reason string) error {
 	return m.authErr
 }
 
 func (m *mockBiometricAuthenticator) IsAvailable() bool {
 	return m.available
+}
+
+func (m *mockBiometricPassphraseStore) IsAvailable() bool {
+	return m.available
+}
+
+func (m *mockBiometricPassphraseStore) Save(ctx context.Context, vaultDir string, passphrase string) error {
+	_, _ = ctx, vaultDir
+	if m.err != nil {
+		return m.err
+	}
+	m.passphrase = passphrase
+	return nil
+}
+
+func (m *mockBiometricPassphraseStore) Load(ctx context.Context, vaultDir string) (string, error) {
+	_, _ = ctx, vaultDir
+	if m.err != nil {
+		return "", m.err
+	}
+	if !m.available {
+		return "", ErrBiometricNotAvailable
+	}
+	return m.passphrase, nil
+}
+
+func (m *mockBiometricPassphraseStore) Delete(vaultDir string) error {
+	_ = vaultDir
+	m.passphrase = ""
+	return m.err
 }
 
 func TestDefaultBiometricAuthenticator_NoopOnNil(t *testing.T) {
@@ -57,20 +93,23 @@ func TestSetBiometricAuthenticator(t *testing.T) {
 }
 
 func TestLoadPassphraseWithTouchID_Available(t *testing.T) {
-	mock := &mockBiometricAuthenticator{available: true, authErr: nil}
-	biometricAuthenticator = mock
-	defer func() { biometricAuthenticator = nil }()
+	mock := &mockBiometricPassphraseStore{available: true, passphrase: "secret"}
+	biometricPassphraseStore = mock
+	defer func() { biometricPassphraseStore = nil }()
 
-	_, err := LoadPassphraseWithTouchID(context.Background(), "/nonexistent")
-	if err == nil {
-		t.Fatal("expected error for missing cached passphrase")
+	got, err := LoadPassphraseWithTouchID(context.Background(), "/nonexistent")
+	if err != nil {
+		t.Fatalf("LoadPassphraseWithTouchID() error = %v", err)
+	}
+	if got != "secret" {
+		t.Fatalf("LoadPassphraseWithTouchID() = %q, want secret", got)
 	}
 }
 
 func TestLoadPassphraseWithTouchID_NotAvailable(t *testing.T) {
-	mock := &mockBiometricAuthenticator{available: false}
-	biometricAuthenticator = mock
-	defer func() { biometricAuthenticator = nil }()
+	mock := &mockBiometricPassphraseStore{available: false}
+	biometricPassphraseStore = mock
+	defer func() { biometricPassphraseStore = nil }()
 
 	_, err := LoadPassphraseWithTouchID(context.Background(), "/nonexistent")
 	if !errors.Is(err, ErrBiometricNotAvailable) {
@@ -79,13 +118,13 @@ func TestLoadPassphraseWithTouchID_NotAvailable(t *testing.T) {
 }
 
 func TestLoadPassphraseWithTouchID_AuthFails(t *testing.T) {
-	mock := &mockBiometricAuthenticator{available: true, authErr: ErrBiometricFailed}
-	biometricAuthenticator = mock
-	defer func() { biometricAuthenticator = nil }()
+	mock := &mockBiometricPassphraseStore{available: true, err: ErrBiometricFailed}
+	biometricPassphraseStore = mock
+	defer func() { biometricPassphraseStore = nil }()
 
 	_, err := LoadPassphraseWithTouchID(context.Background(), "/nonexistent")
-	if !errors.Is(err, ErrBiometricNotAvailable) {
-		t.Errorf("expected ErrBiometricNotAvailable when auth fails, got %v", err)
+	if !errors.Is(err, ErrBiometricFailed) {
+		t.Errorf("expected ErrBiometricFailed when auth fails, got %v", err)
 	}
 }
 

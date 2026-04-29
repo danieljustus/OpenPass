@@ -63,6 +63,8 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 
 	"crypto/sha256"
+
+	"github.com/danieljustus/OpenPass/internal/metrics"
 )
 
 const (
@@ -77,6 +79,30 @@ var (
 	keyringGet    func(service, account string) (string, error)
 	keyringDelete func(service, account string) error
 )
+
+const (
+	CacheBackendOSKeyring = "os-keyring"
+	CacheBackendMemory    = "memory"
+	CacheBackendUnknown   = "unknown"
+)
+
+type CacheStatus struct {
+	Backend    string `json:"backend"`
+	Persistent bool   `json:"persistent"`
+	Message    string `json:"message"`
+}
+
+var cacheStatusProvider = func() CacheStatus {
+	return CacheStatus{
+		Backend:    CacheBackendUnknown,
+		Persistent: false,
+		Message:    "Session cache backend has not been initialized.",
+	}
+}
+
+func GetCacheStatus() CacheStatus {
+	return cacheStatusProvider()
+}
 
 type storedSession struct {
 	SavedAt             time.Time `json:"saved_at"`
@@ -163,15 +189,18 @@ func SavePassphrase(vaultDir string, passphrase string, ttl time.Duration) error
 func LoadPassphrase(vaultDir string) (string, error) {
 	raw, err := keyringGet(serviceName(vaultDir), sessionAccount)
 	if err != nil {
+		metrics.RecordSessionCacheEvent("keyring_unavailable")
 		return "", fmt.Errorf("load session: %w", err)
 	}
 
 	var sess storedSession
 	if unmarshalErr := json.Unmarshal([]byte(raw), &sess); unmarshalErr != nil {
+		metrics.RecordSessionCacheEvent("miss")
 		return "", fmt.Errorf("decode session: %w", unmarshalErr)
 	}
 
 	if sess.TTL <= 0 {
+		metrics.RecordSessionCacheEvent("miss")
 		return "", fmt.Errorf("session expired for vault %s: TTL is zero or negative", vaultDir)
 	}
 
@@ -181,23 +210,28 @@ func LoadPassphrase(vaultDir string) (string, error) {
 	}
 	if time.Since(lastActivity) > time.Duration(sess.TTL) {
 		_ = ClearSession(vaultDir)
+		metrics.RecordSessionCacheEvent("miss")
 		return "", fmt.Errorf("session expired for vault %s: last activity %v exceeded TTL %v", vaultDir, lastActivity.Format(time.RFC3339), time.Duration(sess.TTL))
 	}
 
 	passphrase, resolveErr := resolvePassphrase(&sess, vaultDir)
 	if resolveErr != nil {
+		metrics.RecordSessionCacheEvent("miss")
 		return "", resolveErr
 	}
 
 	sess.LastAccess = time.Now().UTC()
 	payload, err := json.Marshal(sess)
 	if err != nil {
+		metrics.RecordSessionCacheEvent("hit")
 		return passphrase, nil
 	}
 	if updateErr := keyringSet(serviceName(vaultDir), sessionAccount, string(payload)); updateErr != nil {
+		metrics.RecordSessionCacheEvent("hit")
 		return passphrase, nil
 	}
 
+	metrics.RecordSessionCacheEvent("refresh")
 	return passphrase, nil
 }
 
@@ -228,6 +262,7 @@ func ClearSession(vaultDir string) error {
 	if err := keyringDelete(serviceName(vaultDir), sessionAccount); err != nil {
 		return fmt.Errorf("clear session: %w", err)
 	}
+	metrics.RecordSessionCacheEvent("evict")
 	return nil
 }
 
@@ -254,11 +289,5 @@ func IsSessionExpired(vaultDir string) bool {
 }
 
 func LoadPassphraseWithTouchID(ctx context.Context, vaultDir string) (string, error) {
-	biometric := DefaultBiometricAuthenticator()
-	if biometric.IsAvailable() {
-		if err := biometric.Authenticate(ctx, "Unlock OpenPass vault"); err == nil {
-			return LoadPassphrase(vaultDir)
-		}
-	}
-	return "", ErrBiometricNotAvailable
+	return LoadBiometricPassphrase(ctx, vaultDir)
 }
