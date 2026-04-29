@@ -191,6 +191,7 @@ jobs:
           echo "PASS: Coverage ${COVERAGE}% meets threshold of ${COVERAGE_THRESHOLD}%"
 
       - name: Run smoke tests
+        shell: bash
         run: GOWORK=off go test -v -timeout=15m -tags smoke -run TestBetaSmoke .
 
       - name: Generate coverage report
