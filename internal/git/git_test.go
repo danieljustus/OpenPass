@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -946,6 +947,9 @@ func TestInitMkdirAllError(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("running as root; chmod 0 has no effect")
 	}
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: chmod behavior differs")
+	}
 	parent := t.TempDir()
 	if err := os.Chmod(parent, 0o500); err != nil {
 		t.Fatalf("Chmod() error = %v", err)
@@ -1285,6 +1289,9 @@ func TestAutoCommitWithOptionsGitignoreError(t *testing.T) {
 func TestAutoCommitWithOptionsAddError(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("running as root; permission tests are unreliable")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: chmod behavior differs")
 	}
 
 	dir := t.TempDir()

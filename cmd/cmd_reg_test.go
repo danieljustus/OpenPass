@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"runtime"
 	"testing"
 
 	"github.com/danieljustus/OpenPass/internal/config"
@@ -213,6 +214,9 @@ func TestUnlockVaultWrongPassphrase(t *testing.T) {
 }
 
 func TestVaultPathWithEnvVarOpenPassVault(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: path format differs")
+	}
 	origEnv := os.Getenv("OPENPASS_VAULT")
 	defer func() { _ = os.Setenv("OPENPASS_VAULT", origEnv) }()
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -358,6 +359,9 @@ func TestSecureInputPrompt_Timeout(t *testing.T) {
 }
 
 func TestReadSecureInput_DeadlineError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: pipe behavior differs")
+	}
 	readEnd, writeEnd, err := os.Pipe()
 	if err != nil {
 		t.Fatalf("os.Pipe failed: %v", err)

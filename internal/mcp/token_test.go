@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -42,6 +43,9 @@ func TestLoadOrCreateTokenRespectsEnvVar(t *testing.T) {
 }
 
 func TestLoadOrCreateTokenFilePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: file permissions differ")
+	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mcp-token")
 
@@ -178,6 +182,9 @@ func TestRotateTokenCreatesNewToken(t *testing.T) {
 }
 
 func TestRotateTokenSetsCorrectPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: file permissions differ")
+	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mcp-token")
 

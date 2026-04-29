@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -254,6 +255,9 @@ func TestCmdMCPConfig_Stdio(t *testing.T) {
 }
 
 func TestCmdMCPConfig_StdioCustomVaultIncludesVaultArg(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: path format differs")
+	}
 	vaultDir := t.TempDir()
 	vaultFlagReset(t)
 

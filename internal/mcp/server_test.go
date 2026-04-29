@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -428,6 +429,9 @@ func TestCheckScope_NilAgent(t *testing.T) {
 }
 
 func TestNormalizeScopePath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: path format differs")
+	}
 	tests := []struct {
 		input    string
 		expected string

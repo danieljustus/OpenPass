@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -139,6 +140,9 @@ func TestCmdDelete_EmptyConfirm(t *testing.T) {
 }
 
 func TestCmdDelete_AutoCommitError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: stderr capture not reliable")
+	}
 	vaultDir, passphrase := initVault(t)
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "del"}}

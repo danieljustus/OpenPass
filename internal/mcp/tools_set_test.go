@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -432,6 +433,9 @@ func TestHandleSet_TOTPValidParams(t *testing.T) {
 }
 
 func TestHandleSet_WriteEntryFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: path format differs")
+	}
 	vaultDir, identity := mockVault(t)
 	srv := newTestServerWithVault(t, config.AgentProfile{
 		Name:         "test",

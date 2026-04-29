@@ -303,63 +303,65 @@ func TestRunHTTPServer_MCPMethodNotAllowed(t *testing.T) {
 	}
 }
 
-func TestRunHTTPServer_MCPUnsupportedMediaType(t *testing.T) {
-	v := newTestVault(t)
-	port := findFreePort(t)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	waitForServer := runHTTPServerAsync(ctx, t, "127.0.0.1", port, v, mcp.New)
-	defer func() {
-		cancel()
-		waitForServer()
-	}()
-
-	token := testMCPToken(t, v.Dir)
-	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
-
-	req, _ := http.NewRequest(http.MethodPost, baseURL+"/mcp", strings.NewReader("{}"))
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("X-OpenPass-Agent", "default")
-	req.Header.Set("Accept", "application/json, text/event-stream")
-
-	resp, err := newTestHTTPClient().Do(req)
-	if err != nil {
-		t.Fatalf("mcp request failed: %v", err)
+func TestRunHTTPServer_MCPMediaTypeAndAccept(t *testing.T) {
+	cases := []struct {
+		name        string
+		body        string
+		contentType string
+		accept      string
+		wantStatus  int
+	}{
+		{
+			name:        "missing content-type",
+			body:        "{}",
+			contentType: "",
+			accept:      "application/json, text/event-stream",
+			wantStatus:  http.StatusUnsupportedMediaType,
+		},
+		{
+			name:        "bad accept header",
+			body:        `{"jsonrpc":"2.0","id":1,"method":"initialize"}`,
+			contentType: "application/json",
+			accept:      "",
+			wantStatus:  http.StatusNotAcceptable,
+		},
 	}
-	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusUnsupportedMediaType {
-		t.Errorf("missing Content-Type status = %d, want %d", resp.StatusCode, http.StatusUnsupportedMediaType)
-	}
-}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestVault(t)
+			port := findFreePort(t)
 
-func TestRunHTTPServer_MCPBadAccept(t *testing.T) {
-	v := newTestVault(t)
-	port := findFreePort(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			waitForServer := runHTTPServerAsync(ctx, t, "127.0.0.1", port, v, mcp.New)
+			defer func() {
+				cancel()
+				waitForServer()
+			}()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	waitForServer := runHTTPServerAsync(ctx, t, "127.0.0.1", port, v, mcp.New)
-	defer func() {
-		cancel()
-		waitForServer()
-	}()
+			token := testMCPToken(t, v.Dir)
+			baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 
-	token := testMCPToken(t, v.Dir)
-	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+			req, _ := http.NewRequest(http.MethodPost, baseURL+"/mcp", strings.NewReader(tc.body))
+			req.Header.Set("Authorization", "Bearer "+token)
+			req.Header.Set("X-OpenPass-Agent", "default")
+			if tc.contentType != "" {
+				req.Header.Set("Content-Type", tc.contentType)
+			}
+			if tc.accept != "" {
+				req.Header.Set("Accept", tc.accept)
+			}
 
-	req, _ := http.NewRequest(http.MethodPost, baseURL+"/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize"}`))
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("X-OpenPass-Agent", "default")
-	req.Header.Set("Content-Type", "application/json")
+			resp, err := newTestHTTPClient().Do(req)
+			if err != nil {
+				t.Fatalf("mcp request failed: %v", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
 
-	resp, err := newTestHTTPClient().Do(req)
-	if err != nil {
-		t.Fatalf("mcp request failed: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusNotAcceptable {
-		t.Errorf("missing Accept status = %d, want %d", resp.StatusCode, http.StatusNotAcceptable)
+			if resp.StatusCode != tc.wantStatus {
+				t.Errorf("status = %d, want %d", resp.StatusCode, tc.wantStatus)
+			}
+		})
 	}
 }
 

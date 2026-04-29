@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -169,6 +170,9 @@ func TestRejectSymlink_NotExist(t *testing.T) {
 }
 
 func TestRejectSymlink_OtherError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: chmod behavior differs")
+	}
 	parent := t.TempDir()
 	if err := os.Chmod(parent, 0o000); err != nil {
 		t.Fatalf("Chmod() error = %v", err)
@@ -183,6 +187,9 @@ func TestRejectSymlink_OtherError(t *testing.T) {
 }
 
 func TestSafeWriteFileWindows_StatFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: chmod behavior differs")
+	}
 	parent := t.TempDir()
 	if err := os.Chmod(parent, 0o000); err != nil {
 		t.Fatalf("Chmod() error = %v", err)

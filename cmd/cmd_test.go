@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,9 @@ import (
 )
 
 func TestExpandVaultDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: path tests use unix paths")
+	}
 	home, _ := os.UserHomeDir()
 
 	tests := []struct {

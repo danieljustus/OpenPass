@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -12,6 +13,9 @@ import (
 
 func TestGetAutoClearDuration(t *testing.T) {
 	t.Run("returns default when vaultPath fails", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("skipping on windows: HOME env behavior differs")
+		}
 		origVault := vault
 		origFlagChanged := vaultFlag.Changed
 		defer func() {

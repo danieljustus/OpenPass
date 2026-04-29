@@ -3,6 +3,7 @@ package crypto
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"filippo.io/age"
@@ -42,6 +43,9 @@ func TestSaveIdentityPathTraversal(t *testing.T) {
 func TestSaveIdentityNonWritablePath(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("running as root; chmod 0 has no effect")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: chmod behavior differs")
 	}
 	identity, err := age.GenerateX25519Identity()
 	if err != nil {

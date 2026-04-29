@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -10,6 +11,9 @@ import (
 )
 
 func TestCmdEdit_Success(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: shell script editor not supported")
+	}
 	vaultDir, passphrase := initVault(t)
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "original"}}
@@ -141,6 +145,9 @@ func TestCmdEdit_Uninitialized(t *testing.T) {
 }
 
 func TestCmdEdit_AutoCommitError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: stderr capture not reliable")
+	}
 	vaultDir, passphrase := initVault(t)
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "original"}}

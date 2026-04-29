@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -280,6 +281,9 @@ func TestNewRejectsDotDotInName(t *testing.T) {
 }
 
 func TestNewCreatesAuditDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: HOME env behavior differs")
+	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -311,6 +315,9 @@ func TestNewCreatesLogFile(t *testing.T) {
 }
 
 func TestNewSetsCorrectPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: file permissions differ")
+	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -357,6 +364,9 @@ func TestNewErrorWhenAuditDirNotCreatable(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("running as root; chmod 0 has no effect")
 	}
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: chmod behavior differs")
+	}
 
 	parent := t.TempDir()
 	if err := os.Chmod(parent, 0o500); err != nil {
@@ -378,6 +388,9 @@ func TestNewErrorWhenAuditDirNotCreatable(t *testing.T) {
 func TestNewErrorWhenLogFileNotWritable(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("running as root; chmod 0 has no effect")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: chmod behavior differs")
 	}
 
 	home := t.TempDir()
@@ -2024,6 +2037,9 @@ func TestHealthCheckIgnoresBadGlobPattern(t *testing.T) {
 func TestNewOpenFilePermissionDenied(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("running as root; chmod has no effect")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: chmod behavior differs")
 	}
 
 	home := t.TempDir()

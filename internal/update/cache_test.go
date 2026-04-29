@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -313,6 +314,9 @@ func TestCacheSaveNilEntry(t *testing.T) {
 }
 
 func TestCacheSaveWriteError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: chmod behavior differs")
+	}
 	tmpDir := t.TempDir()
 	cachePath := filepath.Join(tmpDir, "readonly", "update-cache.json")
 
@@ -347,6 +351,9 @@ func TestCacheInvalidateNonExistent(t *testing.T) {
 }
 
 func TestCacheInvalidateError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: chmod behavior differs")
+	}
 	tmpDir := t.TempDir()
 	cachePath := filepath.Join(tmpDir, "update-cache.json")
 

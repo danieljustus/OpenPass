@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -294,6 +295,9 @@ func TestCmdAdd_InteractiveURLPrompt(t *testing.T) {
 }
 
 func TestCmdAdd_AutoCommitError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: stderr capture not reliable")
+	}
 	vaultDir, passphrase := initVault(t)
 	setupGitWithBrokenObjects(t, vaultDir)
 	setPassEnv(t, passphrase)

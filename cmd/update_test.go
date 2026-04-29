@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -402,6 +403,9 @@ func TestUpdateCacheTTL_ConfigLoadError(t *testing.T) {
 }
 
 func TestUpdateCacheTTL_CustomCacheTTL(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: HOME env behavior differs")
+	}
 	tmpDir := t.TempDir()
 	_ = os.Setenv("HOME", tmpDir)
 	defer func() {

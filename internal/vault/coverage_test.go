@@ -3,6 +3,7 @@ package vault
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"filippo.io/age"
@@ -42,6 +43,9 @@ func TestOpenWithPassphrasePathTraversal(t *testing.T) {
 func TestVaultInitMkdirAllError(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("running as root; chmod 0 has no effect")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: chmod behavior differs")
 	}
 	parent := t.TempDir()
 	if err := os.Chmod(parent, 0o500); err != nil {
@@ -88,6 +92,9 @@ func TestMergeEntryNotFound(t *testing.T) {
 func TestInitWithPassphraseMkdirAllError(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("running as root; chmod 0 has no effect")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: chmod behavior differs")
 	}
 	parent := t.TempDir()
 	if err := os.Chmod(parent, 0o500); err != nil {
@@ -368,6 +375,9 @@ func TestInitWriteFileError(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("running as root; permissions test meaningless")
 	}
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: chmod behavior differs")
+	}
 	parent := t.TempDir()
 	os.Chmod(parent, 0o500)
 	defer os.Chmod(parent, 0o700)
@@ -573,6 +583,9 @@ func TestWriteEntryToReadOnlyDir(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("running as root; permissions test meaningless")
 	}
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: chmod behavior differs")
+	}
 	parent := t.TempDir()
 	os.Chmod(parent, 0o555)
 	defer os.Chmod(parent, 0o700)
@@ -696,6 +709,9 @@ func containsStringCoverage(values []string, want string) bool {
 func TestInitReadOnlyDirectory(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("running as root; chmod 0 has no effect")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: chmod behavior differs")
 	}
 	parent := t.TempDir()
 	if err := os.Chmod(parent, 0o500); err != nil {

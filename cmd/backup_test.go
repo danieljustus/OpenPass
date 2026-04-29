@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -399,6 +400,9 @@ func TestRestoreBackup_ExistingSymlinkRejected(t *testing.T) {
 }
 
 func TestRestoreBackup_ModeClamping(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: file mode behavior differs")
+	}
 	archivePath := filepath.Join(t.TempDir(), "modes.tar.gz")
 	f, err := os.Create(archivePath)
 	if err != nil {
@@ -508,6 +512,9 @@ func TestBackupCommand_ExcludeGit(t *testing.T) {
 func TestCreateBackup_UnreadableFile(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("running as root; chmod 0 has no effect")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: chmod behavior differs")
 	}
 
 	vaultDir := t.TempDir()

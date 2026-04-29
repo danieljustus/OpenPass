@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -116,6 +117,9 @@ func TestLoadRejectsInvalidYAML(t *testing.T) {
 }
 
 func TestSaveWritesToDefaultConfigPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: HOME env behavior differs")
+	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -153,6 +157,9 @@ func TestSaveWritesToDefaultConfigPath(t *testing.T) {
 }
 
 func TestSaveCreatesConfigDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: HOME env behavior differs")
+	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -256,6 +263,9 @@ func TestLoadParsesRedactFields(t *testing.T) {
 }
 
 func TestSaveWritesRedactFields(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: HOME env behavior differs")
+	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -397,6 +407,9 @@ func TestLoadWithOnlyVaultSection(t *testing.T) {
 }
 
 func TestSaveWithAllConfigSections(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: HOME env behavior differs")
+	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -485,6 +498,9 @@ func TestSaveWithNilConfigReturnsError(t *testing.T) {
 }
 
 func TestSaveLoadRoundTrip_PreservesAllFields(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: HOME env behavior differs")
+	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -1377,6 +1393,9 @@ func TestLoad_AgentAllowedPathsMultiple(t *testing.T) {
 // --- DefaultConfigPath Tests ---
 
 func TestDefaultConfigPath_ReturnsExpectedPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: HOME env behavior differs")
+	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 

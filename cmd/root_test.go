@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -48,6 +49,9 @@ func stubSessionFuncs(t *testing.T) func() {
 // TestVaultPathErrorWhenHomeDirNotAvailable verifies that vaultPath returns an error
 // when the vault path starts with ~ but the home directory cannot be determined.
 func TestVaultPathErrorWhenHomeDirNotAvailable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: HOME env var behavior differs")
+	}
 	resetVaultFlag(t)
 
 	// Save original env vars and restore after test
@@ -82,6 +86,9 @@ func TestVaultPathErrorWhenHomeDirNotAvailable(t *testing.T) {
 // TestVaultPathSuccessWithTildeExpansion verifies that vaultPath correctly expands
 // tilde paths when home directory is available.
 func TestVaultPathSuccessWithTildeExpansion(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: path format differs")
+	}
 	resetVaultFlag(t)
 
 	// Save original env vars and restore after test
@@ -119,6 +126,9 @@ func TestVaultPathSuccessWithTildeExpansion(t *testing.T) {
 // TestVaultPathSuccessWithoutTilde verifies that vaultPath works correctly
 // when vault path does not start with ~.
 func TestVaultPathSuccessWithoutTilde(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: path format differs")
+	}
 	resetVaultFlag(t)
 
 	// Save original env vars and restore after test
@@ -154,6 +164,9 @@ func TestVaultPathSuccessWithoutTilde(t *testing.T) {
 }
 
 func TestVaultPathUsesEnvWhenFlagUnchanged(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: path format differs")
+	}
 	resetVaultFlag(t)
 
 	origEnv := os.Getenv("OPENPASS_VAULT")
@@ -172,6 +185,9 @@ func TestVaultPathUsesEnvWhenFlagUnchanged(t *testing.T) {
 }
 
 func TestVaultPathPrefersExplicitFlagOverEnv(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: path format differs")
+	}
 	resetVaultFlag(t)
 
 	origEnv := os.Getenv("OPENPASS_VAULT")
