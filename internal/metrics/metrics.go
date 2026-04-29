@@ -12,6 +12,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 )
 
+// Version is the application version, injected at build time.
+var Version = "dev"
+
 var registry = prometheus.NewRegistry()
 
 func init() {
@@ -78,6 +81,49 @@ var (
 	)
 )
 
+var (
+	vaultEntriesTotal = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "openpass",
+			Subsystem: "vault",
+			Name:      "entries_total",
+			Help:      "Total number of entries in the vault.",
+		},
+		[]string{"vault"},
+	)
+
+	vaultOperationDurationSeconds = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "openpass",
+			Subsystem: "vault",
+			Name:      "operation_duration_seconds",
+			Help:      "Duration of vault operations in seconds.",
+			Buckets:   prometheus.DefBuckets,
+		},
+		[]string{"op"},
+	)
+
+	sessionCacheEventsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "openpass",
+			Subsystem: "session",
+			Name:      "cache_events_total",
+			Help:      "Total number of session cache events.",
+		},
+		[]string{"event"},
+	)
+
+	updateCheckTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "openpass",
+			Subsystem: "update",
+			Name:      "check_total",
+			Help:      "Total number of update check results.",
+		},
+		[]string{"result"},
+	)
+)
+
 func init() {
 	registry.MustRegister(
 		mcpRequestsTotal,
@@ -85,6 +131,10 @@ func init() {
 		mcpAuthDenialsTotal,
 		mcpApprovalsTotal,
 		vaultOperationsTotal,
+		vaultEntriesTotal,
+		vaultOperationDurationSeconds,
+		sessionCacheEventsTotal,
+		updateCheckTotal,
 	)
 }
 
@@ -112,6 +162,29 @@ func RecordApproval(agent, outcome string) {
 // status should be "success" or "error".
 func RecordVaultOperation(operation, status string) {
 	vaultOperationsTotal.WithLabelValues(operation, status).Inc()
+}
+
+// RecordVaultEntryCount sets the total number of entries in the vault.
+func RecordVaultEntryCount(vaultDir string, count int) {
+	vaultEntriesTotal.WithLabelValues(vaultDir).Set(float64(count))
+}
+
+// RecordVaultOperationDuration records the duration of a vault operation.
+// op should be one of: "open", "decrypt", "encrypt", "search", "list".
+func RecordVaultOperationDuration(op string, duration time.Duration) {
+	vaultOperationDurationSeconds.WithLabelValues(op).Observe(duration.Seconds())
+}
+
+// RecordSessionCacheEvent records a session cache event.
+// event should be one of: "hit", "miss", "refresh", "evict", "keyring_unavailable".
+func RecordSessionCacheEvent(event string) {
+	sessionCacheEventsTotal.WithLabelValues(event).Inc()
+}
+
+// RecordUpdateCheck records an update check result.
+// result should be one of: "up_to_date", "update_available", "error", "cache_hit".
+func RecordUpdateCheck(result string) {
+	updateCheckTotal.WithLabelValues(result).Inc()
 }
 
 // Registry returns the Prometheus registry used by OpenPass.
