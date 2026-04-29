@@ -13,7 +13,7 @@ import (
 )
 
 var expectedCSVImportPaths = []string{
-	"Bank-\"Checking\"",
+	"Bank-Checking",
 	"GitHub,-Personal",
 	"Work-AWS",
 }
@@ -168,7 +168,7 @@ func assertCSVImportedEntries(t *testing.T, svc *vaultsvc.Service, prefix string
 			"url":      "https://github.com/login",
 			"notes":    "Primary account, includes comma in title",
 		},
-		"Bank-\"Checking\"": {
+		"Bank-Checking": {
 			"username": "bank.user@example.com",
 			"password": "p@ss,with,commas",
 			"url":      "https://bank.example.com/login",

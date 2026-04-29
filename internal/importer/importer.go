@@ -91,12 +91,21 @@ func ParseMapping(mapping string) (map[string]string, error) {
 	return result, nil
 }
 
+// windowsInvalidChars contains characters that are invalid in Windows file names.
+// Slash is excluded because it serves as the vault path separator.
+const windowsInvalidChars = `"*?<>|:\`
+
 // NormalizePath cleans and validates a vault path.
 func NormalizePath(path string) string {
 	path = strings.TrimSpace(path)
 	path = strings.Trim(path, "/")
 	path = strings.ReplaceAll(path, " ", "-")
 	path = strings.ReplaceAll(path, "..", "-")
+	// Strip characters that are invalid in Windows file names so that vault
+	// entries are writable on all platforms.
+	for _, ch := range windowsInvalidChars {
+		path = strings.ReplaceAll(path, string(ch), "")
+	}
 	return path
 }
 

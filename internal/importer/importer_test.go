@@ -76,6 +76,7 @@ func TestNormalizePath(t *testing.T) {
 		{name: "trims spaces and slashes", path: "  /work/aws/  ", want: "work/aws"},
 		{name: "replaces spaces with dashes", path: "Bank Checking", want: "Bank-Checking"},
 		{name: "replaces dot dot with dash", path: "../secrets/..", want: "-/secrets/-"},
+		{name: "strips windows-invalid chars", path: `Bank "Checking"`, want: "Bank-Checking"},
 	}
 
 	for _, tt := range tests {
@@ -236,7 +237,7 @@ func TestCSVImporterParseDefaultMapping(t *testing.T) {
 	assertStringField(t, github.Data, "username", "user@example.com")
 	assertStringField(t, github.Data, "notes", "Primary account, includes comma in title")
 
-	bank := findEntry(t, entries, "Bank-\"Checking\"")
+	bank := findEntry(t, entries, "Bank-Checking")
 	assertStringField(t, bank.Data, "password", "p@ss,with,commas")
 	assertStringField(t, bank.Data, "notes", "Security questions: mother's maiden name? Use generated answers.")
 }
