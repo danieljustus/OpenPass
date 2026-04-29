@@ -211,26 +211,34 @@ OpenPass supports optional Touch ID authentication for vault unlock on macOS. Wh
 
 #### Setup
 
-Add to your config (`~/.openpass/config.yaml` or vault `config.yaml`):
+Set the auth method with the CLI:
 
-```yaml
-useTouchID: true
+```bash
+openpass auth set touchid
 ```
 
-Or enable per-vault:
+Or add to your config (`~/.openpass/config.yaml` or vault `config.yaml`):
 
 ```yaml
-vault:
-  useTouchID: true
+authMethod: touchid
+```
+
+Legacy `useTouchID: true` and `vault.useTouchID: true` are still accepted for
+backward compatibility. Prefer `authMethod: touchid` for new configs.
+
+You can switch back at any time:
+
+```bash
+openpass auth set passphrase
 ```
 
 #### How It Works
 
-1. On first unlock after enabling Touch ID, you enter your passphrase normally
-2. The passphrase is cached in the macOS Keychain (existing behavior)
+1. Enabling Touch ID validates your passphrase or active session
+2. The passphrase is stored in a biometric-protected macOS Keychain item
 3. On subsequent unlocks, Touch ID prompts instead of passphrase
-4. If Touch ID succeeds, the cached passphrase is retrieved from keychain
-5. If Touch ID fails or is cancelled, fallback to passphrase prompt
+4. If Touch ID succeeds, the passphrase is retrieved from Keychain
+5. If Touch ID fails or is cancelled, interactive CLI commands fall back to a passphrase prompt
 
 #### Limitations
 

@@ -10,6 +10,8 @@
 
 A modern, secure command-line password manager written in Go. Uses [age](https://age-encryption.org/) for encryption with built-in MCP server support for AI agent integration.
 
+![OpenPass demo](docs/assets/openpass-demo.gif)
+
 > **Safety Notice**: OpenPass manages sensitive secrets. Use at your own risk, keep tested backups of your vault, and verify recovery before relying on it for critical credentials.
 
 ## Features
@@ -54,6 +56,8 @@ scoop install openpass
 go install github.com/danieljustus/OpenPass@latest
 ```
 
+For manual downloads, Linux packages, release verification, and build-from-source instructions, see [docs/distribution.md](docs/distribution.md).
+
 | Platform | amd64 | arm64 | Install Methods |
 |----------|-------|-------|-----------------|
 | macOS | ✓ | ✓ | Quick install, Homebrew, Go, Manual |
@@ -72,8 +76,14 @@ openpass add github
 # or non-interactive:
 openpass set github.password --value "mysecretpassword"
 
+# Add TOTP metadata
+openpass add github --totp-secret JBSWY3DPEHPK3PXP --totp-issuer GitHub
+
 # Retrieve (auto-copies to clipboard with 45s timeout)
 openpass get github.password --clip
+
+# Show entry details, including the current TOTP code when configured
+openpass get github
 
 # List and search
 openpass list
@@ -81,10 +91,14 @@ openpass find mybank
 
 # Generate secure passwords
 openpass generate --length 32 --symbols
+openpass generate --store newaccount.password --length 20 --symbols
 
 # Session management
 openpass unlock   # cache passphrase
 openpass lock     # clear cache
+openpass auth status
+openpass auth set touchid      # macOS Touch ID unlock
+openpass auth set passphrase   # passphrase-only unlock
 
 # Recipients for multi-user vaults
 openpass recipients list
@@ -99,9 +113,25 @@ openpass backup ~/backups/openpass-$(date +%Y%m%d).tar.gz
 openpass restore ~/backups/openpass-20260427.tar.gz
 ```
 
+Backup archives contain encrypted vault files, identity material, config, and MCP tokens. Protect them like the vault itself and test restore before relying on backups.
+
+## Migration from other managers
+
+OpenPass can import from 1Password, Bitwarden, pass, and CSV exports:
+
+```bash
+openpass import <format> <source>
+openpass import bitwarden ~/exports/bitwarden.json
+openpass import pass ~/.password-store
+```
+
+See [docs/migration.md](docs/migration.md) for export steps, format details, and verification guidance.
+
 ## MCP Server
 
 OpenPass exposes an MCP server for AI agent integration:
+
+![OpenPass architecture](docs/assets/openpass-architecture.png)
 
 ```bash
 # Stdio mode (recommended for local agents)
@@ -111,9 +141,15 @@ openpass serve --stdio --agent claude-code
 openpass serve --port 8080
 ```
 
-Generate config snippets: `openpass mcp-config <agent>`
+Use `openpass mcp-config` to generate ready-to-paste client config:
 
-For detailed agent setup, profiles, token management, and observability, see [docs/agent-integration.md](docs/agent-integration.md).
+```bash
+openpass mcp-config claude-code
+openpass mcp-config claude-code --http
+openpass mcp-config hermes --http --format hermes
+```
+
+HTTP mode binds to `127.0.0.1` by default and uses bearer token authentication. Agents can use the MCP `generate_totp` tool to get current TOTP codes without receiving the stored TOTP secret. For detailed agent setup, profiles, token management, and observability, see [docs/agent-integration.md](docs/agent-integration.md).
 
 ## Configuration
 
@@ -149,12 +185,24 @@ For the full configuration reference, see [docs/configuration.md](docs/configura
 - HTTP MCP bound to `127.0.0.1` with bearer token auth
 - **No telemetry** (see [SECURITY.md](SECURITY.md#privacy--telemetry))
 
+## Documentation
+
+- [Configuration reference](docs/configuration.md)
+- [Agent integration](docs/agent-integration.md)
+- [MCP API](docs/mcp-api.md)
+- [Distribution channels](docs/distribution.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Architecture](ARCHITECTURE.md)
+- [Security policy](SECURITY.md)
+
 ## Comparison with pass
 
 | Feature | OpenPass | pass (zx2c4) |
 |---------|----------|--------------|
 | Encryption | age | GPG |
 | Session caching | OS keyring | gpg-agent |
+| Entry format | Individual encrypted files | Individual encrypted files |
+| Git support | Built-in | Via hooks |
 | MCP server | Built-in (stdio + HTTP) | No |
 | Password generation | Built-in | External tools |
 

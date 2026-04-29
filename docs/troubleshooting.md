@@ -571,7 +571,48 @@ cp ~/.openpass/mcp-token ~/backups/openpass/
 
 ---
 
-## Related Documentation
+## Structured Logging
+
+OpenPass uses Go's standard `log/slog` package for structured logging. All logs are written to `stderr` to keep `stdout` clean for stdio MCP transport.
+
+### Enabling Debug Logging
+
+Set the environment variable before running any OpenPass command:
+
+```bash
+OPENPASS_LOG_LEVEL=debug openpass serve --stdio --agent claude-code
+```
+
+Available levels (from most to least verbose):
+- `debug` — Detailed internal state and operations
+- `info` — Normal operational messages
+- `warn` — Warnings and recoverable issues (default)
+- `error` — Errors only
+
+### JSON Format
+
+For machine-readable output (e.g., when piping to log aggregation):
+
+```bash
+OPENPASS_LOG_LEVEL=info OPENPASS_LOG_FORMAT=json openpass serve --http
+```
+
+### Common Log Messages
+
+| Message | Level | Meaning |
+|---------|-------|---------|
+| `OS keyring unavailable` | warn | Falling back to memory-only session cache |
+| `Using memory-only session cache` | warn | Sessions cannot be shared across processes on this platform/build |
+| `rate limiter cleaned expired entries` | debug | Periodic cleanup of stale rate limit entries |
+
+### MCP Stdio Protocol Cleanliness
+
+If JSON-RPC messages are being interleaved with log output, verify:
+1. `OPENPASS_LOG_FORMAT` is set to `text` or `json` (not a custom format)
+2. You're using a version with structured logging support
+3. stdout is not being redirected to a file that also captures stderr
+
+### Related Documentation
 
 - [Agent Integration Guide](agent-integration.md) - MCP setup and configuration
 - [Runbook](runbook.md) - Operational procedures and incident response

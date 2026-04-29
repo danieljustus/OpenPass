@@ -14,11 +14,23 @@ Creates a new vault directory with identity and configuration.
 
 
 .SH OPTIONS
+\fB--auth\fP="ask"
+	unlock method for this vault (ask, passphrase, touchid)
+
+.PP
 \fB-h\fP, \fB--help\fP[=false]
 	help for init
 
 
 .SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--profile\fP=""
+	use a named vault profile
+
+.PP
+\fB--quiet\fP[=false]
+	suppress non-error output
+
+.PP
 \fB--vault\fP="~/.openpass"
 	path to the password vault
 

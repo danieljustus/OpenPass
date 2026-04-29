@@ -44,14 +44,6 @@ pre-commit install
 
 This installs git hooks that run formatting, linting, and short tests before each commit, catching issues locally before they reach CI.
 
-### Workspace and CI Differences
-
-OpenPass uses a Go workspace (`go.work`) during local development, but CI runs with `GOWORK=off` to validate the exact release build path.
-
-- **Local development**: `go.work` replaces `github.com/atotto/clipboard` with the local `./clipboardpkg` module. `./clipboardpkg` is a minimal stub that avoids system clipboard dependencies, making local tests fast and headless.
-- **CI / Release**: All workflows run with `GOWORK=off`, which forces the real `github.com/atotto/clipboard` module to be used. This ensures the release artifact is tested with the actual dependency tree that end users will compile.
-- This split is intentional: local tests stay fast and portable, while CI guarantees the real integration path works.
-
 ### Running from Source
 
 ```bash
@@ -88,7 +80,7 @@ openpass/
 │   ├── git/             # Git integration
 │   ├── mcp/             # MCP server implementation
 │   └── audit/           # Audit logging
-└── clipboardpkg/        # Clipboard support module
+
 ```
 
 ## Code Style Guidelines

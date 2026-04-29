@@ -33,6 +33,8 @@ OpenPass exposes a Model Context Protocol (MCP) server that allows AI agents to 
 | Tool | Description | Write Operation |
 |------|-------------|-----------------|
 | `health` | Check server health status | No |
+| `get_auth_status` | Check OpenPass unlock auth status | No |
+| `set_auth_method` | Change unlock auth method | Config write |
 | `list_entries` | List all vault entries | No |
 | `get_entry` | Retrieve entry contents | No |
 | `get_entry_metadata` | Get entry metadata without sensitive data | No |
@@ -172,6 +174,41 @@ Check the MCP server health status.
 ```
 
 **HTTP Endpoint**: `GET /health` (no authentication required)
+
+---
+
+### get_auth_status
+
+Return the configured unlock method, Touch ID availability, and session cache
+backend.
+
+**Request**:
+
+```json
+{
+  "tool": "get_auth_status",
+  "arguments": {}
+}
+```
+
+---
+
+### set_auth_method
+
+Set the unlock method to `passphrase` or `touchid`. The calling agent profile
+must set `canManageConfig: true`. MCP never accepts a passphrase from the agent;
+Touch ID setup requires an already active OpenPass session.
+
+**Request**:
+
+```json
+{
+  "tool": "set_auth_method",
+  "arguments": {
+    "method": "touchid"
+  }
+}
+```
 
 ---
 
