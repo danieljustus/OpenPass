@@ -339,19 +339,23 @@ func PushWithResult(vaultDir string) PushResult {
 
 	// Handle authentication errors gracefully
 	errStr := err.Error()
-	if strings.Contains(errStr, "authentication") || strings.Contains(errStr, "credentials") ||
-		strings.Contains(errStr, "401") || strings.Contains(errStr, "403") {
+	switch {
+	case strings.Contains(errStr, "authentication"),
+		strings.Contains(errStr, "credentials"),
+		strings.Contains(errStr, "401"),
+		strings.Contains(errStr, "403"):
 		result.Error = &PushError{
 			Message: "authentication failed - please check your credentials",
 			Cause:   err,
 		}
-	} else if strings.Contains(errStr, "connection") || strings.Contains(errStr, "timeout") ||
-		strings.Contains(errStr, "refused") {
+	case strings.Contains(errStr, "connection"),
+		strings.Contains(errStr, "timeout"),
+		strings.Contains(errStr, "refused"):
 		result.Error = &PushError{
 			Message: "network error - please check your connection",
 			Cause:   err,
 		}
-	} else {
+	default:
 		result.Error = &PushError{
 			Message: "push failed",
 			Cause:   err,

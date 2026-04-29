@@ -398,3 +398,474 @@ func TestRecipientsRemove_CorrectOne_Integration(t *testing.T) {
 		t.Errorf("expected only recipient 2 to remain, got: %v", recipients)
 	}
 }
+
+func TestCmdRecipientsList_WithRecipients(t *testing.T) {
+	vaultDir := t.TempDir()
+	passphrase := "correcthorsebatterystaple"
+	vaultFlagReset(t)
+	_ = os.Setenv("OPENPASS_VAULT", vaultDir)
+	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_VAULT") })
+
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+
+	rm := vaultpkg.NewRecipientsManager(vaultDir)
+	if err := rm.AddRecipient(testRecipient1); err != nil {
+		t.Fatalf("add recipient: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "recipients", "list"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	output := captureStdout(func() {
+		_ = rootCmd.Execute()
+	})
+
+	if !strings.Contains(output, "Recipients") {
+		t.Errorf("list output missing header: %q", output)
+	}
+	if !strings.Contains(output, testRecipient1) {
+		t.Errorf("list output missing recipient: %q", output)
+	}
+}
+
+func TestCmdRecipientsAdd_Invalid(t *testing.T) {
+	vaultDir := t.TempDir()
+	passphrase := "correcthorsebatterystaple"
+	vaultFlagReset(t)
+
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+
+	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") })
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "recipients", "add", "not-a-valid-key"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	var execErr error
+	captureStderr(func() {
+		execErr = rootCmd.Execute()
+	})
+
+	if execErr == nil {
+		t.Error("expected error for invalid recipient key")
+	}
+	if !strings.Contains(execErr.Error(), "invalid recipient") {
+		t.Errorf("unexpected error: %v", execErr)
+	}
+}
+
+func TestCmdRecipientsAdd_Duplicate(t *testing.T) {
+	vaultDir := t.TempDir()
+	passphrase := "correcthorsebatterystaple"
+	vaultFlagReset(t)
+
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+
+	rm := vaultpkg.NewRecipientsManager(vaultDir)
+	if err := rm.AddRecipient(testRecipient1); err != nil {
+		t.Fatalf("pre-add recipient: %v", err)
+	}
+
+	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") })
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "recipients", "add", testRecipient1})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	var execErr error
+	captureStderr(func() {
+		execErr = rootCmd.Execute()
+	})
+
+	if execErr == nil {
+		t.Error("expected error for duplicate recipient")
+	}
+	if !strings.Contains(execErr.Error(), "already exists") {
+		t.Errorf("unexpected error: %v", execErr)
+	}
+}
+
+func TestCmdRecipientsRemove_NotFound(t *testing.T) {
+	vaultDir := t.TempDir()
+	passphrase := "correcthorsebatterystaple"
+	vaultFlagReset(t)
+
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+
+	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") })
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "recipients", "remove", testRecipient2, "--yes"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	var execErr error
+	captureStderr(func() {
+		execErr = rootCmd.Execute()
+	})
+
+	if execErr == nil {
+		t.Error("expected error for recipient not found")
+	}
+	if !strings.Contains(execErr.Error(), "not found") {
+		t.Errorf("unexpected error: %v", execErr)
+	}
+}
+
+func TestCmdRecipientsRemove_Cancel(t *testing.T) {
+	vaultDir := t.TempDir()
+	passphrase := "correcthorsebatterystaple"
+	vaultFlagReset(t)
+
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+
+	origConfirmRemove := confirmRemove
+	confirmRemove = false
+	t.Cleanup(func() { confirmRemove = origConfirmRemove })
+
+	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") })
+
+	oldStdin := os.Stdin
+	r, w, _ := os.Pipe()
+	os.Stdin = r
+	_, _ = w.WriteString("n\n")
+	_ = w.Close()
+	t.Cleanup(func() {
+		os.Stdin = oldStdin
+		_ = r.Close()
+	})
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "recipients", "remove", testRecipient1})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	var execErr error
+	output := captureStderr(func() {
+		execErr = rootCmd.Execute()
+	})
+
+	if execErr != nil {
+		t.Errorf("unexpected error for canceled remove: %v", execErr)
+	}
+	if !strings.Contains(output, "Canceled") {
+		t.Errorf("expected 'Canceled' in output: %q", output)
+	}
+}
+
+func TestCmdRecipientsRemove_WithYesFlag(t *testing.T) {
+	vaultDir := t.TempDir()
+	passphrase := "correcthorsebatterystaple"
+	vaultFlagReset(t)
+
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+
+	rm := vaultpkg.NewRecipientsManager(vaultDir)
+	if err := rm.AddRecipient(testRecipient1); err != nil {
+		t.Fatalf("add recipient: %v", err)
+	}
+
+	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") })
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "recipients", "remove", testRecipient1, "--yes"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	output := captureStdout(func() {
+		_ = rootCmd.Execute()
+	})
+
+	if !strings.Contains(output, "Recipient removed successfully") {
+		t.Errorf("expected 'Recipient removed successfully', got: %q", output)
+	}
+}
+
+func TestCmdRecipientsRemove_InvalidKey(t *testing.T) {
+	vaultDir := t.TempDir()
+	passphrase := "correcthorsebatterystaple"
+	vaultFlagReset(t)
+
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+
+	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") })
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "recipients", "remove", "not-a-valid-key", "--yes"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	var execErr error
+	captureStderr(func() {
+		execErr = rootCmd.Execute()
+	})
+
+	if execErr == nil {
+		t.Error("expected error for invalid recipient key")
+	}
+	if !strings.Contains(execErr.Error(), "invalid recipient") {
+		t.Errorf("unexpected error: %v", execErr)
+	}
+}
+
+func TestCmdRecipientsAdd_UnlockError(t *testing.T) {
+	vaultDir := t.TempDir()
+	passphrase := "correcthorsebatterystaple"
+	vaultFlagReset(t)
+
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+
+	_ = os.Setenv("OPENPASS_PASSPHRASE", "wrong-passphrase")
+	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") })
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "recipients", "add", testRecipient1})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	var execErr error
+	captureStderr(func() {
+		execErr = rootCmd.Execute()
+	})
+
+	if execErr == nil {
+		t.Error("expected error for wrong passphrase")
+	}
+	if !strings.Contains(execErr.Error(), "open vault") {
+		t.Errorf("unexpected error: %v", execErr)
+	}
+}
+
+func TestCmdRecipientsRemove_UnlockError(t *testing.T) {
+	vaultDir := t.TempDir()
+	passphrase := "correcthorsebatterystaple"
+	vaultFlagReset(t)
+
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+
+	_ = os.Setenv("OPENPASS_PASSPHRASE", "wrong-passphrase")
+	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") })
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "recipients", "remove", testRecipient1, "--yes"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	var execErr error
+	captureStderr(func() {
+		execErr = rootCmd.Execute()
+	})
+
+	if execErr == nil {
+		t.Error("expected error for wrong passphrase")
+	}
+	if !strings.Contains(execErr.Error(), "open vault") {
+		t.Errorf("unexpected error: %v", execErr)
+	}
+}
+
+func TestRecipients_ErrorPaths(t *testing.T) {
+	resetVaultState(t)
+	t.Run("list - uninitialized vault", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		_ = os.Setenv("OPENPASS_VAULT", tmpDir)
+		defer func() { _ = os.Unsetenv("OPENPASS_VAULT") }()
+
+		rootCmd.SetArgs([]string{"--vault", tmpDir, "recipients", "list"})
+		defer rootCmd.SetArgs(nil)
+
+		err := rootCmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "not initialized") {
+			t.Errorf("expected 'not initialized' error, got: %v", err)
+		}
+	})
+
+	t.Run("add - invalid recipient", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		_ = os.Setenv("OPENPASS_VAULT", tmpDir)
+		_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
+		defer func() {
+			_ = os.Unsetenv("OPENPASS_VAULT")
+			_ = os.Unsetenv("OPENPASS_PASSPHRASE")
+		}()
+
+		cfg := config.Default()
+		_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+
+		rootCmd.SetArgs([]string{"--vault", tmpDir, "recipients", "add", "invalid-key"})
+		defer rootCmd.SetArgs(nil)
+
+		err := rootCmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "invalid") {
+			t.Errorf("expected 'invalid' error, got: %v", err)
+		}
+	})
+
+	t.Run("remove - invalid recipient format", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		_ = os.Setenv("OPENPASS_VAULT", tmpDir)
+		_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
+		defer func() {
+			_ = os.Unsetenv("OPENPASS_VAULT")
+			_ = os.Unsetenv("OPENPASS_PASSPHRASE")
+		}()
+
+		cfg := config.Default()
+		_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+
+		rootCmd.SetArgs([]string{"--vault", tmpDir, "recipients", "remove", "not-age1-key", "-y"})
+		defer rootCmd.SetArgs(nil)
+
+		err := rootCmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "invalid") {
+			t.Errorf("expected 'invalid' error, got: %v", err)
+		}
+	})
+
+	t.Run("remove - recipient not in list", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		_ = os.Setenv("OPENPASS_VAULT", tmpDir)
+		_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
+		defer func() {
+			_ = os.Unsetenv("OPENPASS_VAULT")
+			_ = os.Unsetenv("OPENPASS_PASSPHRASE")
+		}()
+
+		cfg := config.Default()
+		_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+
+		_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
+		identity2, _ := vaultpkg.InitWithPassphrase(tmpDir+"_second", "test2", cfg)
+
+		rootCmd.SetArgs([]string{"--vault", tmpDir, "recipients", "remove", identity2.Recipient().String(), "-y"})
+		defer rootCmd.SetArgs(nil)
+
+		err := rootCmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "not found") {
+			t.Errorf("expected 'not found' error, got: %v", err)
+		}
+	})
+}
+
+func TestRecipients_ListEmpty(t *testing.T) {
+	resetVaultState(t)
+
+	tmpDir := t.TempDir()
+	_ = os.Setenv("OPENPASS_VAULT", tmpDir)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
+	defer func() {
+		_ = os.Unsetenv("OPENPASS_VAULT")
+		_ = os.Unsetenv("OPENPASS_PASSPHRASE")
+	}()
+
+	cfg := config.Default()
+	_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+
+	rootCmd.SetArgs([]string{"--vault", tmpDir, "recipients", "list"})
+	defer rootCmd.SetArgs(nil)
+
+	output := captureStdout(func() {
+		_ = rootCmd.Execute()
+	})
+
+	if !strings.Contains(output, "No recipients configured") {
+		t.Errorf("expected 'No recipients configured', got: %s", output)
+	}
+}
+
+func TestRecipients_ListInvalidRecipient(t *testing.T) {
+	resetVaultState(t)
+
+	tmpDir := t.TempDir()
+	_ = os.Setenv("OPENPASS_VAULT", tmpDir)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
+	defer func() {
+		_ = os.Unsetenv("OPENPASS_VAULT")
+		_ = os.Unsetenv("OPENPASS_PASSPHRASE")
+	}()
+
+	cfg := config.Default()
+	_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+
+	// Write an invalid recipient directly to recipients.txt
+	_ = os.WriteFile(tmpDir+"/recipients.txt", []byte("invalid-key\n"), 0o600)
+
+	rootCmd.SetArgs([]string{"--vault", tmpDir, "recipients", "list"})
+	defer rootCmd.SetArgs(nil)
+
+	output := captureStdout(func() {
+		_ = rootCmd.Execute()
+	})
+
+	if !strings.Contains(output, "invalid key format") {
+		t.Errorf("expected output to contain invalid recipient error, got: %s", output)
+	}
+}
+
+func TestRecipients_AddAlreadyExists(t *testing.T) {
+	resetVaultState(t)
+
+	tmpDir := t.TempDir()
+	_ = os.Setenv("OPENPASS_VAULT", tmpDir)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
+	defer func() {
+		_ = os.Unsetenv("OPENPASS_VAULT")
+		_ = os.Unsetenv("OPENPASS_PASSPHRASE")
+	}()
+
+	cfg := config.Default()
+	identity, _ := vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+	recipient := identity.Recipient().String()
+
+	// Add once
+	_ = vaultpkg.NewRecipientsManager(tmpDir).AddRecipient(recipient)
+
+	// Try to add again via CLI
+	rootCmd.SetArgs([]string{"--vault", tmpDir, "recipients", "add", recipient})
+	defer rootCmd.SetArgs(nil)
+
+	err := rootCmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("expected 'already exists' error, got: %v", err)
+	}
+}
+
+func TestRecipients_RemoveCancelled(t *testing.T) {
+	resetVaultState(t)
+
+	tmpDir := t.TempDir()
+	_ = os.Setenv("OPENPASS_VAULT", tmpDir)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
+	defer func() {
+		_ = os.Unsetenv("OPENPASS_VAULT")
+		_ = os.Unsetenv("OPENPASS_PASSPHRASE")
+	}()
+
+	cfg := config.Default()
+	identity, _ := vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+	recipient := identity.Recipient().String()
+	_ = vaultpkg.NewRecipientsManager(tmpDir).AddRecipient(recipient)
+
+	oldStdin := os.Stdin
+	r, w, _ := os.Pipe()
+	os.Stdin = r
+	_, _ = w.WriteString("n\n")
+	_ = w.Close()
+
+	rootCmd.SetArgs([]string{"--vault", tmpDir, "recipients", "remove", recipient})
+	defer rootCmd.SetArgs(nil)
+
+	_ = rootCmd.Execute()
+	os.Stdin = oldStdin
+	_ = r.Close()
+}

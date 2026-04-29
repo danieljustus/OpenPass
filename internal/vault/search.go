@@ -229,6 +229,8 @@ type FindOptions struct {
 // FindWithOptions searches vault entries with configurable options.
 // It supports both sequential and concurrent decryption, and optional
 // scope filtering before decrypt.
+//
+//nolint:gocyclo // Search orchestration: listing, filtering, decryption, ranking
 func FindWithOptions(vaultDir string, query string, opts FindOptions) ([]Match, error) {
 	paths, err := List(vaultDir, "")
 	if err != nil {

@@ -164,7 +164,7 @@ func GenerateTOTP(secret string, algorithm string, digits int, period int) (*TOT
 	if mod < 0 || mod > int(^uint32(0)) {
 		return nil, fmt.Errorf("digits value %d produces out-of-range modulus", digits)
 	}
-	code = code % uint32(mod)
+	code %= uint32(mod)
 
 	// Format with leading zeros
 	codeStr := fmt.Sprintf("%0*d", digits, code)

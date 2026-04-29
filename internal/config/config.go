@@ -88,6 +88,7 @@ func validateConfigPath(path string) error {
 	return nil
 }
 
+//nolint:gocyclo // Complex config loading with backwards compatibility and environment fallbacks
 func Load(path string) (*Config, error) {
 	if err := validateConfigPath(path); err != nil {
 		return nil, err

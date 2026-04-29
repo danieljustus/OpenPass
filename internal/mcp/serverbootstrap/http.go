@@ -20,6 +20,8 @@ import (
 )
 
 // RunHTTPServer starts the HTTP MCP server.
+//
+//nolint:gocyclo // Complex server initialization: auth, middleware, metrics, graceful shutdown
 func RunHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault, vaultDir string, version string, factory func(*vaultpkg.Vault, string, string) (*mcp.Server, error)) error {
 	addr := fmt.Sprintf("%s:%d", bind, port)
 
@@ -180,6 +182,7 @@ func RunHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault
 		}
 
 		w.Header().Set("Content-Type", "application/json")
+		//nolint:errchkjson // Best-effort JSON response write; no recovery path if encoding fails
 		_ = json.NewEncoder(w).Encode(resp)
 	})
 	mcpChain := mcp.OriginValidationMiddleware(addr, mcp.BearerAuthMiddleware(token, authAuditLog, mcp.AgentHeaderMiddleware(mcpHandler)))

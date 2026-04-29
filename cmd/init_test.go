@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/danieljustus/OpenPass/internal/config"
 	gitpkg "github.com/danieljustus/OpenPass/internal/git"
+	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
 func TestInitCommand_HiddenPassphrase(t *testing.T) {
@@ -48,4 +50,101 @@ func TestInitCommand_HiddenPassphrase(t *testing.T) {
 	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
 		t.Errorf(".git directory not created at %s", gitDir)
 	}
+}
+
+func TestCmdInit_Success(t *testing.T) {
+	vaultDir := t.TempDir()
+	vaultFlagReset(t)
+
+	oldStdin := os.Stdin
+	r, w, _ := os.Pipe()
+	os.Stdin = r
+	_, _ = w.WriteString("supersecretpassphrase123\n")
+	_ = w.Close()
+	t.Cleanup(func() {
+		os.Stdin = oldStdin
+		_ = r.Close()
+	})
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "init"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	output := captureStdout(func() {
+		_ = rootCmd.Execute()
+	})
+
+	if !strings.Contains(output, "Vault initialized") {
+		t.Errorf("init output missing success message: %q", output)
+	}
+}
+
+func TestCmdInit_AlreadyInitialized(t *testing.T) {
+	vaultDir := t.TempDir()
+	vaultFlagReset(t)
+
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, "supersecretpassphrase123", config.Default()); err != nil {
+		t.Fatalf("pre-init vault: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "init"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	var execErr error
+	captureStderr(func() {
+		execErr = rootCmd.Execute()
+	})
+
+	if execErr == nil {
+		t.Error("expected error for already initialized vault")
+	}
+	if !strings.Contains(execErr.Error(), "already initialized") {
+		t.Errorf("unexpected error: %v", execErr)
+	}
+}
+
+func TestCmdInit_ShortPassphrase(t *testing.T) {
+	vaultDir := t.TempDir()
+	vaultFlagReset(t)
+
+	oldStdin := os.Stdin
+	r, w, _ := os.Pipe()
+	os.Stdin = r
+	_, _ = w.WriteString("short\n")
+	_ = w.Close()
+	t.Cleanup(func() {
+		os.Stdin = oldStdin
+		_ = r.Close()
+	})
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "init"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	var execErr error
+	captureStderr(func() {
+		execErr = rootCmd.Execute()
+	})
+
+	if execErr == nil {
+		t.Error("expected error for short passphrase")
+	}
+}
+
+func TestInit_ErrorPaths(t *testing.T) {
+	resetVaultState(t)
+	t.Run("already initialized", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := config.Default()
+		_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+
+		_ = os.Setenv("OPENPASS_VAULT", tmpDir)
+		defer func() { _ = os.Unsetenv("OPENPASS_VAULT") }()
+
+		rootCmd.SetArgs([]string{"--vault", tmpDir, "init"})
+		defer rootCmd.SetArgs(nil)
+
+		err := rootCmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "already initialized") {
+			t.Errorf("expected 'already initialized' error, got: %v", err)
+		}
+	})
 }

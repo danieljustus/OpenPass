@@ -22,6 +22,7 @@ func IsLoopbackBind(bind string) bool {
 func WriteMCPHTTPError(w http.ResponseWriter, status int, id json.RawMessage, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
+	//nolint:errchkjson // Best-effort error response write; no recovery path if encoding fails
 	_ = json.NewEncoder(w).Encode(NewErrorResponse(id, code, message, nil))
 }
 

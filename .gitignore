@@ -52,7 +52,6 @@ coverage.html
 docs/superpowers/
 CYCLE_COMPLETION_SUMMARY.md
 complete_cycle.sh
-mise.toml
 
 # Playwright MCP logs
 .playwright-mcp/

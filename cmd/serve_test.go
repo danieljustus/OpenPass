@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/danieljustus/OpenPass/internal/mcp/serverbootstrap"
 	"github.com/danieljustus/OpenPass/internal/metrics"
 	"github.com/danieljustus/OpenPass/internal/session"
+	"github.com/danieljustus/OpenPass/internal/testutil"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -1025,5 +1027,313 @@ func TestRunHTTPServer_HealthEndpoint_NonLoopback(t *testing.T) {
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("health status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+}
+
+func TestCmdServe_EmptyBind(t *testing.T) {
+	vaultDir := t.TempDir()
+	vaultFlagReset(t)
+	_ = os.Setenv("OPENPASS_VAULT", vaultDir)
+	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_VAULT") })
+
+	t.Cleanup(func() {
+		_ = serveCmd.Flags().Set("bind", "127.0.0.1")
+		_ = serveCmd.Flags().Set("stdio", "false")
+	})
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "serve", "--bind", ""})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	var execErr error
+	captureStderr(func() {
+		execErr = rootCmd.Execute()
+	})
+
+	if execErr == nil {
+		t.Error("expected error for empty bind address")
+	}
+	if !strings.Contains(execErr.Error(), "bind") {
+		t.Errorf("unexpected error: %v", execErr)
+	}
+}
+
+func TestCmdServe_MissingAgentInStdioMode(t *testing.T) {
+	vaultDir := t.TempDir()
+	vaultFlagReset(t)
+	_ = os.Setenv("OPENPASS_VAULT", vaultDir)
+	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_VAULT") })
+
+	t.Cleanup(func() {
+		_ = serveCmd.Flags().Set("bind", "127.0.0.1")
+		_ = serveCmd.Flags().Set("stdio", "false")
+		_ = serveCmd.Flags().Set("agent", "")
+	})
+	_ = serveCmd.Flags().Set("agent", "")
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "serve", "--bind", "127.0.0.1", "--stdio"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	var execErr error
+	captureStderr(func() {
+		execErr = rootCmd.Execute()
+	})
+
+	if execErr == nil {
+		t.Error("expected error for missing --agent in stdio mode")
+	}
+	if !strings.Contains(execErr.Error(), "--agent") {
+		t.Errorf("unexpected error: %v", execErr)
+	}
+}
+
+func TestServe_RunE_HTTPWithAgent(t *testing.T) {
+	vaultDir := t.TempDir()
+	identity := testutil.TempIdentity(t)
+	cfg := config.Default()
+	cfg.VaultDir = vaultDir
+	if err := vaultpkg.Init(vaultDir, identity, cfg); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+	vaultFlagReset(t)
+
+	port := findFreePort(t)
+
+	serveSignals := make(chan chan<- os.Signal, 1)
+	origNotify := serveSignalNotify
+	serveSignalNotify = func(c chan<- os.Signal, sigs ...os.Signal) {
+		serveSignals <- c
+	}
+	t.Cleanup(func() { serveSignalNotify = origNotify })
+
+	origUnlock := serveUnlockVault
+	serveUnlockVault = func(vaultDir string, interactive bool) (*vaultpkg.Vault, error) {
+		if !interactive {
+			t.Error("HTTP mode should request interactive unlock")
+		}
+		return &vaultpkg.Vault{Dir: vaultDir, Identity: identity, Config: cfg}, nil
+	}
+	t.Cleanup(func() { serveUnlockVault = origUnlock })
+
+	started := make(chan struct{})
+	origHTTP := runHTTPServerFunc
+	runHTTPServerFunc = func(ctx context.Context, bind string, gotPort int, v *vaultpkg.Vault) error {
+		if bind != "127.0.0.1" {
+			t.Errorf("bind = %q, want 127.0.0.1", bind)
+		}
+		if gotPort != port {
+			t.Errorf("port = %d, want %d", gotPort, port)
+		}
+		if v == nil || v.Identity == nil {
+			t.Error("expected unlocked vault with identity")
+		}
+		select {
+		case <-started:
+		default:
+			close(started)
+		}
+		<-ctx.Done()
+		return nil
+	}
+	t.Cleanup(func() { runHTTPServerFunc = origHTTP })
+
+	t.Cleanup(func() {
+		_ = serveCmd.Flags().Set("bind", "127.0.0.1")
+		_ = serveCmd.Flags().Set("stdio", "false")
+		_ = serveCmd.Flags().Set("agent", "")
+	})
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "serve", "--agent", "test-agent", "--port", fmt.Sprintf("%d", port)})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = rootCmd.Execute()
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("HTTP server did not start in time")
+	}
+
+	select {
+	case sigCh := <-serveSignals:
+		sigCh <- syscall.SIGTERM
+	case <-time.After(2 * time.Second):
+		t.Fatal("serve command did not install signal handler")
+	}
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("serve command did not shut down after test signal")
+	}
+}
+
+func TestCmdServe_UninitializedVault(t *testing.T) {
+	vaultDir := t.TempDir()
+	vaultFlagReset(t)
+
+	_ = serveCmd.Flags().Set("bind", "127.0.0.1")
+	_ = serveCmd.Flags().Set("stdio", "false")
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "serve", "--bind", "127.0.0.1"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	var execErr error
+	captureStderr(func() {
+		execErr = rootCmd.Execute()
+	})
+
+	if execErr == nil {
+		t.Error("expected error for uninitialized vault")
+	}
+	if !strings.Contains(execErr.Error(), "vault not initialized") {
+		t.Errorf("unexpected error: %v", execErr)
+	}
+}
+
+func TestServe_ErrorPaths(t *testing.T) {
+	resetVaultState(t)
+	t.Run("uninitialized vault", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		_ = os.Setenv("OPENPASS_VAULT", tmpDir)
+		defer func() { _ = os.Unsetenv("OPENPASS_VAULT") }()
+
+		rootCmd.SetArgs([]string{"--vault", tmpDir, "serve", "--port", "0"})
+		defer rootCmd.SetArgs(nil)
+
+		err := rootCmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "not initialized") {
+			t.Errorf("expected 'not initialized' error, got: %v", err)
+		}
+	})
+
+	t.Run("stdio without agent", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := config.Default()
+		_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+
+		_ = os.Setenv("OPENPASS_VAULT", tmpDir)
+		_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
+		defer func() {
+			_ = os.Unsetenv("OPENPASS_VAULT")
+			_ = os.Unsetenv("OPENPASS_PASSPHRASE")
+		}()
+
+		rootCmd.SetArgs([]string{"--vault", tmpDir, "serve", "--stdio"})
+		defer rootCmd.SetArgs(nil)
+
+		err := rootCmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "--agent is required") {
+			t.Errorf("expected '--agent is required' error, got: %v", err)
+		}
+	})
+
+	t.Run("empty bind address", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := config.Default()
+		_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+
+		_ = os.Setenv("OPENPASS_VAULT", tmpDir)
+		_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
+		defer func() {
+			_ = os.Unsetenv("OPENPASS_VAULT")
+			_ = os.Unsetenv("OPENPASS_PASSPHRASE")
+		}()
+
+		rootCmd.SetArgs([]string{"--vault", tmpDir, "serve", "--bind", ""})
+		defer rootCmd.SetArgs(nil)
+
+		err := rootCmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "bind") {
+			t.Errorf("expected bind error, got: %v", err)
+		}
+	})
+}
+
+func TestServe_HTTPSignalShutdown(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping slow integration server test in short mode")
+	}
+	resetVaultState(t)
+
+	tmpDir := t.TempDir()
+	_ = os.Setenv("OPENPASS_VAULT", tmpDir)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
+	defer func() {
+		_ = os.Unsetenv("OPENPASS_VAULT")
+		_ = os.Unsetenv("OPENPASS_PASSPHRASE")
+	}()
+
+	cfg := config.Default()
+	_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+
+	_ = serveCmd.Flags().Set("bind", "127.0.0.1")
+	_ = serveCmd.Flags().Set("stdio", "false")
+
+	port := findFreePort(t)
+
+	origNotify := serveSignalNotify
+	t.Cleanup(func() { serveSignalNotify = origNotify })
+	serveSignalNotify = func(c chan<- os.Signal, sigs ...os.Signal) {
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			c <- syscall.SIGTERM
+		}()
+	}
+
+	rootCmd.SetArgs([]string{"--vault", tmpDir, "serve", "--port", fmt.Sprintf("%d", port)})
+	defer rootCmd.SetArgs(nil)
+
+	done := make(chan struct{})
+	go func() {
+		_ = rootCmd.Execute()
+		close(done)
+	}()
+
+	// Wait for server to start
+	time.Sleep(200 * time.Millisecond)
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("serve did not exit after signal")
+	}
+}
+
+func TestServe_StdioError(t *testing.T) {
+	resetVaultState(t)
+
+	tmpDir := t.TempDir()
+	_ = os.Setenv("OPENPASS_VAULT", tmpDir)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
+	defer func() {
+		_ = os.Unsetenv("OPENPASS_VAULT")
+		_ = os.Unsetenv("OPENPASS_PASSPHRASE")
+	}()
+
+	cfg := config.Default()
+	_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+
+	_ = serveCmd.Flags().Set("bind", "127.0.0.1")
+	_ = serveCmd.Flags().Set("stdio", "false")
+	_ = serveCmd.Flags().Set("agent", "")
+
+	port := findFreePort(t)
+
+	origRunStdio := runStdioServerFunc
+	runStdioServerFunc = func(_ context.Context, _ *vaultpkg.Vault, _ string) error {
+		return fmt.Errorf("mock stdio error")
+	}
+	defer func() { runStdioServerFunc = origRunStdio }()
+
+	rootCmd.SetArgs([]string{"--vault", tmpDir, "serve", "--stdio", "--agent", "test-agent", "--port", fmt.Sprintf("%d", port)})
+	defer rootCmd.SetArgs(nil)
+
+	err := rootCmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "mock stdio error") {
+		t.Errorf("expected mock stdio error, got: %v", err)
 	}
 }

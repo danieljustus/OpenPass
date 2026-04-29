@@ -403,5 +403,5 @@ Vaults created with the older root-level entry layout are migrated to `entries/`
 | spf13/cobra | CLI framework |
 | zalando/go-keyring | OS keyring integration |
 | go-git/go-git | Git integration |
-| mark3labs/mcp-go | MCP protocol (local fork) |
+| (internal/mcp) | MCP protocol — OpenPass implements its own MCP layer; no external mcp-go library is used |
 | atotto/clipboard | Clipboard support |

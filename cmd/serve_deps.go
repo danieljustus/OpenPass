@@ -24,6 +24,7 @@ var runHTTPServerFunc = func(ctx context.Context, bind string, port int, vault *
 }
 var serveUnlockVault = unlockVault
 
+//nolint:gocyclo // Complex CLI orchestration: vault unlock + server bootstrap + signal handling
 func runServe(cmd *cobra.Command, args []string) error {
 	agentName, err := cmd.Flags().GetString("agent")
 	if err != nil {

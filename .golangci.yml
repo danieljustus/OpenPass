@@ -1,5 +1,9 @@
 # golangci-lint configuration for OpenPass
 # https://golangci-lint.run/usage/configuration/
+#
+# NOTE: gosec is deliberately run as a standalone CI step (not via golangci-lint)
+# to produce dedicated SARIF output for the GitHub Security tab. Consolidating it
+# here would lose that security reporting integration.
 
 version: "2"
 
@@ -28,6 +32,10 @@ linters:
     - unconvert
     - unparam
     - whitespace
+    - gocyclo
+    - gocritic
+    - goconst
+    - errchkjson
 
   settings:
     errcheck:
@@ -84,6 +92,22 @@ linters:
           - unused
           - govet
           - staticcheck
+          - errchkjson
+          - goconst
+          - gocritic
+          - gocyclo
+      # Config value strings — constants would not improve readability
+      - path: 'internal/config/config\.go'
+        linters:
+          - goconst
+      # JSON-RPC protocol version string used throughout the MCP package
+      - path: 'internal/mcp/.+\.go'
+        linters:
+          - goconst
+      # Loop variables are fine as short names in tight loops
+      - path: '(.+)_test\.go'
+        linters:
+          - gocritic
 
 formatters:
   enable:

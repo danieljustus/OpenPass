@@ -1,10 +1,14 @@
 package cmd
 
 import (
+	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
+	"github.com/danieljustus/OpenPass/internal/config"
 	"github.com/danieljustus/OpenPass/internal/crypto"
+	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
 func TestGeneratePassword_ValidLengths(t *testing.T) {
@@ -59,4 +63,152 @@ func TestGeneratePassword_WithSymbols(t *testing.T) {
 	if len(password) != 50 {
 		t.Errorf("password length = %d, want 50", len(password))
 	}
+}
+
+func TestCmdGenerate_StoreExisting(t *testing.T) {
+	vaultDir := t.TempDir()
+	passphrase := "correcthorsebatterystaple"
+	vaultFlagReset(t)
+
+	identity, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default())
+	if err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+
+	entry := &vaultpkg.Entry{Data: map[string]any{"password": "oldpass"}}
+	if err := vaultpkg.WriteEntry(vaultDir, "existing.password", entry, identity); err != nil {
+		t.Fatalf("write entry: %v", err)
+	}
+
+	origGenStore := genStore
+	origGenLength := genLength
+	t.Cleanup(func() { genStore = origGenStore; genLength = origGenLength })
+
+	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") })
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "generate", "--length", "16", "--store", "existing.password"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	output := captureStdout(func() {
+		_ = rootCmd.Execute()
+	})
+
+	if !strings.Contains(output, "Password stored at") {
+		t.Errorf("generate store existing output: %q", output)
+	}
+}
+
+func TestCmdGenerate_StoreJSONDoesNotRevealByDefault(t *testing.T) {
+	vaultDir := t.TempDir()
+	passphrase := "correcthorsebatterystaple"
+	vaultFlagReset(t)
+
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+
+	t.Cleanup(func() {
+		genStore = ""
+		genJSON = false
+		genReveal = false
+		genQuiet = false
+	})
+
+	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") })
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "generate", "--length", "16", "--store", "json.password", "--json"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	output := captureStdout(func() {
+		_ = rootCmd.Execute()
+	})
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("generate --store --json output is not valid JSON: %q: %v", output, err)
+	}
+	if _, ok := result["password"]; ok {
+		t.Fatalf("generate --store --json revealed password by default: %#v", result)
+	}
+	if result["stored"] != true || result["path"] != "json.password" {
+		t.Fatalf("unexpected generate JSON result: %#v", result)
+	}
+}
+
+func TestCmdGenerate_ZeroLength(t *testing.T) {
+	vaultDir := t.TempDir()
+	passphrase := "correcthorsebatterystaple"
+	vaultFlagReset(t)
+
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+
+	origGenLength := genLength
+	t.Cleanup(func() { genLength = origGenLength })
+
+	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") })
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "generate", "--length", "0"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	var execErr error
+	captureStderr(func() {
+		execErr = rootCmd.Execute()
+	})
+
+	if execErr == nil {
+		t.Error("expected error for zero length password")
+	}
+}
+
+func TestCmdGenerate_NoStore(t *testing.T) {
+	vaultDir := t.TempDir()
+	vaultFlagReset(t)
+
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, "testpassphrase", config.Default()); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+
+	origGenStore := genStore
+	origGenLength := genLength
+	t.Cleanup(func() { genStore = origGenStore; genLength = origGenLength })
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "generate", "--length", "12"})
+	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+
+	output := captureStdout(func() {
+		_ = rootCmd.Execute()
+	})
+
+	if len(strings.TrimSpace(output)) != 12 {
+		t.Errorf("generate output length %d, want 12: %q", len(strings.TrimSpace(output)), output)
+	}
+}
+
+func TestGenerate_ErrorPaths(t *testing.T) {
+	resetVaultState(t)
+	t.Run("invalid length", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		_ = os.Setenv("OPENPASS_VAULT", tmpDir)
+		_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
+		defer func() {
+			_ = os.Unsetenv("OPENPASS_VAULT")
+			_ = os.Unsetenv("OPENPASS_PASSPHRASE")
+		}()
+
+		cfg := config.Default()
+		_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+
+		rootCmd.SetArgs([]string{"--vault", tmpDir, "generate", "--length", "0"})
+		defer rootCmd.SetArgs(nil)
+
+		err := rootCmd.Execute()
+		if err == nil {
+			t.Error("expected error for zero length")
+		}
+	})
 }

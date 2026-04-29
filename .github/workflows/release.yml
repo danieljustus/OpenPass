@@ -8,10 +8,12 @@ on:
 permissions:
   contents: write
   security-events: write
-  id-token: write  # Required for Cosign keyless signing
+  id-token: write      # Required for Cosign keyless signing and SLSA attestation
+  attestations: write  # Required for build provenance attestation
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  GOSEC_VERSION: v2.22.0
 
 jobs:
   lint:
@@ -41,7 +43,7 @@ jobs:
 
       - name: Run gosec SAST scanner
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
           gosec -fmt sarif -out gosec.sarif ./...
 
       - name: Upload gosec SARIF report
@@ -142,6 +144,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           GOWORK: off
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: 'dist/**'
 
   smoke-test-linux:
     name: Smoke Test (Linux amd64)

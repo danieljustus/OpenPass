@@ -133,7 +133,7 @@ func resolveHTTPConfig(agentName string) (*httpConfig, error) {
 		return nil, err
 	}
 
-	bind := "127.0.0.1"
+	bind := "127.0.0.1" //nolint:goconst // Loopback default is self-documenting
 	configuredPort := 8080
 	tokenPath := filepath.Join(vDir, "mcp-token")
 
@@ -259,7 +259,7 @@ func outputHTTPConfig(agentName, serverName string, redact bool) error {
 
 	authValue := httpCfg.Header["Authorization"]
 	if redact {
-		authValue = "env:OPENPASS_MCP_TOKEN"
+		authValue = "env:OPENPASS_MCP_TOKEN" //nolint:goconst // Redaction placeholder string
 	}
 
 	config := map[string]any{
@@ -286,7 +286,7 @@ func outputHermesHTTPConfig(agentName, serverName string, redact bool) error {
 
 	authValue := httpCfg.Header["Authorization"]
 	if redact {
-		authValue = "env:OPENPASS_MCP_TOKEN"
+		authValue = "env:OPENPASS_MCP_TOKEN" //nolint:goconst // Redaction placeholder string
 	}
 
 	headers := map[string]string{
@@ -328,7 +328,6 @@ func outputAgentStdioConfig(agentName, serverKey, displayName string) error {
 		},
 	}
 
-	_ = displayName // reserved for future use (e.g., description field)
 	enc := yaml.NewEncoder(os.Stdout)
 	defer func() { _ = enc.Close() }()
 	return enc.Encode(config)
@@ -349,7 +348,7 @@ func outputAgentHTTPConfig(agentName, serverKey, displayName string, redact bool
 
 	authValue := httpCfg.Header["Authorization"]
 	if redact {
-		authValue = "env:OPENPASS_MCP_TOKEN"
+		authValue = "env:OPENPASS_MCP_TOKEN" //nolint:goconst // Redaction placeholder string
 	}
 
 	headers := map[string]string{

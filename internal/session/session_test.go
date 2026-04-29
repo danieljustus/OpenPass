@@ -804,6 +804,89 @@ func TestResolvePassphrase_BothEncryptedAndPlaintext(t *testing.T) {
 	}
 }
 
+func TestFallback_KeyringOperations(t *testing.T) {
+	// Save current state
+	oldSet := keyringSet
+	oldGet := keyringGet
+	oldDelete := keyringDelete
+	oldFallbackActive := fallbackActive
+	oldFallback := fallback
+
+	// Activate fallback mode
+	fallbackMu.Lock()
+	fallbackActive = true
+	fallback = &memoryKeyring{}
+	fallbackMu.Unlock()
+
+	keyringSet = setWithFallback
+	keyringGet = getWithFallback
+	keyringDelete = deleteWithFallback
+
+	t.Cleanup(func() {
+		keyringSet = oldSet
+		keyringGet = oldGet
+		keyringDelete = oldDelete
+		fallbackMu.Lock()
+		fallbackActive = oldFallbackActive
+		fallback = oldFallback
+		fallbackMu.Unlock()
+	})
+
+	vaultDir := "/tmp/vault-fallback"
+	passphrase := "fallback-secret"
+
+	// Test Set via fallback
+	if err := SavePassphrase(vaultDir, passphrase, time.Hour); err != nil {
+		t.Fatalf("SavePassphrase() error = %v", err)
+	}
+
+	// Test Get via fallback
+	got, err := LoadPassphrase(vaultDir)
+	if err != nil {
+		t.Fatalf("LoadPassphrase() error = %v", err)
+	}
+	if got != passphrase {
+		t.Errorf("LoadPassphrase() = %q, want %q", got, passphrase)
+	}
+
+	// Test Delete via fallback
+	if err := ClearSession(vaultDir); err != nil {
+		t.Fatalf("ClearSession() error = %v", err)
+	}
+
+	// Verify deletion
+	_, err = LoadPassphrase(vaultDir)
+	if err == nil {
+		t.Fatal("LoadPassphrase() after ClearSession error = nil, want not found")
+	}
+}
+
+func TestFallback_Get_NotFound(t *testing.T) {
+	oldGet := keyringGet
+	oldFallbackActive := fallbackActive
+	oldFallback := fallback
+
+	fallbackMu.Lock()
+	fallbackActive = true
+	fallback = &memoryKeyring{}
+	fallbackMu.Unlock()
+
+	keyringGet = getWithFallback
+
+	t.Cleanup(func() {
+		keyringGet = oldGet
+		fallbackMu.Lock()
+		fallbackActive = oldFallbackActive
+		fallback = oldFallback
+		fallbackMu.Unlock()
+	})
+
+	_, err := LoadPassphrase("/tmp/vault-fallback-notfound")
+	if err == nil {
+		t.Fatal("LoadPassphrase() error = nil, want not found")
+	}
+}
+
 func TestResolvePassphrase_LegacyFormatMigrates(t *testing.T) {
 	fake := newFakeKeyring()
 	stubKeyring(t, fake)

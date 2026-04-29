@@ -25,26 +25,26 @@ repos:
         name: Go Format
         entry: bash -c 'make fmt-check'
         language: system
-        files: \\.go$
+        files: \.go$
         pass_filenames: false
         
       - id: go-vet
         name: Go Vet
         entry: bash -c 'make vet'
         language: system
-        files: \\.go$
+        files: \.go$
         pass_filenames: false
         
       - id: golangci-lint
         name: golangci-lint
         entry: bash -c 'make lint'
         language: system
-        files: \\.go$
+        files: \.go$
         pass_filenames: false
         
       - id: go-test-short
         name: Go Test (Short)
         entry: bash -c 'go test -short ./...'
         language: system
-        files: \\.go$
+        files: \.go$
         pass_filenames: false

@@ -1,4 +1,4 @@
-.PHONY: all build install test test-coverage test-verbose test-race test-ci clean lint lint-fix fmt fmt-check vet completions manpages help
+.PHONY: all build install test test-coverage test-verbose test-race test-ci clean lint lint-fix fmt fmt-check vet completions manpages help docs-check
 
 # Variables
 BINARY_NAME := openpass

@@ -60,13 +60,14 @@ func ValidatePasswordStrength(password string) error {
 	hasSymbol := false
 
 	for _, r := range password {
-		if unicode.IsLower(r) {
+		switch {
+		case unicode.IsLower(r):
 			hasLower = true
-		} else if unicode.IsUpper(r) {
+		case unicode.IsUpper(r):
 			hasUpper = true
-		} else if unicode.IsDigit(r) {
+		case unicode.IsDigit(r):
 			hasDigit = true
-		} else if unicode.IsPunct(r) || unicode.IsSymbol(r) {
+		case unicode.IsPunct(r), unicode.IsSymbol(r):
 			hasSymbol = true
 		}
 	}

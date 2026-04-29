@@ -1,0 +1,7 @@
+[tools]
+go = "1.26.2"
+golangci-lint = "2.11.4"
+gosec = "github.com/securego/gosec/v2/cmd/gosec@v2.22.0"
+govulncheck = "golang.org/x/vuln/cmd/govulncheck@latest"
+syft = "latest"
+cosign = "2.4.1"
