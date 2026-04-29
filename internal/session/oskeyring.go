@@ -6,8 +6,9 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/danieljustus/OpenPass/internal/logging"
 	"github.com/zalando/go-keyring"
+
+	"github.com/danieljustus/OpenPass/internal/logging"
 )
 
 var (

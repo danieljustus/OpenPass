@@ -27,8 +27,8 @@ func RunStdioServer(ctx context.Context, vault *vaultpkg.Vault, agentName string
 		return fmt.Errorf("init tracing: %w", err)
 	}
 	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		_ = shutdownTracing(ctx)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = shutdownTracing(shutdownCtx)
 		cancel()
 	}()
 

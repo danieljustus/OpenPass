@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -14,14 +13,11 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/semconv/v1.21.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
-var (
-	tracer     trace.Tracer
-	tracerOnce sync.Once
-)
+var tracer trace.Tracer
 
 // InitTracing initializes OpenTelemetry tracing with an OTLP HTTP exporter.
 // If endpoint is empty, tracing is disabled and a no-op tracer is used.

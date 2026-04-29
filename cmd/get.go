@@ -80,6 +80,7 @@ var getCmd = &cobra.Command{
 					switch vaultErr.Kind {
 					case vaultsvc.ErrFieldNotFound:
 						return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
+					default:
 					}
 				}
 				return fmt.Errorf("cannot read entry: %w", err)
@@ -102,6 +103,7 @@ var getCmd = &cobra.Command{
 						switch vaultErr.Kind {
 						case vaultsvc.ErrNotFound, vaultsvc.ErrFieldNotFound:
 							return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
+						default:
 						}
 					}
 					return fmt.Errorf("cannot read entry: %w", err)
@@ -118,8 +120,8 @@ var getCmd = &cobra.Command{
 		if field != "" {
 			strValue := fmt.Sprintf("%v", value)
 			if getCopyToClipboard {
-				if err := getClipboard().Copy(strValue); err != nil {
-					return fmt.Errorf("copy to clipboard: %w", err)
+				if clipErr := getClipboard().Copy(strValue); clipErr != nil {
+					return fmt.Errorf("copy to clipboard: %w", clipErr)
 				}
 				fmt.Fprintln(os.Stderr, "[copied to clipboard]")
 
@@ -131,8 +133,8 @@ var getCmd = &cobra.Command{
 					}, cancelCh)
 					go clipboardapp.StartAutoClear(autoClearDuration, func() {
 						close(cancelCh)
-						if err := getClipboard().Copy(""); err != nil {
-							fmt.Fprintf(os.Stderr, "Warning: failed to clear clipboard: %v\n", err)
+						if clearErr := getClipboard().Copy(""); clearErr != nil {
+							fmt.Fprintf(os.Stderr, "Warning: failed to clear clipboard: %v\n", clearErr)
 						}
 						fmt.Fprintln(os.Stderr, "\r[clipboard cleared]        ")
 					}, cancelCh)
@@ -155,6 +157,7 @@ var getCmd = &cobra.Command{
 				switch vaultErr.Kind {
 				case vaultsvc.ErrNotFound, vaultsvc.ErrFieldNotFound:
 					return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
+				default:
 				}
 			}
 			return fmt.Errorf("cannot read entry: %w", err)

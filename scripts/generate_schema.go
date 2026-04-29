@@ -1,3 +1,4 @@
+// Command generate_schema generates the OpenPass config JSON schema file.
 package main
 
 import (

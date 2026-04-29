@@ -61,8 +61,8 @@ var initCmd = &cobra.Command{
 
 		cfg := config.Default()
 		cfg.VaultDir = vaultDir
-		if err := cfg.SetAuthMethod(authMethod); err != nil {
-			return err
+		if authErr := cfg.SetAuthMethod(authMethod); authErr != nil {
+			return authErr
 		}
 		cfg.DefaultAgent = "cli"
 		cfg.Agents = map[string]config.AgentProfile{
@@ -129,7 +129,7 @@ func resolveInitAuthMethod(method string) (string, error) {
 			return "", err
 		}
 		if normalized == config.AuthMethodTouchID && !session.BiometricAvailable() {
-			return "", fmt.Errorf("Touch ID is not available in this OpenPass build or on this Mac")
+			return "", fmt.Errorf("touch ID is not available in this OpenPass build or on this Mac")
 		}
 		return normalized, nil
 	}

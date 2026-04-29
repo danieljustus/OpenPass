@@ -54,7 +54,7 @@ var profileListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "NAME\tVAULT PATH\tDEFAULT")
+		_, _ = fmt.Fprintln(w, "NAME\tVAULT PATH\tDEFAULT")
 		for name, p := range cfg.Profiles {
 			isDefault := ""
 			if name == cfg.DefaultProfile {
@@ -64,9 +64,9 @@ var profileListCmd = &cobra.Command{
 			if vaultPath == "" {
 				vaultPath = "(not set)"
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\n", name, vaultPath, isDefault)
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", name, vaultPath, isDefault)
 		}
-		w.Flush()
+		_ = w.Flush()
 
 		return nil
 	},

@@ -231,6 +231,12 @@ func newTouchIDAuthenticator() BiometricAuthenticator {
 	return &touchIDAuthenticator{}
 }
 
+const biometricAccount = "passphrase"
+
+func biometricServiceName(vaultDir string) string {
+	return "openpass-biometric:" + vaultDir
+}
+
 type touchIDPassphraseStore struct{}
 
 func (t *touchIDPassphraseStore) IsAvailable() bool {

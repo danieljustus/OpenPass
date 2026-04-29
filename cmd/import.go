@@ -68,7 +68,7 @@ var importCmd = &cobra.Command{
 		if err != nil {
 			return errorspkg.NewCLIError(errorspkg.ExitGeneralError, "open import source", err)
 		}
-		defer source.Close()
+		defer func() { _ = source.Close() }()
 
 		imp, err := newImporter(format, options)
 		if err != nil {

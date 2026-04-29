@@ -2,6 +2,7 @@ package importer
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -22,7 +23,7 @@ func (i *csvImporter) Parse(r io.Reader) ([]ImportedEntry, error) {
 
 	header, err := reader.Read()
 	if err != nil {
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return []ImportedEntry{}, nil
 		}
 		return nil, fmt.Errorf("read csv header: %w", err)
@@ -38,7 +39,7 @@ func (i *csvImporter) Parse(r io.Reader) ([]ImportedEntry, error) {
 	for {
 		row, err := reader.Read()
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			return nil, fmt.Errorf("read csv row: %w", err)

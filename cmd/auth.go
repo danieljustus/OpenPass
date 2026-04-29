@@ -80,7 +80,7 @@ var authSetCmd = &cobra.Command{
 			return nil
 		case configpkg.AuthMethodTouchID:
 			if !session.BiometricAvailable() {
-				return fmt.Errorf("Touch ID is not available in this OpenPass build or on this Mac")
+				return fmt.Errorf("touch ID is not available in this OpenPass build or on this Mac")
 			}
 			passphrase, err := passphraseForBiometricSetup(vaultDir)
 			if err != nil {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"filippo.io/age"
+
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -66,12 +67,13 @@ func (s *Service) SetFields(path string, data map[string]any) error {
 // setEntry is the internal upsert implementation shared by SetField and SetFields.
 func (s *Service) setEntry(path string, data map[string]any) error {
 	existing, readErr := vaultpkg.ReadEntry(s.vault.Dir, path, s.vault.Identity)
-	if readErr == nil && existing != nil {
+	switch {
+	case readErr == nil && existing != nil:
 		// Entry exists — merge new data into it
 		if _, err := vaultpkg.MergeEntryWithRecipients(s.vault.Dir, path, data, s.vault.Identity); err != nil {
 			return NewError(ErrWriteFailed, fmt.Sprintf("cannot update entry %s: %v", path, err), err)
 		}
-	} else if errors.Is(readErr, os.ErrNotExist) {
+	case errors.Is(readErr, os.ErrNotExist):
 		// New entry
 		entry := &vaultpkg.Entry{
 			Data: data,
@@ -84,7 +86,7 @@ func (s *Service) setEntry(path string, data map[string]any) error {
 		if err := vaultpkg.WriteEntryWithRecipients(s.vault.Dir, path, entry, s.vault.Identity); err != nil {
 			return NewError(ErrWriteFailed, fmt.Sprintf("cannot create entry %s: %v", path, err), err)
 		}
-	} else {
+	default:
 		return NewError(ErrReadFailed, fmt.Sprintf("cannot read entry %s: %v", path, readErr), readErr)
 	}
 

@@ -122,7 +122,7 @@ func readOnePUXExportJSON(zr *zip.Reader) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("open export.json: %w", err)
 		}
-		defer rc.Close()
+		defer func() { _ = rc.Close() }()
 
 		data, err := io.ReadAll(rc)
 		if err != nil {

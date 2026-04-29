@@ -179,10 +179,10 @@ func vaultPath() (string, error) {
 	// 5. defaultProfile from config
 	home, err := os.UserHomeDir()
 	if err == nil {
-		cfg, err := configpkg.Load(filepath.Join(home, ".openpass", "config.yaml"))
-		if err == nil && cfg.DefaultProfile != "" {
-			p, err := resolveProfileVaultDir(cfg.DefaultProfile)
-			if err == nil {
+		cfg, cfgErr := configpkg.Load(filepath.Join(home, ".openpass", "config.yaml"))
+		if cfgErr == nil && cfg.DefaultProfile != "" {
+			p, profErr := resolveProfileVaultDir(cfg.DefaultProfile)
+			if profErr == nil {
 				return p, nil
 			}
 		}

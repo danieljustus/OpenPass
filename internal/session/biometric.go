@@ -9,12 +9,6 @@ var ErrBiometricNotAvailable = errors.New("biometric authentication not availabl
 var ErrBiometricFailed = errors.New("biometric authentication failed")
 var ErrBiometricNotConfigured = errors.New("biometric authentication is not configured")
 
-const biometricAccount = "passphrase"
-
-func biometricServiceName(vaultDir string) string {
-	return "openpass-biometric:" + vaultDir
-}
-
 type BiometricAuthenticator interface {
 	Authenticate(ctx context.Context, reason string) error
 	IsAvailable() bool
@@ -84,8 +78,7 @@ func (noopBiometricPassphraseStore) IsAvailable() bool {
 	return false
 }
 
-func (noopBiometricPassphraseStore) Save(ctx context.Context, vaultDir string, passphrase string) error {
-	_, _, _ = ctx, vaultDir, passphrase
+func (noopBiometricPassphraseStore) Save(_ context.Context, _ string, _ string) error {
 	return ErrBiometricNotAvailable
 }
 

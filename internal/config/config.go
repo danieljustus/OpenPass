@@ -506,6 +506,7 @@ func builtinAgentProfiles() map[string]AgentProfile {
 	}
 }
 
+//nolint:gocyclo // Validation logic must check every config field; splitting would obscure the full contract.
 func (c *Config) Validate() error {
 	var errs error
 

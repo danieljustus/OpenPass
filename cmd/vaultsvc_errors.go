@@ -16,6 +16,7 @@ func mapVaultSvcError(err error, fallback string) error {
 			return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
 		case vaultsvc.ErrWriteFailed, vaultsvc.ErrReadFailed:
 			return errorspkg.NewCLIError(errorspkg.ExitGeneralError, vaultErr.Message, vaultErr.Cause)
+		default:
 		}
 	}
 

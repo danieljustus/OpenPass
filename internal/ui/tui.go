@@ -1,3 +1,4 @@
+// Package ui provides an interactive terminal UI for browsing and editing vault entries.
 package ui
 
 import (
@@ -24,6 +25,7 @@ const (
 	defaultAutoClearSeconds = 30
 	redactedValue           = "••••"
 	generatedPasswordLength = 20
+	keyQuit                 = "ctrl+c"
 )
 
 type mode int
@@ -248,6 +250,7 @@ func (m TUIModel) View() string {
 	return appStyle.Render(lipgloss.JoinVertical(lipgloss.Left, body, footer))
 }
 
+//nolint:gocyclo // Key handler dispatches across many keyboard shortcuts by design.
 func (m TUIModel) handleKey(msg tea.KeyMsg) (TUIModel, tea.Cmd) {
 	if m.mode == modeFilter {
 		switch msg.String() {
@@ -255,7 +258,7 @@ func (m TUIModel) handleKey(msg tea.KeyMsg) (TUIModel, tea.Cmd) {
 			m.mode = modeNormal
 			m.filterInput.Blur()
 			return m, m.loadSelectedEntry()
-		case "ctrl+c":
+		case keyQuit:
 			return m, tea.Quit
 		}
 
@@ -281,14 +284,14 @@ func (m TUIModel) handleKey(msg tea.KeyMsg) (TUIModel, tea.Cmd) {
 			m.mode = modeNormal
 			m.status = "Canceled"
 			return m, nil
-		case "ctrl+c":
+		case keyQuit:
 			return m, tea.Quit
 		}
 		return m, nil
 	}
 
 	switch msg.String() {
-	case "q", "ctrl+c":
+	case "q", keyQuit:
 		return m, tea.Quit
 	case "?":
 		m.help = !m.help
@@ -559,16 +562,16 @@ func editEntryCmd(svc *vaultsvc.Service, path string) tea.Cmd {
 			return entryEditedMsg{path: path, err: err}
 		}
 		tmpPath := tmp.Name()
-		defer os.Remove(tmpPath)
+		defer func() { _ = os.Remove(tmpPath) }()
 
 		encoder := json.NewEncoder(tmp)
 		encoder.SetIndent("", "  ")
-		if err := encoder.Encode(entry); err != nil {
+		if encErr := encoder.Encode(entry); encErr != nil {
 			_ = tmp.Close()
-			return entryEditedMsg{path: path, err: err}
+			return entryEditedMsg{path: path, err: encErr}
 		}
-		if err := tmp.Close(); err != nil {
-			return entryEditedMsg{path: path, err: err}
+		if closeErr := tmp.Close(); closeErr != nil {
+			return entryEditedMsg{path: path, err: closeErr}
 		}
 
 		editor := os.Getenv("EDITOR")
@@ -579,8 +582,8 @@ func editEntryCmd(svc *vaultsvc.Service, path string) tea.Cmd {
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return entryEditedMsg{path: path, err: fmt.Errorf("run editor: %w", err)}
+		if runErr := cmd.Run(); runErr != nil {
+			return entryEditedMsg{path: path, err: fmt.Errorf("run editor: %w", runErr)}
 		}
 
 		data, err := os.ReadFile(filepath.Clean(tmpPath)) //#nosec G304 -- tmpPath was created by this process.
