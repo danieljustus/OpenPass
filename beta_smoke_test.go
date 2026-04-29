@@ -6,13 +6,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
 func TestBetaSmokeFlow(t *testing.T) {
 	binDir := t.TempDir()
-	binPath := filepath.Join(binDir, "openpass")
+	binName := "openpass"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	binPath := filepath.Join(binDir, binName)
 
 	build := exec.Command("go", "build", "-o", binPath, ".")
 	build.Dir = repoRoot(t)
