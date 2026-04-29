@@ -83,6 +83,7 @@ var (
 	sessionIsExpired      = session.IsSessionExpired
 	sessionLoadBiometric  = session.LoadBiometricPassphrase
 	sessionSaveBiometric  = session.SaveBiometricPassphrase
+	sessionGetCacheStatus = session.GetCacheStatus
 )
 
 var vault string

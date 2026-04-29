@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/danieljustus/OpenPass/internal/config"
+	"github.com/danieljustus/OpenPass/internal/session"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -41,8 +42,10 @@ func stubSessionFuncs(t *testing.T) func() {
 	oldIsExpired := sessionIsExpired
 	oldLoadBiometric := sessionLoadBiometric
 	oldSaveBiometric := sessionSaveBiometric
+	oldGetCacheStatus := sessionGetCacheStatus
 	sessionLoadBiometric = func(context.Context, string) (string, error) { return "", errors.New("not configured") }
 	sessionSaveBiometric = func(context.Context, string, string) error { return nil }
+	sessionGetCacheStatus = func() session.CacheStatus { return session.CacheStatus{Persistent: true} }
 
 	return func() {
 		sessionLoadPassphrase = oldLoad
@@ -50,6 +53,7 @@ func stubSessionFuncs(t *testing.T) func() {
 		sessionIsExpired = oldIsExpired
 		sessionLoadBiometric = oldLoadBiometric
 		sessionSaveBiometric = oldSaveBiometric
+		sessionGetCacheStatus = oldGetCacheStatus
 	}
 }
 
