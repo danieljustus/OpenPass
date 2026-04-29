@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded
 
 ## Context
 
@@ -31,6 +31,15 @@ Keep both packages with clear separation of concerns:
 - **Positive**: Clear separation between workspace infrastructure and application logic
 - **Positive**: CI guard prevents stub leakage into release binaries
 - **Negative**: Two packages with "clipboard" in the name can confuse new contributors (mitigated by this ADR and ARCHITECTURE.md documentation)
+
+## Superseded By
+
+Build-tagged dual implementation (`system_clipboard.go` / `null_clipboard.go`).
+See `internal/clipboard/interface.go` for the new approach.
+
+The workspace stub approach (`clipboardpkg/` + `go.work`) has been replaced with
+build-tagged implementations that use `//go:build test_headless` to switch
+between real clipboard and no-op stub based on build context.
 
 ## References
 
