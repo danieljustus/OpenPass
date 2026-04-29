@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -79,11 +81,15 @@ var (
 	sessionLoadPassphrase = session.LoadPassphrase
 	sessionSavePassphrase = session.SavePassphrase
 	sessionIsExpired      = session.IsSessionExpired
+	sessionLoadBiometric  = session.LoadBiometricPassphrase
+	sessionSaveBiometric  = session.SaveBiometricPassphrase
 )
 
 var vault string
 var vaultFlag *pflag.Flag
 var quietMode bool
+var profile string
+var profileFlag *pflag.Flag
 
 var rootCmd = &cobra.Command{
 	Use:           "openpass",
@@ -126,9 +132,12 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&vault, "vault", "~/.openpass", "path to the password vault")
 	vaultFlag = rootCmd.PersistentFlags().Lookup("vault")
 	rootCmd.PersistentFlags().BoolVar(&quietMode, "quiet", false, "suppress non-error output")
+	rootCmd.PersistentFlags().StringVar(&profile, "profile", "", "use a named vault profile")
+	profileFlag = rootCmd.PersistentFlags().Lookup("profile")
 }
 
 func vaultPath() (string, error) {
+	// 1. --vault flag (highest priority)
 	if vaultFlag != nil && vaultFlag.Changed {
 		p, err := expandVaultDir(vault)
 		if err != nil {
@@ -137,6 +146,7 @@ func vaultPath() (string, error) {
 		return p, nil
 	}
 
+	// 2. OPENPASS_VAULT env var
 	if envVault := strings.TrimSpace(os.Getenv("OPENPASS_VAULT")); envVault != "" {
 		p, err := expandVaultDir(envVault)
 		if err != nil {
@@ -145,11 +155,68 @@ func vaultPath() (string, error) {
 		return p, nil
 	}
 
+	// 3. --profile flag
+	if profileFlag != nil && profileFlag.Changed {
+		profileName := strings.TrimSpace(profile)
+		if profileName != "" {
+			p, err := resolveProfileVaultDir(profileName)
+			if err != nil {
+				return "", errorspkg.NewCLIError(errorspkg.ExitGeneralError, "resolve profile", err)
+			}
+			return p, nil
+		}
+	}
+
+	// 4. OPENPASS_PROFILE env var
+	if envProfile := strings.TrimSpace(os.Getenv("OPENPASS_PROFILE")); envProfile != "" {
+		p, err := resolveProfileVaultDir(envProfile)
+		if err != nil {
+			return "", errorspkg.NewCLIError(errorspkg.ExitGeneralError, "resolve profile", err)
+		}
+		return p, nil
+	}
+
+	// 5. defaultProfile from config
+	home, err := os.UserHomeDir()
+	if err == nil {
+		cfg, err := configpkg.Load(filepath.Join(home, ".openpass", "config.yaml"))
+		if err == nil && cfg.DefaultProfile != "" {
+			p, err := resolveProfileVaultDir(cfg.DefaultProfile)
+			if err == nil {
+				return p, nil
+			}
+		}
+	}
+
+	// 6. Default ~/.openpass
 	p, err := expandVaultDir(vault)
 	if err != nil {
 		return "", errorspkg.NewCLIError(errorspkg.ExitGeneralError, "expand vault path", err)
 	}
 	return p, nil
+}
+
+func resolveProfileVaultDir(profileName string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	cfg, err := configpkg.Load(filepath.Join(home, ".openpass", "config.yaml"))
+	if err != nil {
+		return "", fmt.Errorf("cannot load config: %w", err)
+	}
+
+	profile := cfg.ProfileForName(profileName)
+	if profile == nil {
+		return "", fmt.Errorf("profile %q not found", profileName)
+	}
+
+	if profile.VaultPath == "" {
+		return "", fmt.Errorf("profile %q has no vault path configured", profileName)
+	}
+
+	return expandVaultDir(profile.VaultPath)
 }
 
 // unlockVault attempts to decrypt the vault identity.
@@ -162,15 +229,25 @@ func unlockVault(vaultDir string, interactive bool) (*vaultpkg.Vault, error) {
 func unlockVaultWithTTL(vaultDir string, interactive bool, ttlOverride time.Duration, cacheEnvPassphrase bool) (*vaultpkg.Vault, time.Duration, error) {
 	passphrase, err := sessionLoadPassphrase(vaultDir)
 	passphraseFromEnv := false
+	passphraseFromBiometric := false
+	cfg := loadVaultConfigForUnlock(vaultDir)
 	if err != nil || passphrase == "" {
-		passphrase = os.Getenv("OPENPASS_PASSPHRASE")
-		passphraseFromEnv = passphrase != ""
-		// Clear the env var immediately to prevent exposure via /proc/<pid>/environ
-		_ = os.Unsetenv("OPENPASS_PASSPHRASE")
+		if cfg.EffectiveAuthMethod() == configpkg.AuthMethodTouchID {
+			if biometricPassphrase, biometricErr := sessionLoadBiometric(context.Background(), vaultDir); biometricErr == nil && biometricPassphrase != "" {
+				passphrase = biometricPassphrase
+				passphraseFromBiometric = true
+			}
+		}
+		if passphrase == "" {
+			passphrase = os.Getenv("OPENPASS_PASSPHRASE")
+			passphraseFromEnv = passphrase != ""
+			// Clear the env var immediately to prevent exposure via /proc/<pid>/environ
+			_ = os.Unsetenv("OPENPASS_PASSPHRASE")
+		}
 	}
 	if passphrase == "" {
 		if !interactive {
-			return nil, 0, errorspkg.NewCLIError(errorspkg.ExitLocked, "vault locked: run 'openpass unlock' first, or set OPENPASS_PASSPHRASE", nil)
+			return nil, 0, errorspkg.NewCLIError(errorspkg.ExitLocked, lockedMessageForCache(), nil)
 		}
 		var readErr error
 		passphrase, readErr = readHiddenInput("Passphrase: ", nil)
@@ -196,8 +273,29 @@ func unlockVaultWithTTL(vaultDir string, interactive bool, ttlOverride time.Dura
 			return nil, 0, errorspkg.NewCLIError(errorspkg.ExitGeneralError, "save session", err)
 		}
 	}
+	if cfg.EffectiveAuthMethod() == configpkg.AuthMethodTouchID && !passphraseFromBiometric && (!passphraseFromEnv || cacheEnvPassphrase) {
+		if err := sessionSaveBiometric(context.Background(), vaultDir, passphrase); err != nil && interactive {
+			fmt.Fprintf(os.Stderr, "Warning: could not update Touch ID unlock: %v\n", err)
+		}
+	}
 
 	return v, ttl, nil
+}
+
+func loadVaultConfigForUnlock(vaultDir string) *configpkg.Config {
+	cfg, err := configpkg.Load(filepath.Join(vaultDir, "config.yaml"))
+	if err != nil {
+		return configpkg.Default()
+	}
+	return cfg
+}
+
+func lockedMessageForCache() string {
+	status := session.GetCacheStatus()
+	if !status.Persistent {
+		return "vault locked: this build cannot share 'openpass unlock' sessions across processes; set OPENPASS_PASSPHRASE or use a build with OS keyring support"
+	}
+	return "vault locked: run 'openpass unlock' first, enable Touch ID with 'openpass auth set touchid', or set OPENPASS_PASSPHRASE"
 }
 
 func defaultSessionTTL() time.Duration {
