@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -38,11 +39,17 @@ func stubSessionFuncs(t *testing.T) func() {
 	oldLoad := sessionLoadPassphrase
 	oldSave := sessionSavePassphrase
 	oldIsExpired := sessionIsExpired
+	oldLoadBiometric := sessionLoadBiometric
+	oldSaveBiometric := sessionSaveBiometric
+	sessionLoadBiometric = func(context.Context, string) (string, error) { return "", errors.New("not configured") }
+	sessionSaveBiometric = func(context.Context, string, string) error { return nil }
 
 	return func() {
 		sessionLoadPassphrase = oldLoad
 		sessionSavePassphrase = oldSave
 		sessionIsExpired = oldIsExpired
+		sessionLoadBiometric = oldLoadBiometric
+		sessionSaveBiometric = oldSaveBiometric
 	}
 }
 

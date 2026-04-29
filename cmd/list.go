@@ -1,12 +1,11 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
+	vaultsvc "github.com/danieljustus/OpenPass/internal/vaultsvc"
 )
 
 var listJSON bool
@@ -36,9 +35,10 @@ var listCmd = &cobra.Command{
 			prefix = args[0]
 		}
 
-		entries, err := vaultpkg.List(v.Dir, prefix)
+		svc := vaultsvc.New(v)
+		entries, err := svc.List(prefix)
 		if err != nil {
-			return fmt.Errorf("cannot list entries: %w", err)
+			return mapVaultSvcError(err, "cannot list entries")
 		}
 
 		if listJSON {

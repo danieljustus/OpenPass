@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
+	"github.com/danieljustus/OpenPass/internal/session"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -53,6 +54,10 @@ but should NOT be used on shared machines (visible in process listings).`,
 			return err
 		}
 		_ = v
+
+		if status := session.GetCacheStatus(); !status.Persistent {
+			return errorspkg.NewCLIError(errorspkg.ExitLocked, "session cache is memory-only; 'openpass unlock' cannot unlock future serve processes. Start serve with OPENPASS_PASSPHRASE or use a build with OS keyring support", nil)
+		}
 
 		fmt.Fprintf(os.Stderr, "Vault unlocked (session TTL: %s)\n", effectiveTTL)
 		return nil

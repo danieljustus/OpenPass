@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/danieljustus/OpenPass/internal/metrics"
 )
 
 const DefaultLatestReleaseURL = "https://api.github.com/repos/danieljustus/OpenPass/releases/latest"
@@ -84,24 +86,33 @@ func (c *Checker) CheckWithForce(ctx context.Context, currentVersion string, for
 		if entry, err := c.Cache.Load(); err == nil && entry != nil {
 			latest, cacheOk := parseStableVersion(entry.LatestVersion)
 			if cacheOk {
-				return &Result{
+				result := &Result{
 					CurrentVersion:  current.String(),
 					LatestVersion:   latest.String(),
 					ReleaseURL:      entry.ReleaseURL,
 					Checkable:       true,
 					UpdateAvailable: compareStableVersions(current, latest) < 0,
-				}, nil
+				}
+				if result.UpdateAvailable {
+					metrics.RecordUpdateCheck("update_available")
+				} else {
+					metrics.RecordUpdateCheck("up_to_date")
+				}
+				metrics.RecordUpdateCheck("cache_hit")
+				return result, nil
 			}
 		}
 	}
 
 	release, err := c.fetchLatestRelease(ctx, currentVersion)
 	if err != nil {
+		metrics.RecordUpdateCheck("error")
 		return nil, err
 	}
 
 	latest, ok := parseStableVersion(release.TagName)
 	if !ok {
+		metrics.RecordUpdateCheck("error")
 		return nil, fmt.Errorf("latest release tag %q is not a stable semantic version", release.TagName)
 	}
 
@@ -119,6 +130,12 @@ func (c *Checker) CheckWithForce(ctx context.Context, currentVersion string, for
 			LatestVersion: result.LatestVersion,
 			ReleaseURL:    result.ReleaseURL,
 		})
+	}
+
+	if result.UpdateAvailable {
+		metrics.RecordUpdateCheck("update_available")
+	} else {
+		metrics.RecordUpdateCheck("up_to_date")
 	}
 
 	return result, nil

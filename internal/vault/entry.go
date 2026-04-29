@@ -12,6 +12,7 @@ import (
 	"filippo.io/age"
 
 	vaultcrypto "github.com/danieljustus/OpenPass/internal/crypto"
+	"github.com/danieljustus/OpenPass/internal/metrics"
 	"github.com/danieljustus/OpenPass/internal/pathutil"
 )
 
@@ -119,7 +120,9 @@ func ReadEntry(vaultDir, path string, identity *age.X25519Identity) (*Entry, err
 		return nil, err
 	}
 
+	start := time.Now()
 	plaintext, err := vaultcrypto.Decrypt(raw, identity)
+	metrics.RecordVaultOperationDuration("decrypt", time.Since(start))
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +167,9 @@ func WriteEntry(vaultDir, path string, entry *Entry, identity *age.X25519Identit
 		return err
 	}
 
+	start := time.Now()
 	ciphertext, err := vaultcrypto.Encrypt(plaintext, identity.Recipient())
+	metrics.RecordVaultOperationDuration("encrypt", time.Since(start))
 	if err != nil {
 		return err
 	}
@@ -411,7 +416,9 @@ func GetEntryMetadata(vaultDir, path string, identity *age.X25519Identity) (*Ent
 		return nil, err
 	}
 
+	start := time.Now()
 	plaintext, err := vaultcrypto.Decrypt(raw, identity)
+	metrics.RecordVaultOperationDuration("decrypt", time.Since(start))
 	if err != nil {
 		return nil, err
 	}

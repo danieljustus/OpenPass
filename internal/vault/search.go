@@ -116,9 +116,12 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"filippo.io/age"
 	"golang.org/x/exp/slices"
+
+	"github.com/danieljustus/OpenPass/internal/metrics"
 )
 
 type Match struct {
@@ -168,6 +171,7 @@ func List(vaultDir string, prefix string) ([]string, error) {
 // ListFast returns all entry paths in the vault, optionally filtered by prefix.
 // It uses os.ReadDir for efficient directory traversal without stat calls.
 func ListFast(vaultDir string, prefix string) ([]string, error) {
+	start := time.Now()
 	seen := map[string]struct{}{}
 
 	if err := listEntriesFast(entriesDir(vaultDir), entriesDir(vaultDir), prefix, seen, false); err != nil && !os.IsNotExist(err) {
@@ -182,6 +186,8 @@ func ListFast(vaultDir string, prefix string) ([]string, error) {
 		paths = append(paths, path)
 	}
 	sort.Strings(paths)
+	metrics.RecordVaultOperationDuration("list", time.Since(start))
+	metrics.RecordVaultEntryCount(vaultDir, len(paths))
 	return paths, nil
 }
 
@@ -232,6 +238,11 @@ type FindOptions struct {
 //
 //nolint:gocyclo // Search orchestration: listing, filtering, decryption, ranking
 func FindWithOptions(vaultDir string, query string, opts FindOptions) ([]Match, error) {
+	start := time.Now()
+	defer func() {
+		metrics.RecordVaultOperationDuration("search", time.Since(start))
+	}()
+
 	paths, err := List(vaultDir, "")
 	if err != nil {
 		return nil, err

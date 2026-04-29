@@ -1,3 +1,5 @@
+//go:build test_headless
+
 package cmd
 
 import (
@@ -7,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	clipboardapp "github.com/danieljustus/OpenPass/internal/clipboard"
 	"github.com/danieljustus/OpenPass/internal/config"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
@@ -337,13 +340,8 @@ func TestCmdGet_FieldWithClipboard(t *testing.T) {
 	_ = vaultpkg.WriteEntry(vaultDir, "clip-entry", entry, identity.Identity)
 	setPassEnv(t, passphrase)
 	defer setupVaultFlag(t, vaultDir)()
-	var copied string
-	origClipboardWriteAll := getClipboardWriteAll
-	getClipboardWriteAll = func(s string) error {
-		copied = s
-		return nil
-	}
-	t.Cleanup(func() { getClipboardWriteAll = origClipboardWriteAll })
+	clipboardapp.SetClipboard(clipboardapp.NewNullClipboard())
+	t.Cleanup(func() { clipboardapp.SetClipboard(nil) })
 
 	var stdout string
 	var execErr error
@@ -360,6 +358,7 @@ func TestCmdGet_FieldWithClipboard(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("stdout = %q, want empty when --clip is set", stdout)
 	}
+	copied, _ := clipboardapp.DefaultClipboard().Read()
 	if copied != "clip-pass-123" {
 		t.Fatalf("copied = %q, want clip-pass-123", copied)
 	}

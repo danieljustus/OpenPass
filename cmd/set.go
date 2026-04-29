@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/danieljustus/OpenPass/internal/crypto"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
+	vaultsvc "github.com/danieljustus/OpenPass/internal/vaultsvc"
 )
 
 var (
@@ -131,28 +131,9 @@ var setCmd = &cobra.Command{
 			return err
 		}
 
-		existing, readErr := vaultpkg.ReadEntry(v.Dir, path, v.Identity)
-		entryPath := path
-		if readErr == nil && existing != nil {
-			if _, err := vaultpkg.MergeEntryWithRecipients(v.Dir, entryPath, data, v.Identity); err != nil {
-				return fmt.Errorf("cannot write entry: %w", err)
-			}
-		} else {
-			entry := &vaultpkg.Entry{
-				Data: data,
-				Metadata: vaultpkg.EntryMetadata{
-					Created: time.Now().UTC(),
-					Updated: time.Now().UTC(),
-					Version: 0,
-				},
-			}
-			if err := vaultpkg.WriteEntryWithRecipients(v.Dir, entryPath, entry, v.Identity); err != nil {
-				return fmt.Errorf("cannot write entry: %w", err)
-			}
-		}
-
-		if err := v.AutoCommit(fmt.Sprintf("Update %s", path)); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: auto-commit failed: %v\n", err)
+		svc := vaultsvc.New(v)
+		if err := svc.SetFields(path, data); err != nil {
+			return mapVaultSvcError(err, "cannot write entry")
 		}
 		printQuietAware("Entry saved: %s\n", path)
 		return nil

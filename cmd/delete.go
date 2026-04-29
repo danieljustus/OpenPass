@@ -10,6 +10,7 @@ import (
 
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
+	vaultsvc "github.com/danieljustus/OpenPass/internal/vaultsvc"
 )
 
 var (
@@ -53,12 +54,9 @@ var deleteCmd = &cobra.Command{
 			}
 		}
 
-		if err := vaultpkg.DeleteEntry(v.Dir, path); err != nil {
-			return fmt.Errorf("cannot delete entry: %w", err)
-		}
-
-		if err := v.AutoCommit(fmt.Sprintf("Delete %s", path)); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: auto-commit failed: %v\n", err)
+		svc := vaultsvc.New(v)
+		if err := svc.Delete(path); err != nil {
+			return mapVaultSvcError(err, "cannot delete entry")
 		}
 		if deleteJSON {
 			PrintJSON(map[string]any{"deleted": true, "path": path})

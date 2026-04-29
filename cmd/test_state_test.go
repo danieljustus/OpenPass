@@ -6,10 +6,10 @@ import (
 	"os/signal"
 	"testing"
 
-	"github.com/atotto/clipboard"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	clipboardapp "github.com/danieljustus/OpenPass/internal/clipboard"
 	vaultcrypto "github.com/danieljustus/OpenPass/internal/crypto"
 	"github.com/danieljustus/OpenPass/internal/mcp"
 	"github.com/danieljustus/OpenPass/internal/mcp/serverbootstrap"
@@ -60,7 +60,7 @@ func resetCommandFlagGlobals() {
 	genLength = 20
 	genSymbols = false
 	genStore = ""
-	getClipboardWriteAll = clipboard.WriteAll
+	getClipboard = clipboardapp.DefaultClipboard
 }
 
 func resetCobraCommand(cmd *cobra.Command) {

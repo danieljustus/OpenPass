@@ -10,6 +10,7 @@ import (
 
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
+	vaultsvc "github.com/danieljustus/OpenPass/internal/vaultsvc"
 )
 
 var findJSON bool
@@ -39,9 +40,10 @@ var findCmd = &cobra.Command{
 		if workers > 4 {
 			workers = 4
 		}
-		matches, err := vaultpkg.FindConcurrent(v.Dir, args[0], workers)
+		svc := vaultsvc.New(v)
+		matches, err := svc.Find(args[0], vaultsvc.FindOptions{MaxWorkers: workers})
 		if err != nil {
-			return errorspkg.NewCLIError(errorspkg.ExitGeneralError, "search failed", err)
+			return mapVaultSvcError(err, "search failed")
 		}
 
 		if len(matches) == 0 {

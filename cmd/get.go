@@ -1,13 +1,13 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/atotto/clipboard"
 	"github.com/spf13/cobra"
 
 	clipboardapp "github.com/danieljustus/OpenPass/internal/clipboard"
@@ -15,12 +15,13 @@ import (
 	vaultcrypto "github.com/danieljustus/OpenPass/internal/crypto"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
+	vaultsvc "github.com/danieljustus/OpenPass/internal/vaultsvc"
 )
 
 var (
-	getCopyToClipboard   bool
-	getClipboardWriteAll = clipboard.WriteAll
-	getJSON              bool
+	getCopyToClipboard bool
+	getClipboard       = clipboardapp.DefaultClipboard
+	getJSON            bool
 )
 
 type totpOutput struct {
@@ -55,6 +56,7 @@ var getCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		svc := vaultsvc.New(v)
 
 		query := args[0]
 		path := query
@@ -64,28 +66,44 @@ var getCmd = &cobra.Command{
 			candidatePath := query[:idx]
 			candidateField := query[idx+1:]
 
-			if entry, readErr := vaultpkg.ReadEntry(v.Dir, candidatePath, v.Identity); readErr == nil {
-				if _, ok := entry.Data[candidateField]; ok {
-					path = candidatePath
-					field = candidateField
-				}
+			if _, readErr := svc.GetField(candidatePath, candidateField); readErr == nil {
+				path = candidatePath
+				field = candidateField
 			}
 		}
 
-		entry, err := vaultpkg.ReadEntry(v.Dir, path, v.Identity)
+		value, err := svc.GetField(path, field)
 		if err != nil {
-			matches, findErr := vaultpkg.Find(v.Dir, path)
+			var vaultErr *vaultsvc.Error
+			if !errors.As(err, &vaultErr) || vaultErr.Kind != vaultsvc.ErrNotFound {
+				if errors.As(err, &vaultErr) {
+					switch vaultErr.Kind {
+					case vaultsvc.ErrFieldNotFound:
+						return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
+					}
+				}
+				return fmt.Errorf("cannot read entry: %w", err)
+			}
+
+			matches, findErr := svc.Find(path, vaultsvc.FindOptions{MaxWorkers: 4})
 			if findErr != nil {
 				return fmt.Errorf("search entry: %w", findErr)
 			}
 
 			switch len(matches) {
 			case 0:
-				return errorspkg.NewCLIError(errorspkg.ExitNotFound, fmt.Sprintf("entry not found: %s", path), errorspkg.ErrEntryNotFound)
+				return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
 			case 1:
 				path = matches[0].Path
-				entry, err = vaultpkg.ReadEntry(v.Dir, path, v.Identity)
+				value, err = svc.GetField(path, field)
 				if err != nil {
+					var vaultErr *vaultsvc.Error
+					if errors.As(err, &vaultErr) {
+						switch vaultErr.Kind {
+						case vaultsvc.ErrNotFound, vaultsvc.ErrFieldNotFound:
+							return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
+						}
+					}
 					return fmt.Errorf("cannot read entry: %w", err)
 				}
 			default:
@@ -98,14 +116,9 @@ var getCmd = &cobra.Command{
 		}
 
 		if field != "" {
-			value, ok := entry.Data[field]
-			if !ok {
-				return errorspkg.NewCLIError(errorspkg.ExitNotFound, fmt.Sprintf("field not found: %s", field), errorspkg.ErrEntryNotFound)
-			}
-
 			strValue := fmt.Sprintf("%v", value)
 			if getCopyToClipboard {
-				if err := getClipboardWriteAll(strValue); err != nil {
+				if err := getClipboard().Copy(strValue); err != nil {
 					return fmt.Errorf("copy to clipboard: %w", err)
 				}
 				fmt.Fprintln(os.Stderr, "[copied to clipboard]")
@@ -118,7 +131,7 @@ var getCmd = &cobra.Command{
 					}, cancelCh)
 					go clipboardapp.StartAutoClear(autoClearDuration, func() {
 						close(cancelCh)
-						if err := getClipboardWriteAll(""); err != nil {
+						if err := getClipboard().Copy(""); err != nil {
 							fmt.Fprintf(os.Stderr, "Warning: failed to clear clipboard: %v\n", err)
 						}
 						fmt.Fprintln(os.Stderr, "\r[clipboard cleared]        ")
@@ -133,6 +146,18 @@ var getCmd = &cobra.Command{
 			}
 			printlnQuietAware(strValue)
 			return nil
+		}
+
+		entry, err := svc.GetEntry(path)
+		if err != nil {
+			var vaultErr *vaultsvc.Error
+			if errors.As(err, &vaultErr) {
+				switch vaultErr.Kind {
+				case vaultsvc.ErrNotFound, vaultsvc.ErrFieldNotFound:
+					return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
+				}
+			}
+			return fmt.Errorf("cannot read entry: %w", err)
 		}
 
 		if getJSON {

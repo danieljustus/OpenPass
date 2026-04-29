@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,8 +12,11 @@ import (
 	"github.com/danieljustus/OpenPass/internal/config"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/git"
+	"github.com/danieljustus/OpenPass/internal/session"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
+
+var initAuthMethod string
 
 var initCmd = &cobra.Command{
 	Use:   "init [vault-dir]",
@@ -50,9 +54,16 @@ var initCmd = &cobra.Command{
 		if len(passphrase) < 12 {
 			return fmt.Errorf("passphrase must be at least 12 characters")
 		}
+		authMethod, err := resolveInitAuthMethod(initAuthMethod)
+		if err != nil {
+			return err
+		}
 
 		cfg := config.Default()
 		cfg.VaultDir = vaultDir
+		if err := cfg.SetAuthMethod(authMethod); err != nil {
+			return err
+		}
 		cfg.DefaultAgent = "cli"
 		cfg.Agents = map[string]config.AgentProfile{
 			"cli": {
@@ -81,6 +92,12 @@ var initCmd = &cobra.Command{
 		if err := git.CreateGitignore(vaultDir); err != nil {
 			return fmt.Errorf("cannot create .gitignore: %w", err)
 		}
+		if authMethod == config.AuthMethodTouchID {
+			if err := session.SaveBiometricPassphrase(context.Background(), vaultDir, passphrase); err != nil {
+				return fmt.Errorf("cannot configure Touch ID unlock: %w", err)
+			}
+			printQuietAware("Touch ID unlock enabled\n")
+		}
 
 		printQuietAware("Vault initialized at %s\n", vaultDir)
 		printQuietAware("Public key: %s\n", identity.Recipient().String())
@@ -90,6 +107,49 @@ var initCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(initCmd)
+	initCmd.Flags().StringVar(&initAuthMethod, "auth", "ask", "unlock method for this vault (ask, passphrase, touchid)")
+}
+
+func resolveInitAuthMethod(method string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(method)) {
+	case "", "ask":
+		if session.BiometricAvailable() && stdinIsTerminal() {
+			answer, err := readVisibleInput("Use Touch ID for future unlocks? [y/N]: ")
+			if err != nil {
+				return "", err
+			}
+			if strings.EqualFold(strings.TrimSpace(answer), "y") || strings.EqualFold(strings.TrimSpace(answer), "yes") {
+				return config.AuthMethodTouchID, nil
+			}
+		}
+		return config.AuthMethodPassphrase, nil
+	default:
+		normalized, err := config.NormalizeAuthMethod(method)
+		if err != nil {
+			return "", err
+		}
+		if normalized == config.AuthMethodTouchID && !session.BiometricAvailable() {
+			return "", fmt.Errorf("Touch ID is not available in this OpenPass build or on this Mac")
+		}
+		return normalized, nil
+	}
+}
+
+func stdinIsTerminal() bool {
+	fdRaw := os.Stdin.Fd()
+	if fdRaw > uintptr(^uint(0)>>1) {
+		return false
+	}
+	return isTerminalFunc(int(fdRaw))
+}
+
+func readVisibleInput(prompt string) (string, error) {
+	fmt.Fprint(os.Stderr, prompt)
+	line, err := readLineFromStdin()
+	if err != nil && line == "" {
+		return "", fmt.Errorf("read response: %w", err)
+	}
+	return strings.TrimSpace(line), nil
 }
 
 func expandVaultDir(vaultDir string) (string, error) {
