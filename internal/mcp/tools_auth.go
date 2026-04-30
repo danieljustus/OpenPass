@@ -30,7 +30,7 @@ func (s *Server) handleGetAuthStatus(ctx context.Context, req CallToolRequest) (
 
 func (s *Server) handleSetAuthMethod(ctx context.Context, req CallToolRequest) (*CallToolResult, error) {
 	if !s.canManageConfig() {
-		s.logAudit("auth_config_denied", "<config>", false)
+		s.logAudit(ctx, "auth_config_denied", "<config>", false)
 		agentName := ""
 		if s != nil && s.agent != nil {
 			agentName = s.agent.Name
@@ -71,6 +71,6 @@ func (s *Server) handleSetAuthMethod(ctx context.Context, req CallToolRequest) (
 	if err := s.vault.Config.SaveTo(filepath.Join(s.vault.Dir, "config.yaml")); err != nil {
 		return nil, fmt.Errorf("save config: %w", err)
 	}
-	s.logAudit("auth_config", "<config>", true)
+	s.logAudit(ctx, "auth_config", "<config>", true)
 	return NewToolResultText(fmt.Sprintf("Auth method set to %s", method)), nil
 }

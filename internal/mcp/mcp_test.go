@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -34,7 +35,7 @@ func TestAuthorizeDeniesWritesWhenAgentCannotWrite(t *testing.T) {
 		ApprovalMode: "none",
 	}, "stdio")
 
-	err := srv.authorize("work/entry", true, true)
+	err := srv.authorize(context.Background(), "work/entry", true, true)
 	if err == nil {
 		t.Fatal("authorize() expected error, got nil")
 	}
@@ -51,7 +52,7 @@ func TestAuthorizeDeniesPathsOutsideAllowedScope(t *testing.T) {
 		ApprovalMode: "none",
 	}, "stdio")
 
-	err := srv.authorize("personal/entry", false, false)
+	err := srv.authorize(context.Background(), "personal/entry", false, false)
 	if err == nil {
 		t.Fatal("authorize() expected error, got nil")
 	}
@@ -68,7 +69,7 @@ func TestAuthorizeRequiresApprovalForWrites(t *testing.T) {
 		ApprovalMode: "deny",
 	}, "stdio")
 
-	err := srv.authorize("work/entry", true, false)
+	err := srv.authorize(context.Background(), "work/entry", true, false)
 	if err == nil {
 		t.Fatal("authorize() expected error, got nil")
 	}
@@ -85,7 +86,7 @@ func TestAuthorizeApprovalModeDenyRejectsWrites(t *testing.T) {
 		ApprovalMode: "deny",
 	}, "stdio")
 
-	err := srv.authorize("work/entry", true, false)
+	err := srv.authorize(context.Background(), "work/entry", true, false)
 	if err == nil {
 		t.Fatal("authorize() expected error, got nil")
 	}
@@ -102,7 +103,7 @@ func TestAuthorizeApprovalModeNoneAllowsWrites(t *testing.T) {
 		ApprovalMode: "none",
 	}, "stdio")
 
-	err := srv.authorize("work/entry", true, false)
+	err := srv.authorize(context.Background(), "work/entry", true, false)
 	if err != nil {
 		t.Fatalf("authorize() unexpected error = %v", err)
 	}
@@ -116,7 +117,7 @@ func TestAuthorizeApprovalModePromptDegradesToDenyInStdio(t *testing.T) {
 		ApprovalMode: "prompt",
 	}, "stdio")
 
-	err := srv.authorize("work/entry", true, false)
+	err := srv.authorize(context.Background(), "work/entry", true, false)
 	if err == nil {
 		t.Fatal("authorize() expected error for prompt mode in stdio, got nil")
 	}

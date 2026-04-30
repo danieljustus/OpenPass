@@ -20,6 +20,17 @@ type contextKey string
 
 const agentContextKey contextKey = "openpass-agent"
 
+const tokenContextKey contextKey = "openpass-scoped-token"
+
+func WithToken(ctx context.Context, token *ScopedToken) context.Context {
+	return context.WithValue(ctx, tokenContextKey, token)
+}
+
+func TokenFromContext(ctx context.Context) (*ScopedToken, bool) {
+	t, ok := ctx.Value(tokenContextKey).(*ScopedToken)
+	return t, ok
+}
+
 type RateLimiter struct {
 	attempts       map[string]*rateLimitEntry
 	mu             sync.Mutex
@@ -208,13 +219,8 @@ func isTrustedProxy(remoteAddr string, trustedProxies []string) bool {
 	return false
 }
 
-func BearerAuthMiddleware(token string, auditLog *audit.Logger, next http.Handler) http.Handler {
+func BearerAuthMiddleware(legacyToken string, registry *TokenRegistry, auditLog *audit.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if token == "" {
-			logAuthFailure(auditLog, r, "missing_token", "token not configured")
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
 		auth := r.Header.Get("Authorization")
 		if !strings.HasPrefix(auth, "Bearer ") {
 			logAuthFailure(auditLog, r, "missing_bearer", "authorization header missing or malformed")
@@ -222,12 +228,40 @@ func BearerAuthMiddleware(token string, auditLog *audit.Logger, next http.Handle
 			return
 		}
 		provided := strings.TrimPrefix(auth, "Bearer ")
-		if subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
-			logAuthFailure(auditLog, r, "invalid_token", "token mismatch")
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+
+		if legacyToken != "" && subtle.ConstantTimeCompare([]byte(provided), []byte(legacyToken)) == 1 {
+			next.ServeHTTP(w, r)
 			return
 		}
-		next.ServeHTTP(w, r)
+
+		if registry != nil {
+			hash := sha256Hex(provided)
+			tok, ok := registry.Get(hash)
+			if ok {
+				ctx := WithToken(r.Context(), tok)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
+			registry.mu.RLock()
+			t, exists := registry.entries[hash]
+			registry.mu.RUnlock()
+			if exists && t != nil {
+				if t.Revoked {
+					logAuthFailure(auditLog, r, "token_revoked", "token has been revoked")
+				} else if t.IsExpired() {
+					logAuthFailure(auditLog, r, "token_expired", "token has expired")
+				}
+			}
+		}
+
+		if legacyToken == "" && registry == nil {
+			logAuthFailure(auditLog, r, "missing_token", "token not configured")
+		} else {
+			logAuthFailure(auditLog, r, "invalid_token", "token mismatch")
+		}
+
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	})
 }
 

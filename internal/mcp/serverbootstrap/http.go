@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -35,17 +34,23 @@ func RunHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault
 
 	addr := fmt.Sprintf("%s:%d", bind, port)
 
-	tokenPath := filepath.Join(vaultDir, "mcp-token")
+	// Load token system (registry + legacy fallback)
+	tokenPath := ""
 	if v != nil && v.Config != nil && v.Config.MCP != nil {
 		tf := v.Config.MCP.HTTPTokenFile
 		if tf != "" && tf != "auto" {
 			tokenPath = tf
 		}
 	}
-
-	token, err := mcp.LoadOrCreateToken(tokenPath)
+	registry, legacyToken, err := mcp.LoadTokenSystem(vaultDir, tokenPath)
 	if err != nil {
-		return fmt.Errorf("load token: %w", err)
+		return fmt.Errorf("load token system: %w", err)
+	}
+
+	// Start background cleanup for token registry
+	if registry != nil {
+		cleanupInterval := 5 * time.Minute
+		_ = registry.StartCleanup(ctx, cleanupInterval)
 	}
 
 	authAuditLog, err := audit.New("auth-failures", vaultDir)
@@ -133,7 +138,7 @@ func RunHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault
 		metricsAuthRequired = v.Config.MCP.MetricsAuthRequired
 	}
 	if !mcp.IsLoopbackBind(bind) && metricsAuthRequired {
-		mux.Handle("/metrics", mcp.BearerAuthMiddleware(token, authAuditLog, metricsHandler))
+		mux.Handle("/metrics", mcp.BearerAuthMiddleware(legacyToken, registry, authAuditLog, metricsHandler))
 	} else {
 		mux.Handle("/metrics", metricsHandler)
 	}
@@ -195,7 +200,7 @@ func RunHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault
 		//nolint:errchkjson // Best-effort JSON response write; no recovery path if encoding fails
 		_ = json.NewEncoder(w).Encode(resp)
 	})
-	mcpChain := mcp.OriginValidationMiddleware(addr, mcp.BearerAuthMiddleware(token, authAuditLog, mcp.AgentHeaderMiddleware(mcpHandler)))
+	mcpChain := mcp.OriginValidationMiddleware(addr, mcp.BearerAuthMiddleware(legacyToken, registry, authAuditLog, mcp.AgentHeaderMiddleware(mcpHandler)))
 	if rateLimiter != nil {
 		mcpChain = mcp.RateLimiterMiddleware(rateLimiter, mcpChain)
 	}
@@ -238,6 +243,9 @@ func RunHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault
 		}
 		if rateLimiter != nil {
 			_ = rateLimiter.Close()
+		}
+		if registry != nil {
+			_ = registry.Close()
 		}
 		cacheMu.Lock()
 		for _, h := range handlerCache {

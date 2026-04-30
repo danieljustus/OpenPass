@@ -10,20 +10,19 @@ import (
 )
 
 func (s *Server) handleFind(ctx context.Context, req CallToolRequest) (*CallToolResult, error) {
-	_ = ctx
 	query, err := req.RequireString("query")
 	if err != nil {
-		s.logAudit("find", "<invalid>", false)
+		s.logAudit(ctx, "find", "<invalid>", false)
 		return NewToolResultError(err.Error()), nil
 	}
 
 	matches, err := s.findEntries(ctx, query)
 	if err != nil {
-		s.logAudit("find", query, false)
+		s.logAudit(ctx, "find", query, false)
 		return nil, err
 	}
 
-	s.logAudit("find", query, true)
+	s.logAudit(ctx, "find", query, true)
 	result, err := json.Marshal(matches)
 	if err != nil {
 		return nil, err

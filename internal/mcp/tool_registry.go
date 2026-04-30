@@ -225,3 +225,36 @@ func decodeToolRequest(args json.RawMessage) (CallToolRequest, error) {
 	}
 	return req, nil
 }
+
+// resolveToolAlias looks up a tool by name and returns its canonical name if
+// it is an alias. If the tool is not found or is not an alias, the original
+// name is returned.
+func resolveToolAlias(name string) string {
+	if def, ok := findToolDefinition(name); ok && def.AliasFor != "" {
+		return def.AliasFor
+	}
+	return name
+}
+
+// isToolAllowed returns true when the given tool is permitted for the token.
+// A nil token means legacy mode — all tools are allowed. Revoked or expired
+// tokens deny all tools. Alias resolution is applied so that a token that
+// allows the canonical name also allows the alias (and vice-versa).
+func isToolAllowed(token *ScopedToken, toolName string) bool {
+	if token == nil {
+		return true
+	}
+	if token.Revoked || token.IsExpired() {
+		return false
+	}
+	canonicalName := resolveToolAlias(toolName)
+	if token.IsToolAllowed(toolName) || token.IsToolAllowed(canonicalName) {
+		return true
+	}
+	for _, def := range toolDefinitions() {
+		if def.AliasFor == canonicalName && token.IsToolAllowed(def.Name) {
+			return true
+		}
+	}
+	return false
+}

@@ -23,15 +23,14 @@ func vaultServiceErrorResult(err error) (*CallToolResult, error) {
 }
 
 func (s *Server) handleGet(ctx context.Context, req CallToolRequest) (*CallToolResult, error) {
-	_ = ctx
 	path, err := req.RequireString("path")
 	if err != nil {
-		s.logAudit("get", "<invalid>", false)
+		s.logAudit(ctx, "get", "<invalid>", false)
 		return NewToolResultError(err.Error()), nil
 	}
 
 	if !s.checkScope(path) {
-		s.logAudit("get", path, false)
+		s.logAudit(ctx, "get", path, false)
 		metrics.RecordAuthDenial("scope_denied", s.agent.Name)
 		return nil, fmt.Errorf("access denied: path %q outside allowed scope", path)
 	}
@@ -41,7 +40,7 @@ func (s *Server) handleGet(ctx context.Context, req CallToolRequest) (*CallToolR
 	entry, err := svc.GetEntry(path)
 	span.End()
 	if err != nil {
-		s.logAudit("get", path, false)
+		s.logAudit(ctx, "get", path, false)
 		metrics.RecordVaultOperation("read", "error")
 		return vaultServiceErrorResult(err)
 	}
@@ -50,7 +49,7 @@ func (s *Server) handleGet(ctx context.Context, req CallToolRequest) (*CallToolR
 		entry = redactEntry(entry, s.agent.RedactFields)
 	}
 
-	s.logAudit("get", path, true)
+	s.logAudit(ctx, "get", path, true)
 	metrics.RecordVaultOperation("read", "success")
 
 	includeMetadata := req.GetBool("include_metadata", false)
@@ -77,27 +76,26 @@ func (s *Server) handleGet(ctx context.Context, req CallToolRequest) (*CallToolR
 }
 
 func (s *Server) handleGetMetadata(ctx context.Context, req CallToolRequest) (*CallToolResult, error) {
-	_ = ctx
 	path, err := req.RequireString("path")
 	if err != nil {
-		s.logAudit("get_metadata", "<invalid>", false)
+		s.logAudit(ctx, "get_metadata", "<invalid>", false)
 		return NewToolResultError(err.Error()), nil
 	}
 
 	if !s.checkScope(path) {
-		s.logAudit("get_metadata", path, false)
+		s.logAudit(ctx, "get_metadata", path, false)
 		return nil, fmt.Errorf("access denied: path %q outside allowed scope", path)
 	}
 
 	svc := vaultsvc.New(s.vault)
 	entry, err := svc.GetEntry(path)
 	if err != nil {
-		s.logAudit("get_metadata", path, false)
+		s.logAudit(ctx, "get_metadata", path, false)
 		return vaultServiceErrorResult(err)
 	}
 	meta := entry.Metadata
 
-	s.logAudit("get_metadata", path, true)
+	s.logAudit(ctx, "get_metadata", path, true)
 
 	result := map[string]any{
 		"path":    path,

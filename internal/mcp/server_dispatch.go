@@ -53,6 +53,17 @@ func (s *Server) executeTool(ctx context.Context, name string, args json.RawMess
 		return nil, fmt.Errorf("tool %q is not available in the current environment", name)
 	}
 
+	// Check token tool scope
+	if token, ok := TokenFromContext(ctx); ok {
+		if !isToolAllowed(token, name) {
+			span.SetStatus(codes.Error, "tool scope denied")
+			metrics.RecordAuthDenial("tool_scope_denied", agentName)
+			s.logAuditWithToken(ctx, "tool_scope_denied", name, false)
+			return nil, fmt.Errorf("tool %q not allowed by token scope", name)
+		}
+		token.UpdateLastUsed()
+	}
+
 	result, err := def.Handler(s, ctx, req)
 
 	duration := time.Since(start)

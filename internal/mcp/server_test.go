@@ -545,18 +545,18 @@ func TestServer_LogAudit(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	srv.logAudit("test", "test/path", true)
+	srv.logAudit(context.Background(), "test", "test/path", true)
 	_ = srv.Close()
 }
 
 func TestServer_LogAudit_NilServer(t *testing.T) {
 	var srv *Server
-	srv.logAudit("test", "test/path", true)
+	srv.logAudit(context.Background(), "test", "test/path", true)
 }
 
 func TestServer_LogAudit_NilAgent(t *testing.T) {
 	srv := &Server{agent: nil}
-	srv.logAudit("test", "test/path", true)
+	srv.logAudit(context.Background(), "test", "test/path", true)
 }
 
 func TestAuthorize(t *testing.T) {
@@ -590,7 +590,7 @@ func TestAuthorize(t *testing.T) {
 	}
 	defer func() { _ = srv.Close() }()
 
-	err = srv.authorize("work/entry", false, false)
+	err = srv.authorize(context.Background(), "work/entry", false, false)
 	if err != nil {
 		t.Errorf("authorize() unexpected error: %v", err)
 	}
@@ -598,7 +598,7 @@ func TestAuthorize(t *testing.T) {
 
 func TestAuthorize_NilServer(t *testing.T) {
 	var srv *Server
-	err := srv.authorize("work/entry", false, false)
+	err := srv.authorize(context.Background(), "work/entry", false, false)
 	if err == nil {
 		t.Error("authorize() expected error for nil server")
 	}
@@ -635,7 +635,7 @@ func TestAuthorize_EmptyPath(t *testing.T) {
 	}
 	defer func() { _ = srv.Close() }()
 
-	err = srv.authorize("", false, false)
+	err = srv.authorize(context.Background(), "", false, false)
 	if err == nil {
 		t.Error("authorize() expected error for empty path")
 	}
@@ -672,7 +672,7 @@ func TestAuthorize_WriteWithoutPermission(t *testing.T) {
 	}
 	defer func() { _ = srv.Close() }()
 
-	err = srv.authorize("work/entry", true, false)
+	err = srv.authorize(context.Background(), "work/entry", true, false)
 	if err == nil {
 		t.Error("authorize() expected error for write without permission")
 	}
@@ -709,7 +709,7 @@ func TestAuthorize_WriteWithApprovalDeny(t *testing.T) {
 	}
 	defer func() { _ = srv.Close() }()
 
-	err = srv.authorize("work/entry", true, false)
+	err = srv.authorize(context.Background(), "work/entry", true, false)
 	if err == nil {
 		t.Error("authorize() expected error for write with approval deny")
 	}
@@ -746,7 +746,7 @@ func TestAuthorize_WriteWithApprovalButNotApproved(t *testing.T) {
 	}
 	defer func() { _ = srv.Close() }()
 
-	err = srv.authorize("work/entry", true, false)
+	err = srv.authorize(context.Background(), "work/entry", true, false)
 	if err == nil {
 		t.Error("authorize() expected error when approval required but not approved")
 	}
@@ -1062,7 +1062,7 @@ func TestServer_Authorization_AuditLogging(t *testing.T) {
 	}
 	defer func() { _ = srv.Close() }()
 
-	err = srv.authorize("test", true, true)
+	err = srv.authorize(context.Background(), "test", true, true)
 	if err == nil {
 		t.Error("authorize() should fail when agent cannot write")
 	}

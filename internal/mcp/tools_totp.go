@@ -11,38 +11,37 @@ import (
 )
 
 func (s *Server) handleGenerateTOTP(ctx context.Context, req CallToolRequest) (*CallToolResult, error) {
-	_ = ctx
 	path, err := req.RequireString("path")
 	if err != nil {
-		s.logAudit("totp", "<invalid>", false)
+		s.logAudit(ctx, "totp", "<invalid>", false)
 		return NewToolResultError(err.Error()), nil
 	}
 
 	if !s.checkScope(path) {
-		s.logAudit("totp", path, false)
+		s.logAudit(ctx, "totp", path, false)
 		return nil, fmt.Errorf("access denied: path %q outside allowed scope", path)
 	}
 
 	svc := vaultsvc.New(s.vault)
 	entry, err := svc.GetEntry(path)
 	if err != nil {
-		s.logAudit("totp", path, false)
+		s.logAudit(ctx, "totp", path, false)
 		return vaultServiceErrorResult(err)
 	}
 
 	secret, algorithm, digits, period, hasTOTP := vault.ExtractTOTP(entry.Data)
 	if !hasTOTP {
-		s.logAudit("totp", path, false)
+		s.logAudit(ctx, "totp", path, false)
 		return nil, fmt.Errorf("entry %q does not have TOTP configuration", path)
 	}
 
 	totpCode, err := crypto.GenerateTOTP(secret, algorithm, digits, period)
 	if err != nil {
-		s.logAudit("totp", path, false)
+		s.logAudit(ctx, "totp", path, false)
 		return nil, fmt.Errorf("failed to generate TOTP code: %w", err)
 	}
 
-	s.logAudit("totp", path, true)
+	s.logAudit(ctx, "totp", path, true)
 	result := map[string]any{
 		"code":       totpCode.Code,
 		"expires_at": totpCode.ExpiresAt,

@@ -2,9 +2,13 @@ package cmd
 
 import (
 	"context"
+	"encoding/csv"
 	"os"
 	"os/signal"
+	"reflect"
+	"strings"
 	"testing"
+	"unsafe"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -64,6 +68,10 @@ func resetCommandFlagGlobals() {
 }
 
 func resetCobraCommand(cmd *cobra.Command) {
+	resetCobraCommandSeen(cmd, make(map[*pflag.Flag]bool))
+}
+
+func resetCobraCommandSeen(cmd *cobra.Command, seen map[*pflag.Flag]bool) {
 	if cmd == nil {
 		return
 	}
@@ -75,28 +83,55 @@ func resetCobraCommand(cmd *cobra.Command) {
 	cmd.SilenceUsage = false
 	cmd.SilenceErrors = false
 
-	resetFlagSet(cmd.Flags())
-	resetFlagSet(cmd.PersistentFlags())
-	resetFlagSet(cmd.LocalFlags())
-	resetFlagSet(cmd.InheritedFlags())
+	for _, fs := range []*pflag.FlagSet{cmd.Flags(), cmd.PersistentFlags(), cmd.LocalFlags(), cmd.InheritedFlags()} {
+		if fs != nil {
+			fs.VisitAll(func(flag *pflag.Flag) {
+				if seen[flag] {
+					return
+				}
+				seen[flag] = true
+
+				if sv, ok := flag.Value.(pflag.SliceValue); ok {
+					_ = sv.Replace(parseStringSliceDefault(flag.DefValue))
+					resetSliceValueChanged(flag.Value)
+				} else {
+					_ = flag.Value.Set(flag.DefValue)
+				}
+				flag.Changed = false
+			})
+		}
+	}
 
 	for _, child := range cmd.Commands() {
-		resetCobraCommand(child)
+		resetCobraCommandSeen(child, seen)
 	}
-}
-
-func resetFlagSet(flags *pflag.FlagSet) {
-	if flags == nil {
-		return
-	}
-
-	flags.VisitAll(func(flag *pflag.Flag) {
-		_ = flag.Value.Set(flag.DefValue)
-		flag.Changed = false
-	})
 }
 
 func resetCommandEnv() {
 	_ = os.Unsetenv("OPENPASS_VAULT")
 	_ = os.Unsetenv("OPENPASS_PASSPHRASE")
+}
+
+func parseStringSliceDefault(defValue string) []string {
+	if len(defValue) < 2 || defValue[0] != '[' || defValue[len(defValue)-1] != ']' {
+		return []string{}
+	}
+	inner := defValue[1 : len(defValue)-1]
+	if inner == "" {
+		return []string{}
+	}
+	reader := csv.NewReader(strings.NewReader(inner))
+	vals, _ := reader.Read()
+	return vals
+}
+
+func resetSliceValueChanged(v pflag.Value) {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Ptr {
+		rv = rv.Elem()
+	}
+	if changedField := rv.FieldByName("changed"); changedField.IsValid() && changedField.Kind() == reflect.Bool {
+		ptr := unsafe.Pointer(changedField.UnsafeAddr())
+		*(*bool)(ptr) = false
+	}
 }

@@ -7,7 +7,6 @@ import (
 )
 
 func (s *Server) handleGenerate(ctx context.Context, req CallToolRequest) (*CallToolResult, error) {
-	_ = ctx
 	length := 16
 	if v, err := req.RequireFloat("length"); err == nil {
 		length = int(v)
@@ -18,11 +17,11 @@ func (s *Server) handleGenerate(ctx context.Context, req CallToolRequest) (*Call
 
 	password, err := generatePassword(length, symbols)
 	if err != nil {
-		s.logAudit("generate", "password", false)
+		s.logAudit(ctx, "generate", "password", false)
 		return nil, err
 	}
 
-	s.logAudit("generate", "password", true)
+	s.logAudit(ctx, "generate", "password", true)
 	return NewToolResultText(password), nil
 }
 

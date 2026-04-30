@@ -122,6 +122,7 @@ type LogEntry struct {
 	Transport string `json:"transport,omitempty"`
 	Reason    string `json:"reason,omitempty"`
 	DurMs     int64  `json:"dur_ms,omitempty"`
+	TokenID   string `json:"token_id,omitempty"`
 	OK        bool   `json:"ok"`
 }
 

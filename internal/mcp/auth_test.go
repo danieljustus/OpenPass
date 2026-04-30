@@ -22,7 +22,7 @@ func pollWithTimeout(t *testing.T, condition func() bool, timeout time.Duration,
 }
 
 func TestBearerAuthRejects401WithoutToken(t *testing.T) {
-	handler := BearerAuthMiddleware("secret-token", nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BearerAuthMiddleware("secret-token", nil, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -36,7 +36,7 @@ func TestBearerAuthRejects401WithoutToken(t *testing.T) {
 }
 
 func TestBearerAuthRejectsWhenConfiguredTokenEmpty(t *testing.T) {
-	handler := BearerAuthMiddleware("", nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BearerAuthMiddleware("", nil, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -51,7 +51,7 @@ func TestBearerAuthRejectsWhenConfiguredTokenEmpty(t *testing.T) {
 }
 
 func TestBearerAuthRejects401WithWrongToken(t *testing.T) {
-	handler := BearerAuthMiddleware("secret-token", nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BearerAuthMiddleware("secret-token", nil, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -66,7 +66,7 @@ func TestBearerAuthRejects401WithWrongToken(t *testing.T) {
 }
 
 func TestBearerAuthAcceptsValidToken(t *testing.T) {
-	handler := BearerAuthMiddleware("secret-token", nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BearerAuthMiddleware("secret-token", nil, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -731,7 +731,7 @@ func TestLogAuthFailure_NilLogger(t *testing.T) {
 }
 
 func TestBearerAuthMissingBearerPrefix(t *testing.T) {
-	handler := BearerAuthMiddleware("secret-token", nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BearerAuthMiddleware("secret-token", nil, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -742,5 +742,200 @@ func TestBearerAuthMissingBearerPrefix(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestBearerAuthScopedTokenAccepted(t *testing.T) {
+	dir := t.TempDir()
+	regPath := TokenRegistryFilePath(dir)
+	reg := NewTokenRegistry(regPath)
+	st, raw, err := reg.Create("test-scoped", []string{"get_entry"}, "test-agent", 1*time.Hour)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	_ = st
+
+	handler := BearerAuthMiddleware("", reg, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tok, ok := TokenFromContext(r.Context())
+		if !ok {
+			t.Fatal("TokenFromContext returned false, expected scoped token in context")
+		}
+		if tok.ID == "" {
+			t.Fatal("token ID should not be empty")
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+}
+
+func TestBearerAuthLegacyTokenWinsOverRegistry(t *testing.T) {
+	dir := t.TempDir()
+	regPath := TokenRegistryFilePath(dir)
+	reg := NewTokenRegistry(regPath)
+	_, scopedRaw, err := reg.Create("scoped", []string{"get_entry"}, "", 1*time.Hour)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	handler := BearerAuthMiddleware("legacy-secret", reg, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, hasToken := TokenFromContext(r.Context())
+		if hasToken {
+			t.Error("legacy token should not inject scoped token into context")
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Header.Set("Authorization", "Bearer legacy-secret")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	_ = scopedRaw
+}
+
+func TestBearerAuthScopedTokenExpired(t *testing.T) {
+	dir := t.TempDir()
+	regPath := TokenRegistryFilePath(dir)
+	reg := NewTokenRegistry(regPath)
+	_, raw, err := reg.Create("short-lived", []string{"*"}, "", 1*time.Nanosecond)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	time.Sleep(5 * time.Millisecond)
+
+	handler := BearerAuthMiddleware("", reg, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not be reached for expired token")
+	}))
+
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestBearerAuthScopedTokenRevoked(t *testing.T) {
+	dir := t.TempDir()
+	regPath := TokenRegistryFilePath(dir)
+	reg := NewTokenRegistry(regPath)
+	st, raw, err := reg.Create("revoke-me", []string{"*"}, "", 0)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if !reg.Revoke(st.ID) {
+		t.Fatal("Revoke() failed")
+	}
+
+	handler := BearerAuthMiddleware("", reg, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not be reached for revoked token")
+	}))
+
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Header.Set("Authorization", "Bearer "+raw)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestBearerAuthNilRegistryBackwardCompat(t *testing.T) {
+	handler := BearerAuthMiddleware("my-token", nil, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Header.Set("Authorization", "Bearer my-token")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+}
+
+func TestBearerAuthNoTokenFullyMissing(t *testing.T) {
+	handler := BearerAuthMiddleware("", nil, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not be reached")
+	}))
+
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Header.Set("Authorization", "Bearer some-token")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestBearerAuthScopedTokenUnknownHash(t *testing.T) {
+	dir := t.TempDir()
+	regPath := TokenRegistryFilePath(dir)
+	reg := NewTokenRegistry(regPath)
+	_, _, err := reg.Create("known", []string{"*"}, "", 1*time.Hour)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	handler := BearerAuthMiddleware("", reg, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not be reached for unknown token")
+	}))
+
+	req := httptest.NewRequest("POST", "/mcp", nil)
+	req.Header.Set("Authorization", "Bearer not-a-known-token-at-all")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestWithTokenAndTokenFromContextRoundtrip(t *testing.T) {
+	tok := &ScopedToken{
+		ID:           "tok-roundtrip",
+		Label:        "test",
+		Hash:         sha256Hex("test-me"),
+		Prefix:       "test",
+		AllowedTools: []string{"get_entry"},
+	}
+	ctx := WithToken(context.Background(), tok)
+
+	got, ok := TokenFromContext(ctx)
+	if !ok {
+		t.Fatal("TokenFromContext returned false")
+	}
+	if got.ID != tok.ID {
+		t.Fatalf("ID = %q, want %q", got.ID, tok.ID)
+	}
+	if got.Label != tok.Label {
+		t.Fatalf("Label = %q, want %q", got.Label, tok.Label)
+	}
+}
+
+func TestTokenFromContextEmpty(t *testing.T) {
+	tok, ok := TokenFromContext(context.Background())
+	if ok {
+		t.Fatal("TokenFromContext should return false for empty context")
+	}
+	if tok != nil {
+		t.Fatal("TokenFromContext should return nil for empty context")
 	}
 }

@@ -11,37 +11,36 @@ import (
 )
 
 func (s *Server) handleSet(ctx context.Context, req CallToolRequest) (*CallToolResult, error) {
-	_ = ctx
 	if !s.canWrite() {
-		s.logAudit("set", "<write-denied>", false)
+		s.logAudit(ctx, "set", "<write-denied>", false)
 		metrics.RecordAuthDenial("write_denied", s.agent.Name)
 		return nil, fmt.Errorf("write operations not permitted for this agent")
 	}
 
 	path, err := req.RequireString("path")
 	if err != nil {
-		s.logAudit("set", "<invalid>", false)
+		s.logAudit(ctx, "set", "<invalid>", false)
 		return NewToolResultError(err.Error()), nil
 	}
 	field, err := req.RequireString("field")
 	if err != nil {
-		s.logAudit("set", path, false)
+		s.logAudit(ctx, "set", path, false)
 		return NewToolResultError(err.Error()), nil
 	}
 	value, err := req.RequireString("value")
 	if err != nil {
-		s.logAudit("set", path, false)
+		s.logAudit(ctx, "set", path, false)
 		return NewToolResultError(err.Error()), nil
 	}
 
 	if !s.checkScope(path) {
-		s.logAudit("set", path, false)
+		s.logAudit(ctx, "set", path, false)
 		metrics.RecordAuthDenial("scope_denied", s.agent.Name)
 		return nil, fmt.Errorf("access denied: path %q outside allowed scope", path)
 	}
 
 	if s.requiresApproval() {
-		s.logAudit("approval_denied", path, false)
+		s.logAudit(ctx, "approval_denied", path, false)
 		metrics.RecordApproval(s.agent.Name, "denied")
 		return nil, fmt.Errorf("write to %q denied: approval required but cannot be granted", path)
 	}
@@ -80,7 +79,7 @@ func (s *Server) handleSet(ctx context.Context, req CallToolRequest) (*CallToolR
 		return nil, err
 	}
 
-	s.logAudit("set", path, true)
+	s.logAudit(ctx, "set", path, true)
 	metrics.RecordVaultOperation("write", "success")
 	return NewToolResultText(fmt.Sprintf("Set %s.%s = ***", path, field)), nil
 }
@@ -91,7 +90,7 @@ func (s *Server) upsertEntry(ctx context.Context, path string, partialData map[s
 	err := svc.SetFields(path, partialData)
 	span.End()
 	if err != nil {
-		s.logAudit(action, path, false)
+		s.logAudit(ctx, action, path, false)
 		metrics.RecordVaultOperation("write", "error")
 		_, mappedErr := vaultServiceErrorResult(err)
 		if mappedErr != nil {

@@ -45,6 +45,7 @@ Use --token-only to output just the raw token (for use in scripts).`,
 		redact, _ := cmd.Flags().GetBool("redact")
 		includeToken, _ := cmd.Flags().GetBool("include-token")
 		tokenOnly, _ := cmd.Flags().GetBool("token-only")
+		tokenID, _ := cmd.Flags().GetString("token-id")
 
 		if tokenOnly {
 			return outputTokenOnly()
@@ -57,17 +58,17 @@ Use --token-only to output just the raw token (for use in scripts).`,
 		switch format {
 		case "", "generic":
 			if httpMode {
-				return outputHTTPConfig(agentName, serverName, redactToken)
+				return outputHTTPConfig(agentName, serverName, redactToken, tokenID)
 			}
 			return outputStdioConfig(agentName, serverName)
 		case "hermes":
 			if httpMode {
-				return outputHermesHTTPConfig(agentName, serverName, redactToken)
+				return outputHermesHTTPConfig(agentName, serverName, redactToken, tokenID)
 			}
 			return outputHermesStdioConfig(agentName, serverName)
 		case "claude-code":
 			if httpMode {
-				return outputAgentHTTPConfig(agentName, serverName, "claude_desktop_config", redactToken)
+				return outputAgentHTTPConfig(agentName, serverName, "claude_desktop_config", redactToken, tokenID)
 			}
 			return outputAgentStdioConfig(agentName, serverName)
 		case "codex":
@@ -118,7 +119,7 @@ type httpConfig struct {
 	URL    string
 }
 
-func resolveHTTPConfig(agentName string) (*httpConfig, error) {
+func resolveHTTPConfig(agentName string, tokenID string) (*httpConfig, error) {
 	vDir, err := vaultPath()
 	if err != nil {
 		return nil, err
@@ -126,7 +127,6 @@ func resolveHTTPConfig(agentName string) (*httpConfig, error) {
 
 	bind := "127.0.0.1" //nolint:goconst // Loopback default is self-documenting
 	configuredPort := 8080
-	tokenPath := filepath.Join(vDir, "mcp-token")
 
 	cfgPath := filepath.Join(vDir, "config.yaml")
 	if cfg, cfgErr := loadConfigSilent(cfgPath); cfgErr == nil && cfg.MCP != nil {
@@ -136,9 +136,6 @@ func resolveHTTPConfig(agentName string) (*httpConfig, error) {
 		if cfg.MCP.Port > 0 {
 			configuredPort = cfg.MCP.Port
 		}
-		if cfg.MCP.HTTPTokenFile != "" && cfg.MCP.HTTPTokenFile != "auto" {
-			tokenPath = cfg.MCP.HTTPTokenFile
-		}
 	}
 
 	port, err := resolveHTTPPort(vDir, bind, configuredPort)
@@ -146,9 +143,34 @@ func resolveHTTPConfig(agentName string) (*httpConfig, error) {
 		return nil, err
 	}
 
-	token, err := mcp.LoadOrCreateToken(tokenPath)
-	if err != nil {
-		return nil, fmt.Errorf("load token: %w", err)
+	var token string
+	if tokenID != "" {
+		registry, _, err := mcp.LoadTokenSystem(vDir)
+		if err != nil {
+			return nil, fmt.Errorf("load token registry: %w", err)
+		}
+		found := false
+		for _, t := range registry.List() {
+			if t.ID == tokenID {
+				token = t.Hash
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("token %q not found in registry", tokenID)
+		}
+	} else {
+		tokenPath := filepath.Join(vDir, "mcp-token")
+		if cfg, cfgErr := loadConfigSilent(cfgPath); cfgErr == nil && cfg.MCP != nil {
+			if cfg.MCP.HTTPTokenFile != "" && cfg.MCP.HTTPTokenFile != "auto" {
+				tokenPath = cfg.MCP.HTTPTokenFile
+			}
+		}
+		token, err = mcp.LoadOrCreateToken(tokenPath)
+		if err != nil {
+			return nil, fmt.Errorf("load token: %w", err)
+		}
 	}
 
 	return &httpConfig{
@@ -242,8 +264,8 @@ func outputHermesStdioConfig(agentName, serverName string) error {
 	return enc.Encode(config)
 }
 
-func outputHTTPConfig(agentName, serverName string, redact bool) error {
-	httpCfg, err := resolveHTTPConfig(agentName)
+func outputHTTPConfig(agentName, serverName string, redact bool, tokenID string) error {
+	httpCfg, err := resolveHTTPConfig(agentName, tokenID)
 	if err != nil {
 		return err
 	}
@@ -269,8 +291,8 @@ func outputHTTPConfig(agentName, serverName string, redact bool) error {
 	return enc.Encode(config)
 }
 
-func outputHermesHTTPConfig(agentName, serverName string, redact bool) error {
-	httpCfg, err := resolveHTTPConfig(agentName)
+func outputHermesHTTPConfig(agentName, serverName string, redact bool, tokenID string) error {
+	httpCfg, err := resolveHTTPConfig(agentName, tokenID)
 	if err != nil {
 		return err
 	}
@@ -331,8 +353,8 @@ func outputAgentStdioConfig(agentName, serverKey string) error {
 //
 // Verification: openpass mcp-config claude-code --http --format claude-code | paste into Claude Desktop config
 // Then verify: curl -H "Authorization: Bearer $(cat ~/.openpass/mcp-token)" http://127.0.0.1:8080/mcp
-func outputAgentHTTPConfig(agentName, serverKey, displayName string, redact bool) error {
-	httpCfg, err := resolveHTTPConfig(agentName)
+func outputAgentHTTPConfig(agentName, serverKey, displayName string, redact bool, tokenID string) error {
+	httpCfg, err := resolveHTTPConfig(agentName, tokenID)
 	if err != nil {
 		return err
 	}
@@ -375,6 +397,7 @@ func init() {
 	mcpConfigCmd.Flags().Bool("redact", false, "Output token reference (env:OPENPASS_MCP_TOKEN); kept for explicitness because this is the default")
 	mcpConfigCmd.Flags().Bool("include-token", false, "Include the raw HTTP bearer token in config output")
 	mcpConfigCmd.Flags().Bool("token-only", false, "Output just the raw token (for scripts)")
+	mcpConfigCmd.Flags().String("token-id", "", "Use a specific scoped token for HTTP auth")
 }
 
 func outputTokenOnly() error {

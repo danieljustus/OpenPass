@@ -87,7 +87,7 @@ func TestOutputAgentHTTPConfig_Success(t *testing.T) {
 	}
 
 	output := captureStdout(func() {
-		err := outputAgentHTTPConfig("claude-code", "claude_code", "claude-code", true)
+		err := outputAgentHTTPConfig("claude-code", "claude_code", "claude-code", true, "")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -113,7 +113,7 @@ func TestOutputAgentHTTPConfig_ResolveError(t *testing.T) {
 	vault = "~/.openpass"
 	defer func() { vault = origVault }()
 
-	err := outputAgentHTTPConfig("claude-code", "claude_code", "claude-code", true)
+	err := outputAgentHTTPConfig("claude-code", "claude_code", "claude-code", true, "")
 	if err == nil {
 		t.Fatal("expected error when vault path cannot be resolved")
 	}
@@ -209,7 +209,7 @@ func TestOutputHermesHTTPConfig_Success(t *testing.T) {
 	}
 
 	output := captureStdout(func() {
-		err := outputHermesHTTPConfig("claude-code", "openpass", true)
+		err := outputHermesHTTPConfig("claude-code", "openpass", true, "")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -364,7 +364,7 @@ func TestOutputHTTPConfig_VaultPathError(t *testing.T) {
 		vaultFlag.Changed = origChanged
 	})
 
-	err := outputHTTPConfig("test-agent", "openpass", true)
+	err := outputHTTPConfig("test-agent", "openpass", true, "")
 	if err == nil {
 		t.Error("expected error when HOME is unset for tilde expansion")
 	}

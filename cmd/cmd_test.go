@@ -219,7 +219,7 @@ func TestOutputHTTPConfig(t *testing.T) {
 		t.Fatalf("failed to init vault: %v", err)
 	}
 
-	err := outputHTTPConfig("claude-code", "openpass", true)
+	err := outputHTTPConfig("claude-code", "openpass", true, "")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

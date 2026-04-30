@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -12,7 +13,7 @@ import (
 	"github.com/danieljustus/OpenPass/internal/vault"
 )
 
-func (s *Server) authorize(path string, write bool, approved bool) error {
+func (s *Server) authorize(ctx context.Context, path string, write bool, approved bool) error {
 	if s == nil || s.agent == nil {
 		return errors.New("server not initialized")
 	}
@@ -21,19 +22,19 @@ func (s *Server) authorize(path string, write bool, approved bool) error {
 	}
 
 	if !s.checkScope(path) {
-		s.logAudit("scope_denied", path, false)
+		s.logAudit(ctx, "scope_denied", path, false)
 		metrics.RecordAuthDenial("scope_denied", s.agent.Name)
 		return fmt.Errorf("path %q is outside agent scope", path)
 	}
 
 	if write && !s.canWrite() {
-		s.logAudit("write_denied", path, false)
+		s.logAudit(ctx, "write_denied", path, false)
 		metrics.RecordAuthDenial("write_denied", s.agent.Name)
 		return fmt.Errorf("agent %q cannot write", s.agent.Name)
 	}
 
 	if write && s.requiresApproval() && !approved {
-		s.logAudit("approval_required", path, false)
+		s.logAudit(ctx, "approval_required", path, false)
 		metrics.RecordAuthDenial("approval_required", s.agent.Name)
 		return fmt.Errorf("write to %q requires approval", path)
 	}
@@ -42,14 +43,14 @@ func (s *Server) authorize(path string, write bool, approved bool) error {
 	if write {
 		action = "write"
 	}
-	s.logAudit(action, path, approved)
+	s.logAudit(ctx, action, path, approved)
 	if write && approved {
 		metrics.RecordApproval(s.agent.Name, "granted")
 	}
 	return nil
 }
 
-func (s *Server) logAudit(action, path string, ok bool) {
+func (s *Server) logAudit(ctx context.Context, action, path string, ok bool) {
 	if s == nil || s.auditLog == nil {
 		return
 	}
@@ -57,14 +58,40 @@ func (s *Server) logAudit(action, path string, ok bool) {
 	if !ok {
 		reason = action // action IS the reason when denied (e.g., "scope_denied", "write_denied")
 	}
-	s.auditLog.LogEntry(audit.LogEntry{
+	entry := audit.LogEntry{
 		Agent:     s.agent.Name,
 		Action:    action,
 		Path:      path,
 		Transport: s.transport,
 		OK:        ok,
 		Reason:    reason,
-	})
+	}
+	if token, ok := TokenFromContext(ctx); ok {
+		entry.TokenID = token.ID
+	}
+	s.auditLog.LogEntry(entry)
+}
+
+func (s *Server) logAuditWithToken(ctx context.Context, action, path string, ok bool) {
+	if s == nil || s.auditLog == nil {
+		return
+	}
+	reason := ""
+	if !ok {
+		reason = action
+	}
+	entry := audit.LogEntry{
+		Agent:     s.agent.Name,
+		Action:    action,
+		Path:      path,
+		Transport: s.transport,
+		OK:        ok,
+		Reason:    reason,
+	}
+	if token, ok := TokenFromContext(ctx); ok {
+		entry.TokenID = token.ID
+	}
+	s.auditLog.LogEntry(entry)
 }
 
 func (s *Server) checkScope(path string) bool {

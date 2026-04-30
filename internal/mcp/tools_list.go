@@ -16,14 +16,13 @@ func (s *Server) RegisterTools(srv *mcpServer) {
 }
 
 func (s *Server) handleList(ctx context.Context, req CallToolRequest) (*CallToolResult, error) {
-	_ = ctx
 	prefix, err := req.RequireString("prefix")
 	if err != nil {
 		prefix = ""
 	}
 
 	if !s.checkScope(prefix) {
-		s.logAudit("list", prefix, false)
+		s.logAudit(ctx, "list", prefix, false)
 		metrics.RecordAuthDenial("scope_denied", s.agent.Name)
 		return nil, fmt.Errorf("access denied: path %q outside allowed scope", prefix)
 	}
@@ -33,12 +32,12 @@ func (s *Server) handleList(ctx context.Context, req CallToolRequest) (*CallTool
 	entries, err := svc.List(prefix)
 	span.End()
 	if err != nil {
-		s.logAudit("list", prefix, false)
+		s.logAudit(ctx, "list", prefix, false)
 		metrics.RecordVaultOperation("list", "error")
 		return vaultServiceErrorResult(err)
 	}
 
-	s.logAudit("list", prefix, true)
+	s.logAudit(ctx, "list", prefix, true)
 	metrics.RecordVaultOperation("list", "success")
 	result, err := json.Marshal(entries)
 	if err != nil {
