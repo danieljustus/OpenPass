@@ -46,6 +46,9 @@ func RunCommand(opts RunOptions) (*RunResult, error) {
 		defer cancel()
 	}
 
+	// #nosec G204 — command execution is the intended feature of the run command.
+	// Inputs are validated by caller (agent CanRunCommands permission) and the
+	// command is executed in a controlled subprocess environment.
 	cmd := exec.CommandContext(ctx, opts.Command[0], opts.Command[1:]...)
 
 	if opts.WorkingDir != "" {
