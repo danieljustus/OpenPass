@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -72,6 +73,9 @@ func TestCmdRun_Timeout(t *testing.T) {
 }
 
 func TestCmdRun_WorkingDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: path format differs")
+	}
 	vaultDir, passphrase := initVault(t)
 	setPassEnv(t, passphrase)
 	defer setupVaultFlag(t, vaultDir)()

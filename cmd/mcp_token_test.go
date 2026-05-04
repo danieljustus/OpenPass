@@ -500,7 +500,6 @@ func TestMCPTokenRevoke_DoubleRevoke(t *testing.T) {
 	vaultFlagReset(t)
 	t.Cleanup(func() { resetCobraCommand(rootCmd) })
 
-
 	rootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "revoke", token.ID})
 	var execErr error
 	captureStdout(func() {

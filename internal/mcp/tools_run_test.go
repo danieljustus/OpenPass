@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -336,6 +337,9 @@ func TestHandleRunCommand_MissingSecretRef(t *testing.T) {
 }
 
 func TestHandleRunCommand_WorkingDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: path format differs")
+	}
 	wd := t.TempDir()
 	srv := newTestServer(t, config.AgentProfile{
 		Name:           "test",

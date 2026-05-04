@@ -3,6 +3,7 @@ package secrets
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -121,6 +122,9 @@ func TestRunCommand_OutputCap(t *testing.T) {
 }
 
 func TestRunCommand_WorkingDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: path format differs")
+	}
 	wd := t.TempDir()
 	subDir := filepath.Join(wd, "subdir")
 	if err := os.MkdirAll(subDir, 0o755); err != nil {
