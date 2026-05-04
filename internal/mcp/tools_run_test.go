@@ -76,10 +76,10 @@ func TestHandleRunCommand_SecretEnvInjection(t *testing.T) {
 	})
 
 	srv := newTestServerWithVault(t, config.AgentProfile{
-		Name:         "test",
-		AllowedPaths: []string{"*"},
+		Name:           "test",
+		AllowedPaths:   []string{"*"},
 		CanRunCommands: true,
-		ApprovalMode: "none",
+		ApprovalMode:   "none",
 	}, "stdio", vaultDir)
 	srv.vault.Identity = identity
 
@@ -117,10 +117,10 @@ func TestHandleRunCommand_SecretEnvFullEntry(t *testing.T) {
 	})
 
 	srv := newTestServerWithVault(t, config.AgentProfile{
-		Name:         "test",
-		AllowedPaths: []string{"*"},
+		Name:           "test",
+		AllowedPaths:   []string{"*"},
 		CanRunCommands: true,
-		ApprovalMode: "none",
+		ApprovalMode:   "none",
 	}, "stdio", vaultDir)
 	srv.vault.Identity = identity
 
@@ -157,10 +157,10 @@ func TestHandleRunCommand_ScopeCheck(t *testing.T) {
 	})
 
 	srv := newTestServerWithVault(t, config.AgentProfile{
-		Name:         "test",
-		AllowedPaths: []string{"personal/"},
+		Name:           "test",
+		AllowedPaths:   []string{"personal/"},
 		CanRunCommands: true,
-		ApprovalMode: "none",
+		ApprovalMode:   "none",
 	}, "stdio", vaultDir)
 	srv.vault.Identity = identity
 
@@ -207,10 +207,10 @@ func TestHandleRunCommand_RunDenied(t *testing.T) {
 
 func TestHandleRunCommand_Timeout(t *testing.T) {
 	srv := newTestServer(t, config.AgentProfile{
-		Name:         "test",
-		AllowedPaths: []string{"*"},
+		Name:           "test",
+		AllowedPaths:   []string{"*"},
 		CanRunCommands: true,
-		ApprovalMode: "none",
+		ApprovalMode:   "none",
 	}, "stdio")
 
 	req := CallToolRequest{
@@ -237,10 +237,10 @@ func TestHandleRunCommand_Timeout(t *testing.T) {
 
 func TestHandleRunCommand_InvalidCommand(t *testing.T) {
 	srv := newTestServer(t, config.AgentProfile{
-		Name:         "test",
-		AllowedPaths: []string{"*"},
+		Name:           "test",
+		AllowedPaths:   []string{"*"},
 		CanRunCommands: true,
-		ApprovalMode: "none",
+		ApprovalMode:   "none",
 	}, "stdio")
 
 	tests := []struct {
@@ -304,10 +304,10 @@ func TestHandleRunCommand_MissingSecretRef(t *testing.T) {
 	})
 
 	srv := newTestServerWithVault(t, config.AgentProfile{
-		Name:         "test",
-		AllowedPaths: []string{"*"},
+		Name:           "test",
+		AllowedPaths:   []string{"*"},
 		CanRunCommands: true,
-		ApprovalMode: "none",
+		ApprovalMode:   "none",
 	}, "stdio", vaultDir)
 	srv.vault.Identity = identity
 
@@ -338,10 +338,10 @@ func TestHandleRunCommand_MissingSecretRef(t *testing.T) {
 func TestHandleRunCommand_WorkingDir(t *testing.T) {
 	wd := t.TempDir()
 	srv := newTestServer(t, config.AgentProfile{
-		Name:         "test",
-		AllowedPaths: []string{"*"},
+		Name:           "test",
+		AllowedPaths:   []string{"*"},
 		CanRunCommands: true,
-		ApprovalMode: "none",
+		ApprovalMode:   "none",
 	}, "stdio")
 
 	req := CallToolRequest{
@@ -379,10 +379,10 @@ func TestHandleRunCommand_WorkingDir(t *testing.T) {
 
 func TestHandleRunCommand_NonZeroExit(t *testing.T) {
 	srv := newTestServer(t, config.AgentProfile{
-		Name:         "test",
-		AllowedPaths: []string{"*"},
+		Name:           "test",
+		AllowedPaths:   []string{"*"},
 		CanRunCommands: true,
-		ApprovalMode: "none",
+		ApprovalMode:   "none",
 	}, "stdio")
 
 	req := CallToolRequest{
@@ -413,10 +413,10 @@ func TestHandleRunCommand_NonZeroExit(t *testing.T) {
 
 func TestHandleRunCommand_ApprovalRequired(t *testing.T) {
 	srv := newTestServer(t, config.AgentProfile{
-		Name:         "test",
-		AllowedPaths: []string{"*"},
+		Name:           "test",
+		AllowedPaths:   []string{"*"},
 		CanRunCommands: true,
-		ApprovalMode: "deny",
+		ApprovalMode:   "deny",
 	}, "stdio")
 
 	req := CallToolRequest{
