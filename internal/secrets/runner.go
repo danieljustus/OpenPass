@@ -76,7 +76,8 @@ func RunCommand(opts RunOptions) (*RunResult, error) {
 	}
 
 	if runErr != nil {
-		if exitErr, ok := runErr.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(runErr, &exitErr) {
 			result.ExitCode = exitErr.ExitCode()
 			if ctx.Err() != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				result.ExitCode = -1

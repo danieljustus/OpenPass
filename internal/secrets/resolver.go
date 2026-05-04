@@ -33,10 +33,10 @@ func ResolveSecretRef(svc *vaultsvc.Service, ref string) (string, error) {
 	if err != nil {
 		var svcErr *vaultsvc.Error
 		if errors.As(err, &svcErr) {
-			switch svcErr.Kind {
-			case vaultsvc.ErrNotFound:
+			if svcErr.Kind == vaultsvc.ErrNotFound {
 				return "", fmt.Errorf("secret ref not found: %s", path)
-			case vaultsvc.ErrFieldNotFound:
+			}
+			if svcErr.Kind == vaultsvc.ErrFieldNotFound {
 				return "", fmt.Errorf("field not found in secret ref %s.%s", path, field)
 			}
 		}

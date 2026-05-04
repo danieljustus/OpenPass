@@ -297,6 +297,7 @@ func TestMCPTokenCreate_VaultPathError(t *testing.T) {
 	}
 }
 
+//nolint:dupl
 func TestMCPTokenList_Empty(t *testing.T) {
 	vaultDir := t.TempDir()
 	_ = os.Setenv("OPENPASS_VAULT", vaultDir)
@@ -899,6 +900,7 @@ func TestMCPCmdRegistration(t *testing.T) {
 	}
 }
 
+//nolint:dupl
 func TestMCPTokenCreate_NegativeDayTTL(t *testing.T) {
 	vaultDir := t.TempDir()
 	_ = os.Setenv("OPENPASS_VAULT", vaultDir)
@@ -979,6 +981,7 @@ func TestMCPTokenCreate_RegistryFilePermissions(t *testing.T) {
 	}
 }
 
+//nolint:dupl
 func TestMCPTokenCreate_EmptyLabelOK(t *testing.T) {
 	vaultDir := t.TempDir()
 	_ = os.Setenv("OPENPASS_VAULT", vaultDir)
@@ -1073,6 +1076,7 @@ func TestMCPTokenList_VaultPathError(t *testing.T) {
 	}
 }
 
+//nolint:dupl
 func TestMCPTokenCreate_WithDaySuffixTTL(t *testing.T) {
 	vaultDir := t.TempDir()
 	_ = os.Setenv("OPENPASS_VAULT", vaultDir)

@@ -305,7 +305,7 @@ func (r *TokenRegistry) Revoke(id string) bool {
 // List returns a snapshot of all tokens currently in the registry. Expired
 // tokens are excluded and removed; revoked tokens are included for the audit
 // trail.
-func (r *TokenRegistry) List() []ScopedToken {
+func (r *TokenRegistry) List() []*ScopedToken {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -315,9 +315,9 @@ func (r *TokenRegistry) List() []ScopedToken {
 		}
 	}
 
-	result := make([]ScopedToken, 0, len(r.entries))
+	result := make([]*ScopedToken, 0, len(r.entries))
 	for _, t := range r.entries {
-		result = append(result, *t)
+		result = append(result, t)
 	}
 	return result
 }

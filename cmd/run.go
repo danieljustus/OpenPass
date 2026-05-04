@@ -51,9 +51,9 @@ var runCmd = &cobra.Command{
 			envName := parts[0]
 			secretRef := parts[1]
 
-			value, err := secrets.ResolveSecretRef(svc, secretRef)
-			if err != nil {
-				return err
+			value, resolveErr := secrets.ResolveSecretRef(svc, secretRef)
+			if resolveErr != nil {
+				return resolveErr
 			}
 			envMap[envName] = value
 		}
