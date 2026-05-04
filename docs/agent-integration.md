@@ -13,11 +13,13 @@ agents:
   hermes:
     allowedPaths: ["*"]
     canWrite: true
+    canRunCommands: true
     approvalMode: none
 
   openclaw:
     allowedPaths: ["*"]
     canWrite: true
+    canRunCommands: true
     approvalMode: none
 ```
 

@@ -65,6 +65,7 @@ type AgentProfile struct {
 	AllowedPaths    []string      `yaml:"allowedPaths"`
 	RedactFields    []string      `yaml:"redactFields,omitempty"`
 	CanWrite        bool          `yaml:"canWrite"`
+	CanRunCommands  bool          `yaml:"canRunCommands,omitempty"`
 	CanManageConfig bool          `yaml:"canManageConfig,omitempty"`
 	RequireApproval bool          `yaml:"requireApproval"`
 	ApprovalTimeout time.Duration `yaml:"approvalTimeout,omitempty"`
@@ -73,6 +74,7 @@ type AgentProfile struct {
 type fileAgentProfile struct {
 	ApprovalTimeout *time.Duration `yaml:"approvalTimeout,omitempty"`
 	CanWrite        *bool          `yaml:"canWrite,omitempty"`
+	CanRunCommands  *bool          `yaml:"canRunCommands,omitempty"`
 	CanManageConfig *bool          `yaml:"canManageConfig,omitempty"`
 	RequireApproval *bool          `yaml:"requireApproval,omitempty"`
 	ApprovalMode    *string        `yaml:"approvalMode,omitempty"`
@@ -176,6 +178,9 @@ func Load(path string) (*Config, error) {
 			}
 			if profile.CanWrite != nil {
 				current.CanWrite = *profile.CanWrite
+			}
+			if profile.CanRunCommands != nil {
+				current.CanRunCommands = *profile.CanRunCommands
 			}
 			if profile.CanManageConfig != nil {
 				current.CanManageConfig = *profile.CanManageConfig
@@ -392,11 +397,13 @@ func (c *Config) SaveTo(path string) error {
 	for name, profile := range c.Agents {
 		allowed := append([]string(nil), profile.AllowedPaths...)
 		canWrite := profile.CanWrite
+		canRunCommands := profile.CanRunCommands
 		canManageConfig := profile.CanManageConfig
 		requireApproval := profile.RequireApproval
 		fap := fileAgentProfile{
 			AllowedPaths:    allowed,
 			CanWrite:        &canWrite,
+			CanRunCommands:  &canRunCommands,
 			CanManageConfig: &canManageConfig,
 			RequireApproval: &requireApproval,
 		}
@@ -488,21 +495,22 @@ func (c *Config) SetAuthMethod(method string) error {
 
 func newDefaultAgentProfile(name string) AgentProfile {
 	return AgentProfile{
-		Name:         name,
-		AllowedPaths: []string{},
-		CanWrite:     false,
-		ApprovalMode: "none",
+		Name:           name,
+		AllowedPaths:   []string{},
+		CanWrite:       false,
+		CanRunCommands: false,
+		ApprovalMode:   "none",
 	}
 }
 
 func builtinAgentProfiles() map[string]AgentProfile {
 	return map[string]AgentProfile{
-		"default":     {Name: "default", AllowedPaths: []string{"*"}, CanWrite: false, ApprovalMode: "none"},
-		"claude-code": {Name: "claude-code", AllowedPaths: []string{"*"}, CanWrite: true, ApprovalMode: "none"},
-		"codex":       {Name: "codex", AllowedPaths: []string{"*"}, CanWrite: false, ApprovalMode: "none"},
-		"hermes":      {Name: "hermes", AllowedPaths: []string{"*"}, CanWrite: true, ApprovalMode: "none"},
-		"openclaw":    {Name: "openclaw", AllowedPaths: []string{"*"}, CanWrite: true, ApprovalMode: "none"},
-		"opencode":    {Name: "opencode", AllowedPaths: []string{"*"}, CanWrite: false, ApprovalMode: "none"},
+		"default":     {Name: "default", AllowedPaths: []string{"*"}, CanWrite: false, CanRunCommands: false, ApprovalMode: "none"},
+		"claude-code": {Name: "claude-code", AllowedPaths: []string{"*"}, CanWrite: true, CanRunCommands: false, ApprovalMode: "none"},
+		"codex":       {Name: "codex", AllowedPaths: []string{"*"}, CanWrite: false, CanRunCommands: false, ApprovalMode: "none"},
+		"hermes":      {Name: "hermes", AllowedPaths: []string{"*"}, CanWrite: true, CanRunCommands: false, ApprovalMode: "none"},
+		"openclaw":    {Name: "openclaw", AllowedPaths: []string{"*"}, CanWrite: true, CanRunCommands: false, ApprovalMode: "none"},
+		"opencode":    {Name: "opencode", AllowedPaths: []string{"*"}, CanWrite: false, CanRunCommands: false, ApprovalMode: "none"},
 	}
 }
 

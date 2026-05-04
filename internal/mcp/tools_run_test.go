@@ -1,0 +1,435 @@
+package mcp
+
+import (
+	"context"
+	"encoding/json"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"filippo.io/age"
+
+	"github.com/danieljustus/OpenPass/internal/config"
+	"github.com/danieljustus/OpenPass/internal/vault"
+)
+
+func mockVaultWithEntry(t *testing.T, path string, data map[string]any) (string, *age.X25519Identity) {
+	t.Helper()
+
+	dir := t.TempDir()
+	identity, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatalf("generate identity: %v", err)
+	}
+
+	entry := &vault.Entry{Data: data}
+	if err := vault.WriteEntry(dir, path, entry, identity); err != nil {
+		t.Fatalf("write entry %q: %v", path, err)
+	}
+
+	return dir, identity
+}
+
+func TestHandleRunCommand_BasicRun(t *testing.T) {
+	srv := newTestServer(t, config.AgentProfile{
+		Name:           "test",
+		AllowedPaths:   []string{"*"},
+		CanRunCommands: true,
+		ApprovalMode:   "none",
+	}, "stdio")
+
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"command": []any{"echo", "hello"},
+		},
+	}
+
+	result, err := srv.handleRunCommand(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleRunCommand() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("handleRunCommand() returned nil result")
+	}
+	if result.IsError {
+		t.Fatalf("handleRunCommand() returned error: %s", result.Text)
+	}
+
+	var output map[string]any
+	if err := json.Unmarshal([]byte(result.Text), &output); err != nil {
+		t.Fatalf("parse result: %v", err)
+	}
+	if code, _ := output["exit_code"].(float64); code != 0 {
+		t.Errorf("exit_code = %v, want 0", code)
+	}
+	if stdout, _ := output["stdout"].(string); !strings.Contains(stdout, "hello") {
+		t.Errorf("stdout = %q, want hello", stdout)
+	}
+	if d, _ := output["duration_ms"].(float64); d <= 0 {
+		t.Error("duration_ms should be positive")
+	}
+}
+
+func TestHandleRunCommand_SecretEnvInjection(t *testing.T) {
+	vaultDir, identity := mockVaultWithEntry(t, "github", map[string]any{
+		"api_key": "test-token-42",
+	})
+
+	srv := newTestServerWithVault(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		CanRunCommands: true,
+		ApprovalMode: "none",
+	}, "stdio", vaultDir)
+	srv.vault.Identity = identity
+
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"command": []any{"sh", "-c", "echo $MY_KEY"},
+			"env": map[string]any{
+				"MY_KEY": "github.api_key",
+			},
+		},
+	}
+
+	result, err := srv.handleRunCommand(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleRunCommand() error = %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("handleRunCommand() returned error: %s", result.Text)
+	}
+
+	var output map[string]any
+	if err := json.Unmarshal([]byte(result.Text), &output); err != nil {
+		t.Fatalf("parse result: %v", err)
+	}
+	stdout, _ := output["stdout"].(string)
+	if !strings.Contains(stdout, "test-token-42") {
+		t.Errorf("stdout = %q, want to contain 'test-token-42'", stdout)
+	}
+}
+
+func TestHandleRunCommand_SecretEnvFullEntry(t *testing.T) {
+	vaultDir, identity := mockVaultWithEntry(t, "work/aws", map[string]any{
+		"username": "alice",
+		"password": "secret123",
+	})
+
+	srv := newTestServerWithVault(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		CanRunCommands: true,
+		ApprovalMode: "none",
+	}, "stdio", vaultDir)
+	srv.vault.Identity = identity
+
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"command": []any{"sh", "-c", "echo $ALL_DATA"},
+			"env": map[string]any{
+				"ALL_DATA": "work/aws",
+			},
+		},
+	}
+
+	result, err := srv.handleRunCommand(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleRunCommand() error = %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("handleRunCommand() returned error: %s", result.Text)
+	}
+
+	var output map[string]any
+	if err := json.Unmarshal([]byte(result.Text), &output); err != nil {
+		t.Fatalf("parse result: %v", err)
+	}
+	stdout, _ := output["stdout"].(string)
+	if !strings.Contains(stdout, "secret123") || !strings.Contains(stdout, "alice") {
+		t.Errorf("stdout = %q, want to contain entry data", stdout)
+	}
+}
+
+func TestHandleRunCommand_ScopeCheck(t *testing.T) {
+	vaultDir, identity := mockVaultWithEntry(t, "work/aws", map[string]any{
+		"password": "secret123",
+	})
+
+	srv := newTestServerWithVault(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"personal/"},
+		CanRunCommands: true,
+		ApprovalMode: "none",
+	}, "stdio", vaultDir)
+	srv.vault.Identity = identity
+
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"command": []any{"echo", "test"},
+			"env": map[string]any{
+				"PASS": "work/aws.password",
+			},
+		},
+	}
+
+	_, err := srv.handleRunCommand(context.Background(), req)
+	if err == nil {
+		t.Fatal("handleRunCommand() expected error for out-of-scope secret ref, got nil")
+	}
+	if !strings.Contains(err.Error(), "outside allowed scope") {
+		t.Fatalf("error = %v, want 'outside allowed scope'", err)
+	}
+}
+
+func TestHandleRunCommand_RunDenied(t *testing.T) {
+	srv := newTestServer(t, config.AgentProfile{
+		Name:           "readonly",
+		AllowedPaths:   []string{"*"},
+		CanRunCommands: false,
+		ApprovalMode:   "none",
+	}, "stdio")
+
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"command": []any{"echo", "test"},
+		},
+	}
+
+	_, err := srv.handleRunCommand(context.Background(), req)
+	if err == nil {
+		t.Fatal("handleRunCommand() expected error for run-denied agent, got nil")
+	}
+	if !strings.Contains(err.Error(), "command execution not permitted") {
+		t.Fatalf("error = %v, want 'command execution not permitted'", err)
+	}
+}
+
+func TestHandleRunCommand_Timeout(t *testing.T) {
+	srv := newTestServer(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		CanRunCommands: true,
+		ApprovalMode: "none",
+	}, "stdio")
+
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"command": []any{"sleep", "10"},
+			"timeout": float64(1),
+		},
+	}
+
+	result, err := srv.handleRunCommand(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleRunCommand() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("handleRunCommand() returned nil result")
+	}
+	if !result.IsError {
+		t.Fatal("handleRunCommand() expected error result for timeout")
+	}
+	if !strings.Contains(result.Text, "timed out") {
+		t.Fatalf("result text = %q, want 'timed out'", result.Text)
+	}
+}
+
+func TestHandleRunCommand_InvalidCommand(t *testing.T) {
+	srv := newTestServer(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		CanRunCommands: true,
+		ApprovalMode: "none",
+	}, "stdio")
+
+	tests := []struct {
+		name    string
+		args    map[string]any
+		wantErr string
+	}{
+		{
+			name:    "missing command",
+			args:    map[string]any{},
+			wantErr: "missing required argument \"command\"",
+		},
+		{
+			name:    "command not array",
+			args:    map[string]any{"command": "not-an-array"},
+			wantErr: "must be an array",
+		},
+		{
+			name:    "empty command array",
+			args:    map[string]any{"command": []any{}},
+			wantErr: "must not be empty",
+		},
+		{
+			name:    "command element not string",
+			args:    map[string]any{"command": []any{"echo", 42}},
+			wantErr: "must be a string",
+		},
+		{
+			name: "env not object",
+			args: map[string]any{
+				"command": []any{"echo", "test"},
+				"env":     "not-an-object",
+			},
+			wantErr: "must be an object",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := CallToolRequest{Arguments: tt.args}
+			result, err := srv.handleRunCommand(context.Background(), req)
+			if err != nil {
+				t.Fatalf("handleRunCommand() error = %v", err)
+			}
+			if result == nil {
+				t.Fatal("handleRunCommand() returned nil result")
+			}
+			if !result.IsError {
+				t.Error("handleRunCommand() expected error result")
+			}
+			if !strings.Contains(result.Text, tt.wantErr) {
+				t.Errorf("result text = %q, want to contain %q", result.Text, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestHandleRunCommand_MissingSecretRef(t *testing.T) {
+	vaultDir, identity := mockVaultWithEntry(t, "github", map[string]any{
+		"api_key": "test-token",
+	})
+
+	srv := newTestServerWithVault(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		CanRunCommands: true,
+		ApprovalMode: "none",
+	}, "stdio", vaultDir)
+	srv.vault.Identity = identity
+
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"command": []any{"echo", "test"},
+			"env": map[string]any{
+				"KEY": "github.missing_field",
+			},
+		},
+	}
+
+	result, err := srv.handleRunCommand(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleRunCommand() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("handleRunCommand() returned nil result")
+	}
+	if !result.IsError {
+		t.Fatal("handleRunCommand() expected error result for missing secret ref")
+	}
+	if !strings.Contains(result.Text, "cannot resolve secret ref") {
+		t.Fatalf("result text = %q, want 'cannot resolve secret ref'", result.Text)
+	}
+}
+
+func TestHandleRunCommand_WorkingDir(t *testing.T) {
+	wd := t.TempDir()
+	srv := newTestServer(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		CanRunCommands: true,
+		ApprovalMode: "none",
+	}, "stdio")
+
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"command":     []any{"pwd"},
+			"working_dir": wd,
+		},
+	}
+
+	result, err := srv.handleRunCommand(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleRunCommand() error = %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("handleRunCommand() returned error: %s", result.Text)
+	}
+
+	var output map[string]any
+	if err := json.Unmarshal([]byte(result.Text), &output); err != nil {
+		t.Fatalf("parse result: %v", err)
+	}
+	stdout := strings.TrimSpace(output["stdout"].(string))
+	resolvedOut, err := filepath.EvalSymlinks(stdout)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", stdout, err)
+	}
+	resolvedWd, err := filepath.EvalSymlinks(wd)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", wd, err)
+	}
+	if resolvedOut != resolvedWd {
+		t.Errorf("pwd (resolved) = %q, want %q", resolvedOut, resolvedWd)
+	}
+}
+
+func TestHandleRunCommand_NonZeroExit(t *testing.T) {
+	srv := newTestServer(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		CanRunCommands: true,
+		ApprovalMode: "none",
+	}, "stdio")
+
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"command": []any{"sh", "-c", "exit 42"},
+		},
+	}
+
+	result, err := srv.handleRunCommand(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleRunCommand() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("handleRunCommand() returned nil result")
+	}
+	if result.IsError {
+		t.Fatalf("handleRunCommand() returned error: %s", result.Text)
+	}
+
+	var output map[string]any
+	if err := json.Unmarshal([]byte(result.Text), &output); err != nil {
+		t.Fatalf("parse result: %v", err)
+	}
+	if code, _ := output["exit_code"].(float64); code != 42 {
+		t.Errorf("exit_code = %v, want 42", code)
+	}
+}
+
+func TestHandleRunCommand_ApprovalRequired(t *testing.T) {
+	srv := newTestServer(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		CanRunCommands: true,
+		ApprovalMode: "deny",
+	}, "stdio")
+
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"command": []any{"echo", "test"},
+		},
+	}
+
+	_, err := srv.handleRunCommand(context.Background(), req)
+	if err == nil {
+		t.Fatal("handleRunCommand() expected error for approval-required, got nil")
+	}
+	if !strings.Contains(err.Error(), "approval required") {
+		t.Fatalf("error = %v, want 'approval required'", err)
+	}
+}

@@ -86,34 +86,17 @@ int touch_id_store_passphrase(char *service_c, char *account_c, char *passphrase
 
 	SecItemDelete(query);
 
-	CFErrorRef error = NULL;
-	SecAccessControlRef access = SecAccessControlCreateWithFlags(
-		NULL,
-		kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-		kSecAccessControlBiometryCurrentSet,
-		&error
-	);
-	if (access == NULL) {
-		if (error != NULL) {
-			CFRelease(error);
-		}
-		CFRelease(query);
-		return errSecAuthFailed;
-	}
-
 	CFDataRef data = CFDataCreate(NULL, (const UInt8 *)passphrase_c, (CFIndex)strlen(passphrase_c));
 	if (data == NULL) {
-		CFRelease(access);
 		CFRelease(query);
 		return errSecParam;
 	}
 
-	CFDictionarySetValue(query, kSecAttrAccessControl, access);
+	CFDictionarySetValue(query, kSecAttrAccessible, kSecAttrAccessibleWhenUnlockedThisDeviceOnly);
 	CFDictionarySetValue(query, kSecValueData, data);
 
 	OSStatus status = SecItemAdd(query, NULL);
 	CFRelease(data);
-	CFRelease(access);
 	CFRelease(query);
 	return (int)status;
 }
@@ -124,24 +107,44 @@ int touch_id_load_passphrase(char *service_c, char *account_c, char *reason_c, c
 	}
 	*passphrase_out = NULL;
 
+	LAContext *laCtx = [[LAContext alloc] init];
+	if (laCtx == nil) {
+		return errSecAuthFailed;
+	}
+	NSError *laError = nil;
+	BOOL canEval = [laCtx canEvaluatePolicy:LAPolicyDeviceOwnerAuthenticationWithBiometrics
+	                                  error:&laError];
+	if (!canEval) {
+		[laCtx release];
+		return errSecAuthFailed;
+	}
+
+	__block int authResult = 0;
+	dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+	[laCtx evaluatePolicy:LAPolicyDeviceOwnerAuthenticationWithBiometrics
+	      localizedReason:[NSString stringWithUTF8String:reason_c]
+	                reply:^(BOOL success, NSError *replyError) {
+		authResult = success ? 1 : 0;
+		dispatch_semaphore_signal(semaphore);
+	}];
+	dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+	[semaphore release];
+	[laCtx release];
+
+	if (authResult != 1) {
+		return errSecAuthFailed;
+	}
+
 	CFMutableDictionaryRef query = openpass_biometric_query(service_c, account_c);
 	if (query == NULL) {
 		return errSecParam;
 	}
 
-	CFStringRef reason = CFStringCreateWithCString(NULL, reason_c, kCFStringEncodingUTF8);
-	if (reason == NULL) {
-		CFRelease(query);
-		return errSecParam;
-	}
-
 	CFDictionarySetValue(query, kSecReturnData, kCFBooleanTrue);
 	CFDictionarySetValue(query, kSecMatchLimit, kSecMatchLimitOne);
-	CFDictionarySetValue(query, kSecUseOperationPrompt, reason);
 
 	CFTypeRef result = NULL;
 	OSStatus status = SecItemCopyMatching(query, &result);
-	CFRelease(reason);
 	CFRelease(query);
 	if (status != errSecSuccess) {
 		return (int)status;

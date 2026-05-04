@@ -42,6 +42,7 @@ OpenPass exposes a Model Context Protocol (MCP) server that allows AI agents to 
 | `generate_password` | Generate secure passwords | No |
 | `generate_totp` | Generate TOTP codes | No |
 | `set_entry_field` | Store or update a field | **Yes** |
+| `run_command` | Execute command with secret env injection | **Yes** |
 | `delete_entry` | Delete an entry | **Yes** |
 | `openpass_delete` | Deprecated alias for delete_entry | **Yes** |
 | `secure_input` | Prompt user for sensitive data via TTY | **Yes** |
@@ -560,6 +561,60 @@ Store or update a single field in an entry. Requires write permission.
 
 ---
 
+### run_command
+
+Execute a command on the host with secrets injected as environment variables.
+
+**Request**:
+
+```json
+{
+  "tool": "run_command",
+  "arguments": {
+    "command": ["curl", "-H", "Authorization: Bearer $API_KEY", "https://api.github.com/user"],
+    "env": {
+      "API_KEY": "github.api_key"
+    },
+    "working_dir": "/tmp",
+    "timeout": 30
+  }
+}
+```
+
+**Parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `command` | array | Yes | - | Command and arguments as strings |
+| `env` | object | No | `{}` | Map of env var names to secret refs (e.g. `{"API_KEY": "github.api_key"}`) |
+| `working_dir` | string | No | current dir | Working directory for the command |
+| `timeout` | number | No | 30 | Timeout in seconds |
+
+**Response**:
+
+```json
+{
+  "exit_code": 0,
+  "stdout": "...",
+  "stderr": "",
+  "duration_ms": 245
+}
+```
+
+**Notes**:
+- Requires `canRunCommands: true` in agent profile (separate from `canWrite`)
+- Each secret ref is scope-checked individually
+- Secret values are never exposed in the MCP response or audit logs
+- Output is capped at 100KB per stream to prevent context bloat
+- Timeout kills the process with exit code `-1`
+
+**Errors**:
+- `run_denied`: Agent profile has `canRunCommands: false`
+- `scope_denied`: Secret ref path is outside agent's allowed scope
+- `approval_required`: Agent profile requires approval
+
+---
+
 ### delete_entry
 
 Delete a password entry. Requires write permission.
@@ -629,6 +684,7 @@ Delete a password entry. Requires write permission.
 | `missing_parameter` | 400 | Required parameter missing | Include all required fields |
 | `invalid_parameter` | 400 | Parameter value invalid | Check parameter constraints |
 | `write_denied` | 403 | Agent cannot write | Set `canWrite: true` in profile |
+| `run_denied` | 403 | Agent cannot execute commands | Set `canRunCommands: true` in profile |
 | `approval_required` | 403 | Operation requires approval | `approvalMode: prompt` degrades to deny in MCP |
 | `rate_limited` | 429 | Too many requests | Wait and retry |
 | `internal_error` | 500 | Server error | Check server logs, restart server |
@@ -742,7 +798,8 @@ Agent profiles are defined in the vault configuration file (`~/.openpass/config.
 agents:
   <profile-name>:
     allowedPaths: ["*"]           # Path patterns agent can access
-    canWrite: false               # Whether agent can create/update/delete
+    canWrite: false               # Whether agent can create/update/delete entries
+    canRunCommands: false         # Whether agent can execute commands with secrets
     approvalMode: "none"          # Approval behavior: none | deny | prompt
     redactFields: []              # Fields to redact from responses
 ```
@@ -753,6 +810,7 @@ agents:
 |-------|------|---------|-------------|
 | `allowedPaths` | array | `["*"]` | Path patterns the agent can access. Use `*` for all paths, or prefixes like `["work/", "personal/"]` |
 | `canWrite` | boolean | `false` | Whether the agent can modify vault entries |
+| `canRunCommands` | boolean | `false` | Whether the agent can execute commands with secret env injection via `run_command` |
 | `approvalMode` | string | `"none"` | Write approval behavior: `none` (allow), `deny` (reject), `prompt` (degrades to deny in MCP) |
 | `redactFields` | array | `[]` | Field names to redact from `get_entry` responses (e.g., `["totp.secret"]` shows `[REDACTED]`) |
 
@@ -760,14 +818,14 @@ agents:
 
 OpenPass includes several pre-configured profiles:
 
-| Profile | `allowedPaths` | `canWrite` | Use Case |
-|---------|----------------|------------|----------|
-| `default` | `["*"]` | `false` | Read-only access to all entries |
-| `claude-code` | `["*"]` | `true` | Full access for Claude Code |
-| `codex` | `["*"]` | `true` | Full access for Codex |
-| `hermes` | `["*"]` | `true` | Full access for Hermes |
-| `openclaw` | `["*"]` | `true` | Full access for OpenClaw |
-| `opencode` | `["*"]` | `true` | Full access for OpenCode |
+| Profile | `allowedPaths` | `canWrite` | `canRunCommands` | Use Case |
+|---------|----------------|------------|-------------------|----------|
+| `default` | `["*"]` | `false` | `false` | Read-only access to all entries |
+| `claude-code` | `["*"]` | `true` | `false` | Full vault access for Claude Code |
+| `codex` | `["*"]` | `false` | `false` | Read-only access for Codex |
+| `hermes` | `["*"]` | `true` | `false` | Full vault access for Hermes |
+| `openclaw` | `["*"]` | `true` | `false` | Full vault access for OpenClaw |
+| `opencode` | `["*"]` | `false` | `false` | Read-only access for OpenCode |
 
 ### Custom Profile Example
 

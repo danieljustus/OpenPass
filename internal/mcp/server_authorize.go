@@ -123,6 +123,10 @@ func (s *Server) canWrite() bool {
 	return s != nil && s.agent != nil && s.agent.CanWrite
 }
 
+func (s *Server) canRunCommands() bool {
+	return s != nil && s.agent != nil && s.agent.CanRunCommands
+}
+
 func (s *Server) canManageConfig() bool {
 	return s != nil && s.agent != nil && s.agent.CanManageConfig
 }
