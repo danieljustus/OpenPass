@@ -145,14 +145,15 @@ func resolveHTTPConfig(agentName string, tokenID string) (*httpConfig, error) {
 
 	var token string
 	if tokenID != "" {
-		registry, _, err := mcp.LoadTokenSystem(vDir)
-		if err != nil {
-			return nil, fmt.Errorf("load token registry: %w", err)
+		registry, _, loadErr := mcp.LoadTokenSystem(vDir)
+		if loadErr != nil {
+			return nil, fmt.Errorf("load token registry: %w", loadErr)
 		}
 		found := false
-		for _, t := range registry.List() {
-			if t.ID == tokenID {
-				token = t.Hash
+		list := registry.List()
+		for i := range list {
+			if list[i].ID == tokenID {
+				token = list[i].Hash
 				found = true
 				break
 			}
