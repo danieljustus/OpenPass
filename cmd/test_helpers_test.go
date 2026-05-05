@@ -51,12 +51,12 @@ func setupVaultFlag(t *testing.T, vaultDir string) func() {
 	}
 }
 
-func initVault(t *testing.T) (string, string) {
+func initVault(t *testing.T) (string, []byte) {
 	t.Helper()
 	resetCmdFlags()
 	t.Cleanup(resetCmdFlags)
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
 		t.Fatalf("init vault: %v", err)
 	}

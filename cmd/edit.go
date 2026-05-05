@@ -23,10 +23,8 @@ var editCmd = &cobra.Command{
 The entry is opened in JSON format. Save and exit the editor to update the entry.
 If the entry does not exist, an error is returned.
 
-The editor is determined by the --editor flag or EDITOR environment variable (defaults to vi).
-
-	Examples:
-  openpass edit github
+The editor is determined by the --editor flag or EDITOR environment variable (defaults to vi).`,
+	Example: `  openpass edit github
   openpass edit work/aws
   openpass edit personal/bank --editor nano
   EDITOR=nano openpass edit personal/bank`,

@@ -112,7 +112,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -379,15 +378,6 @@ func FindWithOptions(vaultDir string, query string, opts FindOptions) ([]Match, 
 	return matches, nil
 }
 
-// Find searches vault entries matching a query.
-// Performance: Uses path-only fast path to avoid decrypting entries when possible.
-// If query appears in a path, entry is included without decryption.
-// Only entries where path doesn't match are decrypted to search field content.
-// Uses FindConcurrent with runtime.NumCPU() workers for parallel decryption.
-func Find(vaultDir string, query string) ([]Match, error) {
-	return FindConcurrent(vaultDir, query, runtime.NumCPU())
-}
-
 func hasField(fields []string, want string) bool {
 	return slices.Contains(fields, want)
 }
@@ -423,15 +413,4 @@ func CollectFieldMatches(matches map[string]struct{}, prefix string, value any, 
 			matches[prefix] = struct{}{}
 		}
 	}
-}
-
-// FindConcurrent searches vault entries using bounded parallel decryption.
-// It uses a worker pool with maxWorkers concurrent decryption operations.
-// This is optimal for large vaults (10k+ entries) with field searches that
-// don't match paths.
-func FindConcurrent(vaultDir string, query string, maxWorkers int) ([]Match, error) {
-	if maxWorkers <= 0 {
-		maxWorkers = 4
-	}
-	return FindWithOptions(vaultDir, query, FindOptions{MaxWorkers: maxWorkers})
 }

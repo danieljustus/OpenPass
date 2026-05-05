@@ -220,7 +220,7 @@ func TestSaveLoadIdentityWithPassphrase(t *testing.T) {
 
 	dir := t.TempDir()
 	path := dir + string(os.PathSeparator) + "identity.age"
-	passphrase := "correct horse battery staple"
+	passphrase := []byte("correct horse battery staple")
 
 	if err = SaveIdentity(identity, path, passphrase); err != nil {
 		t.Fatalf("save identity: %v", err)
@@ -250,7 +250,7 @@ func TestSaveIdentityNilIdentity(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + string(os.PathSeparator) + "identity.age"
 
-	err := SaveIdentity(nil, path, "passphrase")
+	err := SaveIdentity(nil, path, []byte("passphrase"))
 	if !errors.Is(err, ErrNilIdentity) {
 		t.Fatalf("expected ErrNilIdentity, got: %v", err)
 	}
@@ -264,7 +264,7 @@ func TestSaveIdentityEmptyPassphrase(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + string(os.PathSeparator) + "identity.age"
 
-	err = SaveIdentity(identity, path, "")
+	err = SaveIdentity(identity, path, []byte(""))
 	if err == nil {
 		t.Fatal("expected error for empty passphrase")
 	}
@@ -278,11 +278,11 @@ func TestLoadIdentityWrongPassphrase(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + string(os.PathSeparator) + "identity.age"
 
-	if err = SaveIdentity(identity, path, "correct passphrase"); err != nil {
+	if err = SaveIdentity(identity, path, []byte("correct passphrase")); err != nil {
 		t.Fatalf("SaveIdentity failed: %v", err)
 	}
 
-	_, err = LoadIdentity(path, "wrong passphrase")
+	_, err = LoadIdentity(path, []byte("wrong passphrase"))
 	if err == nil {
 		t.Fatal("expected error for wrong passphrase")
 	}
@@ -295,14 +295,14 @@ func TestLoadIdentityEmptyPassphrase(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + string(os.PathSeparator) + "identity.age"
 
-	_, err := LoadIdentity(path, "")
+	_, err := LoadIdentity(path, []byte(""))
 	if err == nil {
 		t.Fatal("expected error for empty passphrase")
 	}
 }
 
 func TestLoadIdentityNonExistentFile(t *testing.T) {
-	_, err := LoadIdentity("/nonexistent/path/identity.age", "passphrase")
+	_, err := LoadIdentity("/nonexistent/path/identity.age", []byte("passphrase"))
 	if err == nil {
 		t.Fatal("expected error for non-existent file")
 	}
@@ -310,7 +310,7 @@ func TestLoadIdentityNonExistentFile(t *testing.T) {
 
 func TestEncryptDecryptWithPassphrase(t *testing.T) {
 	plaintext := []byte("secret message encrypted with passphrase")
-	passphrase := "my super secret passphrase"
+	passphrase := []byte("my super secret passphrase")
 
 	ciphertext, err := EncryptWithPassphrase(plaintext, passphrase)
 	if err != nil {
@@ -333,8 +333,8 @@ func TestEncryptDecryptWithPassphrase(t *testing.T) {
 
 func TestDecryptWithPassphraseWrongPassword(t *testing.T) {
 	plaintext := []byte("secret message")
-	passphrase := "correct passphrase"
-	wrongPassphrase := "wrong passphrase"
+	passphrase := []byte("correct passphrase")
+	wrongPassphrase := []byte("wrong passphrase")
 
 	ciphertext, err := EncryptWithPassphrase(plaintext, passphrase)
 	if err != nil {
@@ -351,28 +351,28 @@ func TestDecryptWithPassphraseWrongPassword(t *testing.T) {
 }
 
 func TestEncryptWithPassphraseEmptyPlaintext(t *testing.T) {
-	_, err := EncryptWithPassphrase([]byte{}, "passphrase")
+	_, err := EncryptWithPassphrase([]byte{}, []byte("passphrase"))
 	if !errors.Is(err, ErrEmptyPlaintext) {
 		t.Fatalf("expected ErrEmptyPlaintext, got: %v", err)
 	}
 }
 
 func TestEncryptWithPassphraseEmptyPassphrase(t *testing.T) {
-	_, err := EncryptWithPassphrase([]byte("test"), "")
+	_, err := EncryptWithPassphrase([]byte("test"), []byte(""))
 	if err == nil {
 		t.Fatal("expected error for empty passphrase")
 	}
 }
 
 func TestDecryptWithPassphraseEmptyCiphertext(t *testing.T) {
-	_, err := DecryptWithPassphrase([]byte{}, "passphrase")
+	_, err := DecryptWithPassphrase([]byte{}, []byte("passphrase"))
 	if !errors.Is(err, ErrEmptyCiphertext) {
 		t.Fatalf("expected ErrEmptyCiphertext, got: %v", err)
 	}
 }
 
 func TestDecryptWithPassphraseEmptyPassphrase(t *testing.T) {
-	_, err := DecryptWithPassphrase([]byte("encrypted"), "")
+	_, err := DecryptWithPassphrase([]byte("encrypted"), []byte(""))
 	if err == nil {
 		t.Fatal("expected error for empty passphrase")
 	}

@@ -21,6 +21,14 @@ Use --check to verify if an active session exists without prompting.
 
 Environment variable OPENPASS_PASSPHRASE can be used in CI/CD environments
 but should NOT be used on shared machines (visible in process listings).`,
+	Example: `  # Unlock the vault
+  openpass unlock
+
+  # Check if session is active
+  openpass unlock --check
+
+  # Unlock with custom TTL
+  openpass unlock --ttl 30m`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		check, _ := cmd.Flags().GetBool("check")
 		ttl, _ := cmd.Flags().GetDuration("ttl")

@@ -100,12 +100,10 @@ func NormalizePath(path string) string {
 	path = strings.TrimSpace(path)
 	path = strings.Trim(path, "/")
 	path = strings.ReplaceAll(path, " ", "-")
-	path = strings.ReplaceAll(path, "..", "-")
-	// Strip characters that are invalid in Windows file names so that vault
-	// entries are writable on all platforms.
 	for _, ch := range windowsInvalidChars {
 		path = strings.ReplaceAll(path, string(ch), "")
 	}
+	path = strings.ReplaceAll(path, "..", "-")
 	return path
 }
 

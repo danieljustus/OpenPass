@@ -95,31 +95,6 @@ func Decrypt(ciphertext []byte, identity *age.X25519Identity) ([]byte, error) {
 	return plaintext, nil
 }
 
-// DecryptInto decrypts ciphertext into the provided buffer.
-// Reuses the provided slice if it has sufficient capacity, avoiding allocations.
-// Returns the decrypted plaintext (possibly using the provided buffer) or an error.
-func DecryptInto(ciphertext []byte, identity *age.X25519Identity, buf []byte) ([]byte, error) {
-	if identity == nil {
-		return nil, ErrNilIdentity
-	}
-
-	if len(ciphertext) == 0 {
-		return nil, ErrEmptyCiphertext
-	}
-
-	r, err := age.Decrypt(bytes.NewReader(ciphertext), identity)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrDecryptionFailed, err)
-	}
-
-	plaintext, err := io.ReadAll(r)
-	if err != nil {
-		return nil, fmt.Errorf("read decrypted data: %w", err)
-	}
-
-	return plaintext, nil
-}
-
 // Wipe overwrites the contents of buf with zeros to prevent sensitive data
 // from remaining in memory after use. Call with defer after allocating buffers
 // that hold passphrases, identity bytes, or decrypted entry fields.
@@ -136,16 +111,16 @@ func Wipe(buf []byte) {
 // EncryptWithPassphrase encrypts plaintext using a passphrase.
 // The passphrase is used to derive a scrypt-based recipient.
 // This is useful for encrypting data that should be decryptable with a password.
-func EncryptWithPassphrase(plaintext []byte, passphrase string) ([]byte, error) {
+func EncryptWithPassphrase(plaintext []byte, passphrase []byte) ([]byte, error) {
 	if len(plaintext) == 0 {
 		return nil, ErrEmptyPlaintext
 	}
 
-	if passphrase == "" {
+	if len(passphrase) == 0 {
 		return nil, errors.New("passphrase is empty")
 	}
 
-	recipient, err := age.NewScryptRecipient(passphrase)
+	recipient, err := age.NewScryptRecipient(string(passphrase))
 	if err != nil {
 		return nil, fmt.Errorf("create scrypt recipient: %w", err)
 	}
@@ -169,16 +144,16 @@ func EncryptWithPassphrase(plaintext []byte, passphrase string) ([]byte, error) 
 
 // DecryptWithPassphrase decrypts ciphertext using a passphrase.
 // The passphrase must match the one used during encryption.
-func DecryptWithPassphrase(ciphertext []byte, passphrase string) ([]byte, error) {
+func DecryptWithPassphrase(ciphertext []byte, passphrase []byte) ([]byte, error) {
 	if len(ciphertext) == 0 {
 		return nil, ErrEmptyCiphertext
 	}
 
-	if passphrase == "" {
+	if len(passphrase) == 0 {
 		return nil, errors.New("passphrase is empty")
 	}
 
-	identity, err := age.NewScryptIdentity(passphrase)
+	identity, err := age.NewScryptIdentity(string(passphrase))
 	if err != nil {
 		return nil, fmt.Errorf("create scrypt identity: %w", err)
 	}

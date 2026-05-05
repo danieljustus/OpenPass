@@ -34,7 +34,7 @@ func TestFallback_KeyringOperations(t *testing.T) {
 	})
 
 	vaultDir := "/tmp/vault-fallback"
-	passphrase := "fallback-secret"
+	passphrase := []byte("fallback-secret")
 
 	if err := SavePassphrase(vaultDir, passphrase, time.Hour); err != nil {
 		t.Fatalf("SavePassphrase() error = %v", err)
@@ -44,7 +44,7 @@ func TestFallback_KeyringOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadPassphrase() error = %v", err)
 	}
-	if got != passphrase {
+	if string(got) != string(passphrase) {
 		t.Errorf("LoadPassphrase() = %q, want %q", got, passphrase)
 	}
 

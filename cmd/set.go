@@ -8,9 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/danieljustus/OpenPass/internal/crypto"
-	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
-	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
+	cryptopkg "github.com/danieljustus/OpenPass/internal/crypto"
 	vaultsvc "github.com/danieljustus/OpenPass/internal/vaultsvc"
 )
 
@@ -26,22 +24,13 @@ var setCmd = &cobra.Command{
 	Use:   "set <path[.field]> [--value value]",
 	Short: "Set a password entry or field",
 	Long:  "Creates or updates a password entry. Use --value or interactive mode.",
-	Args:  cobra.ExactArgs(1),
+	Example: `  # Set a field non-interactively
+  openpass set github.password --value "mysecret"
+
+  # Set TOTP data
+  openpass set github --totp-secret JBSWY3DPEHPK3PXP`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultDir, err := vaultPath()
-		if err != nil {
-			return err
-		}
-
-		if !vaultpkg.IsInitialized(vaultDir) {
-			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
-		}
-
-		v, err := unlockVault(vaultDir, true)
-		if err != nil {
-			return err
-		}
-
 		query := args[0]
 		path := query
 		field := ""
@@ -58,7 +47,7 @@ var setCmd = &cobra.Command{
 				data["password"] = setValue
 			}
 			if !setForce && (field == "" || field == "password") {
-				if err := crypto.ValidatePasswordStrength(setValue); err != nil {
+				if err := cryptopkg.ValidatePasswordStrength(setValue); err != nil {
 					return err
 				}
 			}
@@ -83,12 +72,13 @@ var setCmd = &cobra.Command{
 				}
 
 				password, err := readHiddenInput("Password: ", reader)
-				if err != nil && password == "" {
+				if err != nil && len(password) == 0 {
 					return fmt.Errorf("read password: %w", err)
 				}
-				data["password"] = password
+				defer cryptopkg.Wipe(password)
+				data["password"] = string(password)
 				if !setForce {
-					if validateErr := crypto.ValidatePasswordStrength(password); validateErr != nil {
+					if validateErr := cryptopkg.ValidatePasswordStrength(string(password)); validateErr != nil {
 						return validateErr
 					}
 				}
@@ -127,16 +117,17 @@ var setCmd = &cobra.Command{
 			data["totp"] = totpData
 		}
 
-		if err := crypto.ValidateTOTPData(data); err != nil {
+		if err := cryptopkg.ValidateTOTPData(data); err != nil {
 			return err
 		}
 
-		svc := vaultsvc.New(v)
-		if err := svc.SetFields(path, data); err != nil {
-			return mapVaultSvcError(err, "cannot write entry")
-		}
-		printQuietAware("Entry saved: %s\n", path)
-		return nil
+		return withVault(func(svc *vaultsvc.Service) error {
+			if err := svc.SetFields(path, data); err != nil {
+				return mapVaultSvcError(err, "cannot write entry")
+			}
+			printQuietAware("Entry saved: %s\n", path)
+			return nil
+		})
 	},
 }
 

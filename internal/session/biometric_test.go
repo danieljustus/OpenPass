@@ -13,7 +13,7 @@ type mockBiometricAuthenticator struct {
 
 type mockBiometricPassphraseStore struct {
 	available  bool
-	passphrase string
+	passphrase []byte
 	err        error
 }
 
@@ -29,7 +29,7 @@ func (m *mockBiometricPassphraseStore) IsAvailable() bool {
 	return m.available
 }
 
-func (m *mockBiometricPassphraseStore) Save(ctx context.Context, vaultDir string, passphrase string) error {
+func (m *mockBiometricPassphraseStore) Save(ctx context.Context, vaultDir string, passphrase []byte) error {
 	_, _ = ctx, vaultDir
 	if m.err != nil {
 		return m.err
@@ -38,20 +38,20 @@ func (m *mockBiometricPassphraseStore) Save(ctx context.Context, vaultDir string
 	return nil
 }
 
-func (m *mockBiometricPassphraseStore) Load(ctx context.Context, vaultDir string) (string, error) {
+func (m *mockBiometricPassphraseStore) Load(ctx context.Context, vaultDir string) ([]byte, error) {
 	_, _ = ctx, vaultDir
 	if m.err != nil {
-		return "", m.err
+		return nil, m.err
 	}
 	if !m.available {
-		return "", ErrBiometricNotAvailable
+		return nil, ErrBiometricNotAvailable
 	}
 	return m.passphrase, nil
 }
 
 func (m *mockBiometricPassphraseStore) Delete(vaultDir string) error {
 	_ = vaultDir
-	m.passphrase = ""
+	m.passphrase = nil
 	return m.err
 }
 
@@ -93,7 +93,7 @@ func TestSetBiometricAuthenticator(t *testing.T) {
 }
 
 func TestLoadPassphraseWithTouchID_Available(t *testing.T) {
-	mock := &mockBiometricPassphraseStore{available: true, passphrase: "secret"}
+	mock := &mockBiometricPassphraseStore{available: true, passphrase: []byte("secret")}
 	biometricPassphraseStore = mock
 	defer func() { biometricPassphraseStore = nil }()
 
@@ -101,7 +101,7 @@ func TestLoadPassphraseWithTouchID_Available(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadPassphraseWithTouchID() error = %v", err)
 	}
-	if got != "secret" {
+	if string(got) != "secret" {
 		t.Fatalf("LoadPassphraseWithTouchID() = %q, want secret", got)
 	}
 }

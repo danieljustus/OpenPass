@@ -19,9 +19,8 @@ import (
 )
 
 var (
-	getCopyToClipboard bool
-	getClipboard       = clipboardapp.DefaultClipboard
-	getJSON            bool
+	getPrint     bool
+	getClipboard = clipboardapp.DefaultClipboard
 )
 
 type totpOutput struct {
@@ -41,44 +40,145 @@ var getCmd = &cobra.Command{
 	Use:   "get <path[.field]>",
 	Short: "Get a password entry",
 	Long:  "Retrieves and displays a password entry. Use path.field syntax to get specific fields.",
-	Args:  cobra.ExactArgs(1),
+	Example: `  # Get a specific field (auto-copies to clipboard on TTY)
+  openpass get github.password
+
+  # Substring search fallback (when exact path doesn't exist)
+  openpass get git
+
+  # Explicitly print to stdout instead of clipboard
+  openpass get github.password --print
+
+  # Output as JSON
+  openpass get github --output json
+
+  # Use a specific profile
+  openpass get github.password --profile work`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultDir, err := vaultPath()
-		if err != nil {
-			return err
-		}
+		return withVault(func(svc *vaultsvc.Service) error {
+			query := args[0]
+			path := query
+			field := ""
 
-		if !vaultpkg.IsInitialized(vaultDir) {
-			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
-		}
+			if idx := strings.LastIndex(query, "."); idx > 0 {
+				candidatePath := query[:idx]
+				candidateField := query[idx+1:]
 
-		v, err := unlockVault(vaultDir, true)
-		if err != nil {
-			return err
-		}
-		svc := vaultsvc.New(v)
-
-		query := args[0]
-		path := query
-		field := ""
-
-		if idx := strings.LastIndex(query, "."); idx > 0 {
-			candidatePath := query[:idx]
-			candidateField := query[idx+1:]
-
-			if _, readErr := svc.GetField(candidatePath, candidateField); readErr == nil {
-				path = candidatePath
-				field = candidateField
+				if _, readErr := svc.GetField(candidatePath, candidateField); readErr == nil {
+					path = candidatePath
+					field = candidateField
+				}
 			}
-		}
 
-		value, err := svc.GetField(path, field)
-		if err != nil {
-			var vaultErr *vaultsvc.Error
-			if !errors.As(err, &vaultErr) || vaultErr.Kind != vaultsvc.ErrNotFound {
+			value, err := svc.GetField(path, field)
+			if err != nil {
+				var vaultErr *vaultsvc.Error
+				if !errors.As(err, &vaultErr) || vaultErr.Kind != vaultsvc.ErrNotFound {
+					if errors.As(err, &vaultErr) {
+						switch vaultErr.Kind {
+						case vaultsvc.ErrFieldNotFound:
+							return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
+						default:
+						}
+					}
+					return fmt.Errorf("cannot read entry: %w", err)
+				}
+
+				matches, findErr := svc.Find(path, vaultpkg.FindOptions{MaxWorkers: 4})
+				if findErr != nil {
+					return fmt.Errorf("search entry: %w", findErr)
+				}
+
+				switch len(matches) {
+				case 0:
+					return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
+				case 1:
+					path = matches[0].Path
+					value, err = svc.GetField(path, field)
+					if err != nil {
+						var vaultErr *vaultsvc.Error
+						if errors.As(err, &vaultErr) {
+							switch vaultErr.Kind {
+							case vaultsvc.ErrNotFound, vaultsvc.ErrFieldNotFound:
+								return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
+							default:
+							}
+						}
+						return fmt.Errorf("cannot read entry: %w", err)
+					}
+				default:
+					fmt.Fprintln(os.Stderr, "Multiple matches:")
+					for _, m := range matches {
+						fmt.Fprintf(os.Stderr, "  %s\n", m.Path)
+					}
+					return errorspkg.NewCLIError(errorspkg.ExitNotFound, fmt.Sprintf("ambiguous path: %s", path), errorspkg.ErrEntryNotFound)
+				}
+			}
+
+			if field != "" {
+				strValue := fmt.Sprintf("%v", value)
+
+				// Determine if we should copy to clipboard:
+				// 1. --output json: never clipboard, always print as JSON
+				// 2. --print flag: always print to stdout
+				// 3. Not a TTY: print to stdout (for scripts/pipes)
+				// 4. TTY + no --print: copy to clipboard (default)
+				// 5. Config override: clipboard.printByDefault=false restores old behavior
+
+				if outputFormat != "text" {
+					if err := PrintResult(strValue); err != nil {
+						return err
+					}
+					return nil
+				}
+
+				shouldPrint := getPrint || !isTerminalFunc(int(os.Stdout.Fd()))
+				if !shouldPrint {
+					// Check config override
+					vaultDir, _ := vaultPath()
+					if vaultDir != "" {
+						cfg, _ := configpkg.Load(vaultDir + "/config.yaml")
+						if cfg != nil && cfg.Clipboard != nil && !cfg.Clipboard.PrintByDefault {
+							shouldPrint = true
+						}
+					}
+				}
+
+				if !shouldPrint {
+					// Copy to clipboard (default TTY behavior)
+					if clipErr := getClipboard().Copy(strValue); clipErr != nil {
+						return fmt.Errorf("copy to clipboard: %w", clipErr)
+					}
+					fmt.Fprintln(os.Stderr, "[copied to clipboard]")
+
+					autoClearDuration := getAutoClearDuration()
+					if autoClearDuration > 0 {
+						cancelCh := make(chan struct{})
+						go clipboardapp.Countdown(autoClearDuration, func(remaining int) {
+							fmt.Fprintf(os.Stderr, "\r[clearing clipboard in %ds] ", remaining)
+						}, cancelCh)
+						go clipboardapp.StartAutoClear(autoClearDuration, func() {
+							close(cancelCh)
+							if clearErr := getClipboard().Copy(""); clearErr != nil {
+								fmt.Fprintf(os.Stderr, "Warning: failed to clear clipboard: %v\n", clearErr)
+							}
+							fmt.Fprintln(os.Stderr, "\r[clipboard cleared]        ")
+						}, cancelCh)
+					}
+					return nil
+				}
+
+				printlnQuietAware(strValue)
+				return nil
+			}
+
+			entry, err := svc.GetEntry(path)
+			if err != nil {
+				var vaultErr *vaultsvc.Error
 				if errors.As(err, &vaultErr) {
 					switch vaultErr.Kind {
-					case vaultsvc.ErrFieldNotFound:
+					case vaultsvc.ErrNotFound, vaultsvc.ErrFieldNotFound:
 						return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
 					default:
 					}
@@ -86,147 +186,72 @@ var getCmd = &cobra.Command{
 				return fmt.Errorf("cannot read entry: %w", err)
 			}
 
-			matches, findErr := svc.Find(path, vaultsvc.FindOptions{MaxWorkers: 4})
-			if findErr != nil {
-				return fmt.Errorf("search entry: %w", findErr)
-			}
-
-			switch len(matches) {
-			case 0:
-				return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
-			case 1:
-				path = matches[0].Path
-				value, err = svc.GetField(path, field)
-				if err != nil {
-					var vaultErr *vaultsvc.Error
-					if errors.As(err, &vaultErr) {
-						switch vaultErr.Kind {
-						case vaultsvc.ErrNotFound, vaultsvc.ErrFieldNotFound:
-							return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
-						default:
+			if outputFormat != "text" {
+				output := getEntryOutput{
+					Path:     path,
+					Modified: entry.Metadata.Updated.Format("2006-01-02 15:04"),
+					Fields:   entry.Data,
+				}
+				if secret, algorithm, digits, period, hasTOTP := vaultpkg.ExtractTOTP(entry.Data); hasTOTP {
+					totpCode, err := vaultcrypto.GenerateTOTP(secret, algorithm, digits, period)
+					if err == nil {
+						period := int64(totpCode.Period)
+						if period == 0 {
+							period = 30
+						}
+						now := time.Now().UTC()
+						remaining := period - (now.Unix() % period)
+						output.TOTP = &totpOutput{
+							Code:      totpCode.Code,
+							Period:    period,
+							Remaining: int(remaining),
 						}
 					}
-					return fmt.Errorf("cannot read entry: %w", err)
 				}
-			default:
-				fmt.Fprintln(os.Stderr, "Multiple matches:")
-				for _, m := range matches {
-					fmt.Fprintf(os.Stderr, "  %s\n", m.Path)
-				}
-				return errorspkg.NewCLIError(errorspkg.ExitNotFound, fmt.Sprintf("ambiguous path: %s", path), errorspkg.ErrEntryNotFound)
-			}
-		}
-
-		if field != "" {
-			strValue := fmt.Sprintf("%v", value)
-			if getCopyToClipboard {
-				if clipErr := getClipboard().Copy(strValue); clipErr != nil {
-					return fmt.Errorf("copy to clipboard: %w", clipErr)
-				}
-				fmt.Fprintln(os.Stderr, "[copied to clipboard]")
-
-				autoClearDuration := getAutoClearDuration()
-				if autoClearDuration > 0 {
-					cancelCh := make(chan struct{})
-					go clipboardapp.Countdown(autoClearDuration, func(remaining int) {
-						fmt.Fprintf(os.Stderr, "\r[clearing clipboard in %ds] ", remaining)
-					}, cancelCh)
-					go clipboardapp.StartAutoClear(autoClearDuration, func() {
-						close(cancelCh)
-						if clearErr := getClipboard().Copy(""); clearErr != nil {
-							fmt.Fprintf(os.Stderr, "Warning: failed to clear clipboard: %v\n", clearErr)
-						}
-						fmt.Fprintln(os.Stderr, "\r[clipboard cleared]        ")
-					}, cancelCh)
+				if err := PrintResult(output); err != nil {
+					return err
 				}
 				return nil
 			}
 
-			if getJSON {
-				PrintJSON(strValue)
-				return nil
-			}
-			printlnQuietAware(strValue)
-			return nil
-		}
+			printQuietAware("Path: %s\n", path)
+			printQuietAware("Modified: %s\n", entry.Metadata.Updated.Format("2006-01-02 15:04"))
+			printlnQuietAware()
 
-		entry, err := svc.GetEntry(path)
-		if err != nil {
-			var vaultErr *vaultsvc.Error
-			if errors.As(err, &vaultErr) {
-				switch vaultErr.Kind {
-				case vaultsvc.ErrNotFound, vaultsvc.ErrFieldNotFound:
-					return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
-				default:
-				}
+			keys := make([]string, 0, len(entry.Data))
+			for k := range entry.Data {
+				keys = append(keys, k)
 			}
-			return fmt.Errorf("cannot read entry: %w", err)
-		}
+			sort.Strings(keys)
 
-		if getJSON {
-			output := getEntryOutput{
-				Path:     path,
-				Modified: entry.Metadata.Updated.Format("2006-01-02 15:04"),
-				Fields:   entry.Data,
+			for _, k := range keys {
+				printQuietAware("%s: %v\n", k, entry.Data[k])
 			}
+
 			if secret, algorithm, digits, period, hasTOTP := vaultpkg.ExtractTOTP(entry.Data); hasTOTP {
 				totpCode, err := vaultcrypto.GenerateTOTP(secret, algorithm, digits, period)
-				if err == nil {
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "\n[Warning: could not generate TOTP code: %v]\n", err)
+				} else {
 					period := int64(totpCode.Period)
 					if period == 0 {
 						period = 30
 					}
 					now := time.Now().UTC()
 					remaining := period - (now.Unix() % period)
-					output.TOTP = &totpOutput{
-						Code:      totpCode.Code,
-						Period:    period,
-						Remaining: int(remaining),
-					}
+
+					printlnQuietAware()
+					fmt.Fprintf(os.Stderr, "TOTP Code: %s (expires in %ds)\n", totpCode.Code, remaining)
 				}
 			}
-			PrintJSON(output)
+
 			return nil
-		}
-
-		printQuietAware("Path: %s\n", path)
-		printQuietAware("Modified: %s\n", entry.Metadata.Updated.Format("2006-01-02 15:04"))
-		printlnQuietAware()
-
-		keys := make([]string, 0, len(entry.Data))
-		for k := range entry.Data {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-
-		for _, k := range keys {
-			printQuietAware("%s: %v\n", k, entry.Data[k])
-		}
-
-		if secret, algorithm, digits, period, hasTOTP := vaultpkg.ExtractTOTP(entry.Data); hasTOTP {
-			totpCode, err := vaultcrypto.GenerateTOTP(secret, algorithm, digits, period)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "\n[Warning: could not generate TOTP code: %v]\n", err)
-			} else {
-				period := int64(totpCode.Period)
-				if period == 0 {
-					period = 30
-				}
-				now := time.Now().UTC()
-				remaining := period - (now.Unix() % period)
-
-				printlnQuietAware()
-				fmt.Fprintf(os.Stderr, "TOTP Code: %s (expires in %ds)\n", totpCode.Code, remaining)
-			}
-		}
-
-		return nil
+		})
 	},
 }
 
 func init() {
-	getCmd.Flags().BoolVarP(&getCopyToClipboard, "clip", "c", false, "Copy value to clipboard")
-	getCmd.Flags().BoolVarP(&getJSON, "json", "j", false, "Output as JSON")
+	getCmd.Flags().BoolVarP(&getPrint, "print", "p", false, "Print value to stdout instead of copying to clipboard")
 	rootCmd.AddCommand(getCmd)
 }
 

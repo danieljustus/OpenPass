@@ -101,7 +101,7 @@ func TestFindMatchesPaths(t *testing.T) {
 	mustWriteEntry(t, vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
 	mustWriteEntry(t, vaultDir, id, "personal/email", map[string]interface{}{"username": "bob"})
 
-	got, err := Find(vaultDir, "github")
+	got, err := FindWithOptions(vaultDir, "github", FindOptions{MaxWorkers: 0})
 	if err != nil {
 		t.Fatalf("Find() error = %v", err)
 	}
@@ -126,7 +126,7 @@ func TestFindMatchesFieldValues(t *testing.T) {
 		"password": "s3cr3t",
 	})
 
-	got, err := Find(vaultDir, "s3cr")
+	got, err := FindWithOptions(vaultDir, "s3cr", FindOptions{MaxWorkers: 0})
 	if err != nil {
 		t.Fatalf("Find() error = %v", err)
 	}
@@ -154,7 +154,7 @@ func TestFindReturnsFieldNamesThatMatched(t *testing.T) {
 		},
 	})
 
-	got, err := Find(vaultDir, "alpha")
+	got, err := FindWithOptions(vaultDir, "alpha", FindOptions{MaxWorkers: 0})
 	if err != nil {
 		t.Fatalf("Find() error = %v", err)
 	}
@@ -174,7 +174,7 @@ func TestFindIsCaseInsensitive(t *testing.T) {
 
 	mustWriteEntry(t, vaultDir, id, "GitHub.Com/User", map[string]interface{}{"username": "Alice"})
 
-	got, err := Find(vaultDir, "gItHuB")
+	got, err := FindWithOptions(vaultDir, "gItHuB", FindOptions{MaxWorkers: 0})
 	if err != nil {
 		t.Fatalf("Find() error = %v", err)
 	}
@@ -238,7 +238,7 @@ func TestFindWithNoIdentity(t *testing.T) {
 	searchIdentity = nil
 	searchIdentityMu.Unlock()
 
-	_, err := Find(vaultDir, "github")
+	_, err := FindWithOptions(vaultDir, "github", FindOptions{MaxWorkers: 0})
 	if err == nil {
 		t.Fatal("expected error when no search identity is available")
 	}
@@ -255,7 +255,7 @@ func TestFindMatchesNestedArrayFields(t *testing.T) {
 		},
 	})
 
-	got, err := Find(vaultDir, "alice")
+	got, err := FindWithOptions(vaultDir, "alice", FindOptions{MaxWorkers: 0})
 	if err != nil {
 		t.Fatalf("Find() error = %v", err)
 	}
@@ -274,7 +274,7 @@ func TestFindWithEmptyQuery(t *testing.T) {
 
 	mustWriteEntry(t, vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
 
-	got, err := Find(vaultDir, "")
+	got, err := FindWithOptions(vaultDir, "", FindOptions{MaxWorkers: 0})
 	if err != nil {
 		t.Fatalf("Find() error = %v", err)
 	}
@@ -299,18 +299,18 @@ func TestFindConcurrentMatchesFind(t *testing.T) {
 
 	for _, q := range queries {
 		t.Run(q, func(t *testing.T) {
-			findResults, err := Find(vaultDir, q)
+			findResults, err := FindWithOptions(vaultDir, q, FindOptions{MaxWorkers: 0})
 			if err != nil {
 				t.Fatalf("Find() error = %v", err)
 			}
 
-			concurrentResults, err := FindConcurrent(vaultDir, q, 4)
+			concurrentResults, err := FindWithOptions(vaultDir, q, FindOptions{MaxWorkers: 4})
 			if err != nil {
-				t.Fatalf("FindConcurrent() error = %v", err)
+				t.Fatalf("FindWithOptions() error = %v", err)
 			}
 
 			if len(concurrentResults) != len(findResults) {
-				t.Fatalf("FindConcount() len=%d, Find len=%d for query %q", len(concurrentResults), len(findResults), q)
+				t.Fatalf("FindWithOptions() len=%d, FindWithOptions() len=%d for query %q", len(concurrentResults), len(findResults), q)
 			}
 
 			findPaths := make(map[string]bool)
@@ -319,7 +319,7 @@ func TestFindConcurrentMatchesFind(t *testing.T) {
 			}
 			for _, m := range concurrentResults {
 				if !findPaths[m.Path] {
-					t.Errorf("FindConcurrent() returned path %q not in Find() results", m.Path)
+					t.Errorf("FindWithOptions() returned path %q not in FindWithOptions() results", m.Path)
 				}
 			}
 		})
@@ -339,7 +339,7 @@ func TestFindConcurrentNoIdentity(t *testing.T) {
 		rememberSearchIdentity(id)
 	})
 
-	_, err := FindConcurrent(vaultDir, "github", 4)
+	_, err := FindWithOptions(vaultDir, "github", FindOptions{MaxWorkers: 4})
 	if err == nil {
 		t.Fatal("expected error when no search identity is available")
 	}
@@ -350,12 +350,12 @@ func TestFindConcurrentEmptyVault(t *testing.T) {
 	id := testutil.TempIdentity(t)
 	rememberSearchIdentity(id)
 
-	got, err := FindConcurrent(vaultDir, "query", 4)
+	got, err := FindWithOptions(vaultDir, "query", FindOptions{MaxWorkers: 4})
 	if err != nil {
-		t.Fatalf("FindConcurrent() error = %v", err)
+		t.Fatalf("FindWithOptions() error = %v", err)
 	}
 	if len(got) != 0 {
-		t.Fatalf("FindConcurrent() on empty vault returned %d results, want 0", len(got))
+		t.Fatalf("FindWithOptions() on empty vault returned %d results, want 0", len(got))
 	}
 }
 
@@ -365,19 +365,19 @@ func TestFindConcurrentDefaultsMaxWorkers(t *testing.T) {
 
 	mustWriteEntry(t, vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
 
-	got, err := FindConcurrent(vaultDir, "github", 0)
+	got, err := FindWithOptions(vaultDir, "github", FindOptions{MaxWorkers: 0})
 	if err != nil {
-		t.Fatalf("FindConcurrent() error = %v", err)
+		t.Fatalf("FindWithOptions() error = %v", err)
 	}
 	if len(got) != 1 {
-		t.Fatalf("FindConcurrent() with maxWorkers=0 returned %d results, want 1", len(got))
+		t.Fatalf("FindWithOptions() with MaxWorkers=0 returned %d results, want 1", len(got))
 	}
 
-	got2, err := FindConcurrent(vaultDir, "github", -1)
+	got2, err := FindWithOptions(vaultDir, "github", FindOptions{MaxWorkers: -1})
 	if err != nil {
-		t.Fatalf("FindConcurrent() error = %v", err)
+		t.Fatalf("FindWithOptions() error = %v", err)
 	}
 	if len(got2) != 1 {
-		t.Fatalf("FindConcurrent() with maxWorkers=-1 returned %d results, want 1", len(got2))
+		t.Fatalf("FindWithOptions() with MaxWorkers=-1 returned %d results, want 1", len(got2))
 	}
 }

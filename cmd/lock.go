@@ -14,6 +14,8 @@ import (
 var lockCmd = &cobra.Command{
 	Use:   "lock",
 	Short: "Lock the vault (clear session)",
+	Example: `  # Lock the vault (clear session)
+  openpass lock`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultDir, err := vaultPath()
 		if err != nil {

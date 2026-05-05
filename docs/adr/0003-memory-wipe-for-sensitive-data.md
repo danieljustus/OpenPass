@@ -74,11 +74,58 @@ Rationale:
    complexity and risk of bugs. We defer this until a concrete threat model
    justifies the cost.
 
-## Consequences
+## Implementation
+
+### Phase 1 (Original)
 
 - `internal/crypto.Wipe` is added and called with `defer` after passphrase
   use in `cmd/root.go`.
-- Decrypted entry fields should be wiped after use (applied where feasible).
+- **Limitation**: Passphrase was converted from `[]byte` (terminal input) to
+  `string` immediately at the read boundary. `crypto.Wipe([]byte(passphrase))`
+  created and wiped a *copy* — the immutable original `string` remained in the
+  heap. This was a documented limitation but not an effective wipe.
+
+### Phase 2 (Completed — OPENPASS-554)
+
+- Passphrase is kept as `[]byte` from input (`term.ReadPassword`) through the
+  entire lifecycle: cmd layer → vault layer → crypto layer → age library
+  boundary.
+- `crypto.Wipe(passphrase)` now zeros the *actual* passphrase bytes, not a
+  copy.
+- Only at the age library boundary (`age.NewScryptRecipient`,
+  `age.NewScryptIdentity`) is `string(passphrase)` used. The age library
+  internally converts to `[]byte` anyway, so the `string` copy is transient.
+- All call sites audited: `cmd/root.go`, `cmd/auth.go`, `cmd/init.go`,
+  `internal/mcp/tools_auth.go`, `internal/session/`, `internal/vault/`,
+  `internal/crypto/`.
+- Tests updated: `go test ./...` passes. Build clean.
+
+### Phase 3 (Completed — OPENPASS-549)
+
+Extended wipe coverage to decrypted entry data and additional passphrase paths:
+
+- `internal/vault/entry.go:ReadEntry` — `defer vaultcrypto.Wipe(plaintext)` after
+  decrypting entry JSON (covers all read paths: get, find, edit, MCP tools).
+- `internal/vault/entry.go:GetEntryMetadata` — `defer vaultcrypto.Wipe(plaintext)`
+  after decrypting entry for metadata extraction.
+- `internal/crypto/keygen.go:LoadIdentity` — `defer Wipe(plaintext)` after
+  reading decrypted age identity key material.
+- `cmd/init.go` — `defer cryptopkg.Wipe(passphrase)` after reading vault
+  initialization passphrase.
+- `cmd/set.go` — `defer cryptopkg.Wipe(password)` after reading interactive
+  password input.
+- `cmd/add.go` — `defer cryptopkg.Wipe(password)` after reading interactive
+  password input.
+- `internal/session/memory_keyring.go:Get` — capture and `zeroBytes(plain)` the
+  decrypted passphrase verification result (was previously discarded without
+  wiping).
+
+Total `crypto.Wipe` / `zeroBytes` call sites: 10 (3 original + 7 new).
+
+## Consequences
+
+- `crypto.Wipe` is now effective for the passphrase lifecycle.
+- Decrypted entry fields should still be wiped after use (applied where feasible).
 - The ADR is reviewed if:
   - A security audit identifies heap exposure as a critical finding
   - We add a daemon mode where secrets persist in memory longer

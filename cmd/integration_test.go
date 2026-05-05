@@ -60,7 +60,7 @@ func TestCmdGitPull_NoRemote(t *testing.T) {
 
 func TestCmdGitLog_Success(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "correcthorsebatterystaple"
+	passphrase := []byte("correcthorsebatterystaple")
 	vaultFlagReset(t)
 
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
@@ -96,7 +96,7 @@ func TestCmdGitLog_Success(t *testing.T) {
 
 func TestCmdGitUnknownAction(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "correcthorsebatterystaple"
+	passphrase := []byte("correcthorsebatterystaple")
 	vaultFlagReset(t)
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
 		t.Fatalf("init vault: %v", err)
@@ -123,7 +123,7 @@ func TestCmdGitUnknownAction(t *testing.T) {
 
 func TestCmdLock_Success(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "correcthorsebatterystaple"
+	passphrase := []byte("correcthorsebatterystaple")
 	vaultFlagReset(t)
 
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
@@ -148,7 +148,7 @@ func TestCmdLock_Success(t *testing.T) {
 
 func TestCmdUnlock_CheckExpired(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "correcthorsebatterystaple"
+	passphrase := []byte("correcthorsebatterystaple")
 	vaultFlagReset(t)
 
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
@@ -176,7 +176,7 @@ func TestCmdUnlock_CheckExpired(t *testing.T) {
 
 func TestCmdUnlock_CheckActive(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "correcthorsebatterystaple"
+	passphrase := []byte("correcthorsebatterystaple")
 	vaultFlagReset(t)
 
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
@@ -240,7 +240,7 @@ func TestUnlock_ErrorPaths(t *testing.T) {
 	t.Run("wrong passphrase", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := config.Default()
-		_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+		_, _ = vaultpkg.InitWithPassphrase(tmpDir, []byte("test"), cfg)
 
 		_ = os.Setenv("OPENPASS_VAULT", tmpDir)
 		_ = os.Setenv("OPENPASS_PASSPHRASE", "wrong-password")

@@ -15,11 +15,11 @@ type cmdMockBiometricStore struct {
 }
 
 func (c cmdMockBiometricStore) IsAvailable() bool { return c.available }
-func (c cmdMockBiometricStore) Save(context.Context, string, string) error {
+func (c cmdMockBiometricStore) Save(context.Context, string, []byte) error {
 	return nil
 }
-func (c cmdMockBiometricStore) Load(context.Context, string) (string, error) {
-	return "", session.ErrBiometricNotConfigured
+func (c cmdMockBiometricStore) Load(context.Context, string) ([]byte, error) {
+	return nil, session.ErrBiometricNotConfigured
 }
 func (c cmdMockBiometricStore) Delete(string) error { return nil }
 

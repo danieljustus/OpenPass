@@ -3,7 +3,6 @@ package vault
 import (
 	"os"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -74,8 +73,14 @@ func TestOpenLoadsExistingVault(t *testing.T) {
 	if v.Identity == nil || v.Identity.String() != identity.String() {
 		t.Fatal("Open() did not preserve the provided identity")
 	}
-	if !reflect.DeepEqual(v.Config, cfg) {
-		t.Fatalf("Config = %#v, want %#v", v.Config, cfg)
+	if v.Config == nil {
+		t.Fatal("Open() returned nil Config")
+	}
+	if v.Config.VaultDir != vaultDir {
+		t.Fatalf("VaultDir = %q, want %q", v.Config.VaultDir, vaultDir)
+	}
+	if v.Config.DefaultAgent != cfg.DefaultAgent {
+		t.Fatalf("DefaultAgent = %q, want %q", v.Config.DefaultAgent, cfg.DefaultAgent)
 	}
 }
 
@@ -410,7 +415,7 @@ func TestOpenWithNilIdentity(t *testing.T) {
 }
 
 func TestOpenWithPassphraseEmptyVaultDir(t *testing.T) {
-	_, err := OpenWithPassphrase("", "passphrase")
+	_, err := OpenWithPassphrase("", []byte("passphrase"))
 	if err == nil {
 		t.Fatal("expected error for empty vault dir")
 	}
@@ -418,14 +423,14 @@ func TestOpenWithPassphraseEmptyVaultDir(t *testing.T) {
 
 func TestOpenWithPassphraseEmptyPassphrase(t *testing.T) {
 	vaultDir := t.TempDir()
-	_, err := OpenWithPassphrase(vaultDir, "")
+	_, err := OpenWithPassphrase(vaultDir, []byte{})
 	if err == nil {
 		t.Fatal("expected error for empty passphrase")
 	}
 }
 
 func TestInitWithPassphraseEmptyVaultDir(t *testing.T) {
-	_, err := InitWithPassphrase("", "passphrase", config.Default())
+	_, err := InitWithPassphrase("", []byte("passphrase"), config.Default())
 	if err == nil {
 		t.Fatal("expected error for empty vault dir")
 	}
@@ -433,7 +438,7 @@ func TestInitWithPassphraseEmptyVaultDir(t *testing.T) {
 
 func TestInitWithPassphraseEmptyPassphrase(t *testing.T) {
 	vaultDir := t.TempDir()
-	_, err := InitWithPassphrase(vaultDir, "", config.Default())
+	_, err := InitWithPassphrase(vaultDir, []byte{}, config.Default())
 	if err == nil {
 		t.Fatal("expected error for empty passphrase")
 	}
@@ -441,7 +446,7 @@ func TestInitWithPassphraseEmptyPassphrase(t *testing.T) {
 
 func TestInitWithPassphraseNilConfig(t *testing.T) {
 	vaultDir := t.TempDir()
-	_, err := InitWithPassphrase(vaultDir, "passphrase", nil)
+	_, err := InitWithPassphrase(vaultDir, []byte("passphrase"), nil)
 	if err == nil {
 		t.Fatal("expected error for nil config")
 	}

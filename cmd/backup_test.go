@@ -16,7 +16,7 @@ import (
 
 func TestCreateBackup(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase-123"
+	passphrase := []byte("test-passphrase-123")
 	cfg := config.Default()
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, cfg); err != nil {
 		t.Fatalf("init vault: %v", err)
@@ -34,7 +34,7 @@ func TestCreateBackup(t *testing.T) {
 
 func TestCreateBackup_ExcludeGit(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase-123"
+	passphrase := []byte("test-passphrase-123")
 	cfg := config.Default()
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, cfg); err != nil {
 		t.Fatalf("init vault: %v", err)
@@ -82,7 +82,7 @@ func TestCreateBackup_ExcludeGit(t *testing.T) {
 
 func TestRestoreBackup(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase-123"
+	passphrase := []byte("test-passphrase-123")
 	cfg := config.Default()
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, cfg); err != nil {
 		t.Fatalf("init vault: %v", err)
@@ -224,7 +224,7 @@ func TestBackupCommand(t *testing.T) {
 	t.Cleanup(resetCommandTestState)
 
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase-123"
+	passphrase := []byte("test-passphrase-123")
 	cfg := config.Default()
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, cfg); err != nil {
 		t.Fatalf("init vault: %v", err)
@@ -250,7 +250,7 @@ func TestRestoreCommand(t *testing.T) {
 	t.Cleanup(resetCommandTestState)
 
 	srcVault := t.TempDir()
-	passphrase := "test-passphrase-123"
+	passphrase := []byte("test-passphrase-123")
 	cfg := config.Default()
 	if _, err := vaultpkg.InitWithPassphrase(srcVault, passphrase, cfg); err != nil {
 		t.Fatalf("init vault: %v", err)
@@ -328,7 +328,7 @@ func TestRestoreCommand_CorruptArchive(t *testing.T) {
 
 func TestCreateBackup_SymlinkSkipped(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase-123"
+	passphrase := []byte("test-passphrase-123")
 	cfg := config.Default()
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, cfg); err != nil {
 		t.Fatalf("init vault: %v", err)
@@ -377,7 +377,7 @@ func TestCreateBackup_SymlinkSkipped(t *testing.T) {
 
 func TestRestoreBackup_ExistingSymlinkRejected(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase-123"
+	passphrase := []byte("test-passphrase-123")
 	cfg := config.Default()
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, cfg); err != nil {
 		t.Fatalf("init vault: %v", err)
@@ -480,7 +480,7 @@ func TestBackupCommand_ExcludeGit(t *testing.T) {
 	t.Cleanup(resetCommandTestState)
 
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase-123"
+	passphrase := []byte("test-passphrase-123")
 	cfg := config.Default()
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, cfg); err != nil {
 		t.Fatalf("init vault: %v", err)
@@ -518,7 +518,7 @@ func TestCreateBackup_UnreadableFile(t *testing.T) {
 	}
 
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase-123"
+	passphrase := []byte("test-passphrase-123")
 	cfg := config.Default()
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, cfg); err != nil {
 		t.Fatalf("init vault: %v", err)

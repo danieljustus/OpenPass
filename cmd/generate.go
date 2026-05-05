@@ -15,15 +15,23 @@ var (
 	genLength  int
 	genSymbols bool
 	genStore   string
-	genJSON    bool
 	genReveal  bool
 	genQuiet   bool
+	genJSON    bool
 )
 
 var generateCmd = &cobra.Command{
 	Use:     "generate",
 	Aliases: []string{"gen"},
 	Short:   "Generate a secure password",
+	Example: `  # Generate a 20-character password
+  openpass generate --length 20
+
+  # Include symbols
+  openpass generate --length 32 --symbols
+
+  # Generate and store
+  openpass generate --store newaccount.password`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		password, err := generatePassword(genLength, genSymbols)
 		if err != nil {
@@ -61,7 +69,12 @@ var generateCmd = &cobra.Command{
 				return fmt.Errorf("auto-commit failed: %w", err)
 			}
 
-			if genJSON {
+			if outputFormat == "text" {
+				if genQuiet {
+					return nil
+				}
+				printQuietAware("Password stored at: %s\n", entryPath)
+			} else {
 				result := map[string]any{
 					"stored": true,
 					"path":   genStore,
@@ -70,21 +83,20 @@ var generateCmd = &cobra.Command{
 				if genReveal {
 					result["password"] = password
 				}
-				PrintJSON(result)
-				return nil
+				if err := PrintResult(result); err != nil {
+					return err
+				}
 			}
-			if genQuiet {
-				return nil
-			}
-			printQuietAware("Password stored at: %s\n", entryPath)
-		}
-
-		if genJSON {
-			PrintJSON(map[string]interface{}{"password": password})
 			return nil
 		}
 
-		printlnQuietAware(password)
+		if outputFormat == "text" {
+			printlnQuietAware(password)
+		} else {
+			if err := PrintResult(map[string]interface{}{"password": password}); err != nil {
+				return err
+			}
+		}
 		return nil
 	},
 }
@@ -103,7 +115,6 @@ func init() {
 	generateCmd.Flags().IntVarP(&genLength, "length", "l", 20, "Password length")
 	generateCmd.Flags().BoolVarP(&genSymbols, "symbols", "s", false, "Include symbols")
 	generateCmd.Flags().StringVar(&genStore, "store", "", "Store at path (optional)")
-	generateCmd.Flags().BoolVarP(&genJSON, "json", "j", false, "Output as JSON")
 	generateCmd.Flags().BoolVar(&genReveal, "reveal", false, "Include generated password in output when using --store")
 	generateCmd.Flags().BoolVar(&genQuiet, "quiet", false, "Suppress success output when using --store")
 	generateCmd.AddCommand(manpagesCmd)

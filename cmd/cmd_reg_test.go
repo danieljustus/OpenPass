@@ -121,7 +121,7 @@ func TestGeneratePasswordCoverage(t *testing.T) {
 
 func TestUnlockVaultWithEnvVar(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
 		t.Fatalf("init vault: %v", err)
@@ -137,7 +137,7 @@ func TestUnlockVaultWithEnvVar(t *testing.T) {
 		}
 	}()
 
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	vault = vaultDir
@@ -153,7 +153,7 @@ func TestUnlockVaultWithEnvVar(t *testing.T) {
 
 func TestUnlockVaultNoPassphrase(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
 		t.Fatalf("init vault: %v", err)
@@ -183,7 +183,7 @@ func TestUnlockVaultNoPassphrase(t *testing.T) {
 
 func TestUnlockVaultWrongPassphrase(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
 		t.Fatalf("init vault: %v", err)
@@ -237,7 +237,7 @@ func TestVaultPathWithEnvVarOpenPassVault(t *testing.T) {
 
 func TestUnlockVaultSavesToKeyring(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
 		t.Fatalf("init vault: %v", err)
@@ -253,7 +253,7 @@ func TestUnlockVaultSavesToKeyring(t *testing.T) {
 		}
 	}()
 
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	vault = vaultDir
@@ -272,7 +272,7 @@ func TestUnlockVaultSavesToKeyring(t *testing.T) {
 
 func TestRecipientsCmd_Add_Success(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 	_, _ = vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default())
 
 	origVault := vault
@@ -285,7 +285,7 @@ func TestRecipientsCmd_Add_Success(t *testing.T) {
 		}
 	}()
 
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	vault = vaultDir
@@ -303,7 +303,7 @@ func TestRecipientsCmd_Add_Success(t *testing.T) {
 
 func TestRecipientsCmd_List_WithRecipients(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 	_, _ = vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default())
 
 	rm := vaultpkg.NewRecipientsManager(vaultDir)
@@ -322,7 +322,7 @@ func TestRecipientsCmd_List_WithRecipients(t *testing.T) {
 		}
 	}()
 
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	vault = vaultDir
@@ -338,7 +338,7 @@ func TestRecipientsCmd_List_WithRecipients(t *testing.T) {
 
 func TestRecipientsCmd_Remove_Success(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 	_, _ = vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default())
 
 	const testRecipient = "age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p"
@@ -359,7 +359,7 @@ func TestRecipientsCmd_Remove_Success(t *testing.T) {
 		}
 	}()
 
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	vault = vaultDir
@@ -377,7 +377,7 @@ func TestRecipientsCmd_Remove_Success(t *testing.T) {
 
 func TestGenerateCmd_StoreToExistingEntry(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 	identity, _ := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default())
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "oldpassword"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "existing.pass", entry, identity)
@@ -392,7 +392,7 @@ func TestGenerateCmd_StoreToExistingEntry(t *testing.T) {
 		}
 	}()
 
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	vault = vaultDir
@@ -410,7 +410,7 @@ func TestGenerateCmd_StoreToExistingEntry(t *testing.T) {
 
 func TestGenerateCmd_StoreNewEntry(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 	_, _ = vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default())
 
 	origVault := vault
@@ -423,7 +423,7 @@ func TestGenerateCmd_StoreNewEntry(t *testing.T) {
 		}
 	}()
 
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	vault = vaultDir
@@ -485,7 +485,7 @@ func TestOutputHTTPConfigMCP(t *testing.T) {
 
 func TestRunHTTPServer(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 	v, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default())
 	if err != nil {
 		t.Fatalf("init vault: %v", err)
@@ -501,7 +501,7 @@ func TestRunHTTPServer(t *testing.T) {
 		}
 	}()
 
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	vault = vaultDir
@@ -528,7 +528,7 @@ func TestRunHTTPServer(t *testing.T) {
 
 func TestRunStdioServer(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 	_, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default())
 	if err != nil {
 		t.Fatalf("init vault: %v", err)
@@ -544,7 +544,7 @@ func TestRunStdioServer(t *testing.T) {
 		}
 	}()
 
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	vault = vaultDir

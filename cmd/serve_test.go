@@ -51,12 +51,12 @@ func newTestVault(t *testing.T) *vaultpkg.Vault {
 		vaultFlag.Changed = false
 	}
 
-	_, err := vaultpkg.InitWithPassphrase(tmpDir, "test-passphrase", config.Default())
+	_, err := vaultpkg.InitWithPassphrase(tmpDir, []byte("test-passphrase"), config.Default())
 	if err != nil {
 		t.Fatalf("init vault: %v", err)
 	}
 
-	v, err := vaultpkg.OpenWithPassphrase(tmpDir, "test-passphrase")
+	v, err := vaultpkg.OpenWithPassphrase(tmpDir, []byte("test-passphrase"))
 	if err != nil {
 		t.Fatalf("open vault: %v", err)
 	}
@@ -769,7 +769,7 @@ func TestServeCommand_StdioOnlyDoesNotStartHTTP(t *testing.T) {
 	t.Cleanup(resetCommandTestState)
 
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	var stdioStarted bool
@@ -809,7 +809,7 @@ func setupServeCommandTest(t *testing.T) (vaultDir string, cleanup func()) {
 	resetCommandTestState()
 	t.Cleanup(resetCommandTestState)
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	cleanup = setupVaultFlag(t, vaultDir)
 	runHTTPServerFunc = func(_ context.Context, _ string, _ int, _ *vaultpkg.Vault) error {
 		return nil
@@ -1213,7 +1213,7 @@ func TestServe_ErrorPaths(t *testing.T) {
 	t.Run("stdio without agent", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := config.Default()
-		_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+		_, _ = vaultpkg.InitWithPassphrase(tmpDir, []byte("test"), cfg)
 
 		_ = os.Setenv("OPENPASS_VAULT", tmpDir)
 		_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
@@ -1234,7 +1234,7 @@ func TestServe_ErrorPaths(t *testing.T) {
 	t.Run("empty bind address", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := config.Default()
-		_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+		_, _ = vaultpkg.InitWithPassphrase(tmpDir, []byte("test"), cfg)
 
 		_ = os.Setenv("OPENPASS_VAULT", tmpDir)
 		_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
@@ -1268,7 +1268,7 @@ func TestServe_HTTPSignalShutdown(t *testing.T) {
 	}()
 
 	cfg := config.Default()
-	_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+	_, _ = vaultpkg.InitWithPassphrase(tmpDir, []byte("test"), cfg)
 
 	_ = serveCmd.Flags().Set("bind", "127.0.0.1")
 	_ = serveCmd.Flags().Set("stdio", "false")
@@ -1315,7 +1315,7 @@ func TestServe_StdioError(t *testing.T) {
 	}()
 
 	cfg := config.Default()
-	_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+	_, _ = vaultpkg.InitWithPassphrase(tmpDir, []byte("test"), cfg)
 
 	_ = serveCmd.Flags().Set("bind", "127.0.0.1")
 	_ = serveCmd.Flags().Set("stdio", "false")

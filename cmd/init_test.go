@@ -13,9 +13,9 @@ import (
 
 func TestInitCommand_HiddenPassphrase(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-hidden-passphrase"
+	passphrase := []byte("test-hidden-passphrase")
 
-	restore := pipeStdin(t, passphrase+"\n")
+	restore := pipeStdin(t, string(passphrase)+"\n")
 	defer restore()
 
 	rootCmd.SetArgs([]string{"init", vaultDir})
@@ -82,7 +82,7 @@ func TestCmdInit_AlreadyInitialized(t *testing.T) {
 	vaultDir := t.TempDir()
 	vaultFlagReset(t)
 
-	if _, err := vaultpkg.InitWithPassphrase(vaultDir, "supersecretpassphrase123", config.Default()); err != nil {
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, []byte("supersecretpassphrase123"), config.Default()); err != nil {
 		t.Fatalf("pre-init vault: %v", err)
 	}
 
@@ -134,7 +134,7 @@ func TestInit_ErrorPaths(t *testing.T) {
 	t.Run("already initialized", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := config.Default()
-		_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+		_, _ = vaultpkg.InitWithPassphrase(tmpDir, []byte("test"), cfg)
 
 		_ = os.Setenv("OPENPASS_VAULT", tmpDir)
 		defer func() { _ = os.Unsetenv("OPENPASS_VAULT") }()

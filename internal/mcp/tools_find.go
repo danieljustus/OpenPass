@@ -37,7 +37,7 @@ func (s *Server) findEntries(ctx context.Context, query string) ([]vault.Match, 
 	svc := vaultsvc.New(s.vault)
 	_, span := metrics.StartSpan(ctx, "vault.Find")
 	defer span.End()
-	return svc.Find(query, vaultsvc.FindOptions{
+	return svc.Find(query, vault.FindOptions{
 		MaxWorkers:  4,
 		ScopeFilter: s.checkScope,
 	})

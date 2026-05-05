@@ -10,7 +10,7 @@ func TestMemoryKeyring_SetAndGet_RoundTrip(t *testing.T) {
 	mk := &memoryKeyring{}
 	vaultDir := "/tmp/vault-mem"
 
-	enc, nonce, err := encryptPassphrase("secret", vaultDir)
+	enc, nonce, err := encryptPassphrase([]byte("secret"), deriveKey(vaultDir))
 	if err != nil {
 		t.Fatalf("setup encrypt failed: %v", err)
 	}

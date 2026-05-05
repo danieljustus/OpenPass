@@ -246,7 +246,7 @@ func (t *touchIDPassphraseStore) IsAvailable() bool {
 	return touchIDAvailable()
 }
 
-func (t *touchIDPassphraseStore) Save(ctx context.Context, vaultDir string, passphrase string) error {
+func (t *touchIDPassphraseStore) Save(ctx context.Context, vaultDir string, passphrase []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -256,7 +256,7 @@ func (t *touchIDPassphraseStore) Save(ctx context.Context, vaultDir string, pass
 
 	service := C.CString(biometricServiceName(vaultDir))
 	account := C.CString(biometricAccount)
-	secret := C.CString(passphrase)
+	secret := C.CString(string(passphrase))
 	defer C.free(unsafe.Pointer(service))
 	defer C.free(unsafe.Pointer(account))
 	defer C.free(unsafe.Pointer(secret))
@@ -267,12 +267,12 @@ func (t *touchIDPassphraseStore) Save(ctx context.Context, vaultDir string, pass
 	return nil
 }
 
-func (t *touchIDPassphraseStore) Load(ctx context.Context, vaultDir string) (string, error) {
+func (t *touchIDPassphraseStore) Load(ctx context.Context, vaultDir string) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
-		return "", err
+		return nil, err
 	}
 	if !touchIDAvailable() {
-		return "", ErrBiometricNotAvailable
+		return nil, ErrBiometricNotAvailable
 	}
 
 	service := C.CString(biometricServiceName(vaultDir))
@@ -285,13 +285,17 @@ func (t *touchIDPassphraseStore) Load(ctx context.Context, vaultDir string) (str
 	var out *C.char
 	status := int(C.touch_id_load_passphrase(service, account, reason, &out))
 	if status == errSecItemNotFound {
-		return "", ErrBiometricNotConfigured
+		return nil, ErrBiometricNotConfigured
 	}
 	if status != errSecSuccess {
-		return "", fmt.Errorf("%w: keychain status %d", ErrBiometricFailed, status)
+		return nil, fmt.Errorf("%w: keychain status %d", ErrBiometricFailed, status)
 	}
-	defer C.free(unsafe.Pointer(out))
-	return C.GoString(out), nil
+	goStr := C.GoString(out)
+	// Wipe the C string memory before freeing
+	C.memset(unsafe.Pointer(out), 0, C.size_t(len(goStr)))
+	C.free(unsafe.Pointer(out))
+
+	return []byte(goStr), nil
 }
 
 func (t *touchIDPassphraseStore) Delete(vaultDir string) error {

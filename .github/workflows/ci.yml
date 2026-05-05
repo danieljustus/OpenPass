@@ -179,6 +179,19 @@ jobs:
         shell: bash
         run: go test -v -timeout=15m -tags smoke -run TestBetaSmoke .
 
+      - name: Run fuzz tests
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          echo "Running fuzz tests with 30s per target..."
+          go test -fuzz=FuzzCSVImporterParse -fuzztime=30s ./internal/importer/
+          go test -fuzz=FuzzBitwardenImporterParse -fuzztime=30s ./internal/importer/
+          go test -fuzz=FuzzOnePUXImporterParse -fuzztime=30s ./internal/importer/
+          go test -fuzz=FuzzParsePassEntry -fuzztime=30s ./internal/importer/
+          go test -fuzz=FuzzNormalizePath -fuzztime=30s ./internal/importer/
+          go test -fuzz=FuzzParseMapping -fuzztime=30s ./internal/importer/
+          echo "All fuzz tests passed without crashes"
+
       - name: Generate coverage report
         if: matrix.os == 'ubuntu-latest'
         run: go tool cover -html=coverage.out -o coverage.html

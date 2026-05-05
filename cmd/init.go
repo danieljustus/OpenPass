@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/danieljustus/OpenPass/internal/config"
+	cryptopkg "github.com/danieljustus/OpenPass/internal/crypto"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/git"
 	"github.com/danieljustus/OpenPass/internal/session"
@@ -22,7 +23,15 @@ var initCmd = &cobra.Command{
 	Use:   "init [vault-dir]",
 	Short: "Initialize a new password vault",
 	Long:  "Creates a new vault directory with identity and configuration.",
-	Args:  cobra.MaximumNArgs(1),
+	Example: `  # Initialize default vault
+  openpass init
+
+  # Initialize with specific auth method
+  openpass init --auth touchid
+
+  # Initialize custom vault directory
+  openpass init ~/my-vault`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var (
 			vaultDir string
@@ -51,6 +60,7 @@ var initCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("cannot read passphrase: %w", err)
 		}
+		defer cryptopkg.Wipe(passphrase)
 		if len(passphrase) < 12 {
 			return fmt.Errorf("passphrase must be at least 12 characters")
 		}
@@ -146,10 +156,10 @@ func stdinIsTerminal() bool {
 func readVisibleInput(prompt string) (string, error) {
 	fmt.Fprint(os.Stderr, prompt)
 	line, err := readLineFromStdin()
-	if err != nil && line == "" {
+	if err != nil && len(line) == 0 {
 		return "", fmt.Errorf("read response: %w", err)
 	}
-	return strings.TrimSpace(line), nil
+	return strings.TrimSpace(string(line)), nil
 }
 
 func expandVaultDir(vaultDir string) (string, error) {

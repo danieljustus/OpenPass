@@ -20,12 +20,12 @@ var expectedCSVImportPaths = []string{
 
 func TestImportCommandDryRunDoesNotWriteEntries(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
-	output := runImportCommand(t, passphrase, "--vault", vaultDir, "import", "csv", csvImportFixture(t), "--dry-run")
+	output := runImportCommand(t, string(passphrase), "--vault", vaultDir, "import", "csv", csvImportFixture(t), "--dry-run")
 
-	svc := importTestVaultService(t, vaultDir, passphrase)
+	svc := importTestVaultService(t, vaultDir, string(passphrase))
 	entries, err := svc.List("")
 	if err != nil {
 		t.Fatalf("list entries: %v", err)
@@ -45,15 +45,15 @@ func TestImportCommandDryRunDoesNotWriteEntries(t *testing.T) {
 
 func TestImportCommandCSVWritesEntries(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
-	output := runImportCommand(t, passphrase, "--vault", vaultDir, "import", "csv", csvImportFixture(t))
+	output := runImportCommand(t, string(passphrase), "--vault", vaultDir, "import", "csv", csvImportFixture(t))
 
 	if !strings.Contains(output, "Import summary: 3 imported, 0 skipped") {
 		t.Errorf("import output missing summary: %s", output)
 	}
-	svc := importTestVaultService(t, vaultDir, passphrase)
+	svc := importTestVaultService(t, vaultDir, string(passphrase))
 	assertCSVImportedEntries(t, svc, "")
 }
 
@@ -62,11 +62,11 @@ func TestImportCommandSkipExistingDoesNotChangeEntries(t *testing.T) {
 	defer setupVaultFlag(t, vaultDir)()
 	source := csvImportFixture(t)
 
-	runImportCommand(t, passphrase, "--vault", vaultDir, "import", "csv", source)
-	svc := importTestVaultService(t, vaultDir, passphrase)
+	runImportCommand(t, string(passphrase), "--vault", vaultDir, "import", "csv", source)
+	svc := importTestVaultService(t, vaultDir, string(passphrase))
 	before := snapshotImportEntries(t, svc, expectedCSVImportPaths)
 
-	output := runImportCommand(t, passphrase, "--vault", vaultDir, "import", "csv", source, "--skip-existing")
+	output := runImportCommand(t, string(passphrase), "--vault", vaultDir, "import", "csv", source, "--skip-existing")
 	after := snapshotImportEntries(t, svc, expectedCSVImportPaths)
 
 	if !reflect.DeepEqual(after, before) {
@@ -79,12 +79,12 @@ func TestImportCommandSkipExistingDoesNotChangeEntries(t *testing.T) {
 
 func TestImportCommandOverwriteUpdatesExistingEntries(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	source := csvImportFixture(t)
 
-	runImportCommand(t, passphrase, "--vault", vaultDir, "import", "csv", source)
-	svc := importTestVaultService(t, vaultDir, passphrase)
+	runImportCommand(t, string(passphrase), "--vault", vaultDir, "import", "csv", source)
+	svc := importTestVaultService(t, vaultDir, string(passphrase))
 	if err := svc.SetFields("GitHub,-Personal", map[string]any{
 		"username": "changed@example.com",
 		"extra":    "remove-me",
@@ -92,7 +92,7 @@ func TestImportCommandOverwriteUpdatesExistingEntries(t *testing.T) {
 		t.Fatalf("modify imported entry: %v", err)
 	}
 
-	output := runImportCommand(t, passphrase, "--vault", vaultDir, "import", "csv", source, "--overwrite")
+	output := runImportCommand(t, string(passphrase), "--vault", vaultDir, "import", "csv", source, "--overwrite")
 	entry, err := svc.GetEntry("GitHub,-Personal")
 	if err != nil {
 		t.Fatalf("get overwritten entry: %v", err)
@@ -111,15 +111,15 @@ func TestImportCommandOverwriteUpdatesExistingEntries(t *testing.T) {
 
 func TestImportCommandPrefixWritesEntriesUnderPrefix(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
-	output := runImportCommand(t, passphrase, "--vault", vaultDir, "import", "csv", csvImportFixture(t), "--prefix", "imports/")
+	output := runImportCommand(t, string(passphrase), "--vault", vaultDir, "import", "csv", csvImportFixture(t), "--prefix", "imports/")
 
 	if !strings.Contains(output, "Imported: imports/GitHub,-Personal") {
 		t.Errorf("prefix output missing imported path: %s", output)
 	}
-	svc := importTestVaultService(t, vaultDir, passphrase)
+	svc := importTestVaultService(t, vaultDir, string(passphrase))
 	assertCSVImportedEntries(t, svc, "imports/")
 }
 
@@ -152,7 +152,7 @@ func csvImportFixture(t *testing.T) string {
 
 func importTestVaultService(t *testing.T, vaultDir, passphrase string) *vaultsvc.Service {
 	t.Helper()
-	v, err := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
+	v, err := vaultpkg.OpenWithPassphrase(vaultDir, []byte(passphrase))
 	if err != nil {
 		t.Fatalf("open vault: %v", err)
 	}

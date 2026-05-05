@@ -54,10 +54,10 @@ func (s *Server) handleSetAuthMethod(ctx context.Context, req CallToolRequest) (
 			return NewToolResultError("Touch ID is not available in this OpenPass build or on this Mac"), nil
 		}
 		passphrase, err := session.LoadPassphrase(s.vault.Dir)
-		if err != nil || passphrase == "" {
+		if err != nil || len(passphrase) == 0 {
 			return NewToolResultError("Touch ID setup requires an active OpenPass session; run openpass unlock first"), nil
 		}
-		defer crypto.Wipe([]byte(passphrase))
+		defer crypto.Wipe(passphrase)
 		if err := session.SaveBiometricPassphrase(ctx, s.vault.Dir, passphrase); err != nil {
 			return nil, fmt.Errorf("save Touch ID unlock item: %w", err)
 		}

@@ -18,7 +18,7 @@ func TestCmdEdit_Success(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "original"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "edit-me", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	editor := fakeEditorWithContent(t,
 		`{"data":{"password":"edited_pass"},"meta":{"created":"0001-01-01T00:00:00Z","updated":"0001-01-01T00:00:00Z","version":0}}`)
@@ -33,7 +33,7 @@ func TestCmdEdit_Success(t *testing.T) {
 
 func TestCmdEdit_NotFound(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	stderr := captureStderr(func() {
 		rootCmd.SetArgs([]string{"--vault", vaultDir, "edit", "ghost"})
@@ -50,7 +50,7 @@ func TestCmdEdit_EditorNotFound(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "x"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "ed-nf", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	origEditor := os.Getenv("EDITOR")
 	_ = os.Setenv("EDITOR", "nonexistent_editor_xyz_abc")
@@ -71,7 +71,7 @@ func TestCmdEdit_EmptyFile(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "x"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "empty-edit", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	origEditor := os.Getenv("EDITOR")
 	_ = os.Setenv("EDITOR", fakeEditorEmpty(t))
@@ -92,7 +92,7 @@ func TestCmdEdit_InvalidJSON(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "x"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "bad-json", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	origEditor := os.Getenv("EDITOR")
 	_ = os.Setenv("EDITOR", fakeEditorInvalid(t))
@@ -112,7 +112,7 @@ func TestCmdEdit_EditorRunError(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "x"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "edit-err", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	origEditor := os.Getenv("EDITOR")
@@ -153,7 +153,7 @@ func TestCmdEdit_AutoCommitError(t *testing.T) {
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "original"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "autocommit-edit", entry, identity.Identity)
 	setupGitWithBrokenObjects(t, vaultDir)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	editor := fakeEditorWithContent(t,
@@ -192,7 +192,7 @@ func TestEdit_ErrorPaths(t *testing.T) {
 				tmpDir := t.TempDir()
 				_ = os.Setenv("OPENPASS_VAULT", tmpDir)
 				cfg := config.Default()
-				_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+				_, _ = vaultpkg.InitWithPassphrase(tmpDir, []byte("test"), cfg)
 				_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
 				return tmpDir
 			},

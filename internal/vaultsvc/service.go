@@ -122,25 +122,9 @@ func (s *Service) List(prefix string) ([]string, error) {
 	return entries, nil
 }
 
-// FindOptions configures search behavior.
-type FindOptions struct {
-	// MaxWorkers controls parallel decryption. <= 0 uses default (CPU count, capped at 4).
-	MaxWorkers int
-	// ScopeFilter, if non-nil, restricts search to matching paths before decryption.
-	ScopeFilter func(path string) bool
-}
-
 // Find searches for entries matching the given query.
-func (s *Service) Find(query string, opts FindOptions) ([]vaultpkg.Match, error) {
-	workers := opts.MaxWorkers
-	if workers <= 0 {
-		workers = 4 // Default cap to avoid memory exhaustion
-	}
-
-	matches, err := vaultpkg.FindWithOptions(s.vault.Dir, query, vaultpkg.FindOptions{
-		MaxWorkers:  workers,
-		ScopeFilter: opts.ScopeFilter,
-	})
+func (s *Service) Find(query string, opts vaultpkg.FindOptions) ([]vaultpkg.Match, error) {
+	matches, err := vaultpkg.FindWithOptions(s.vault.Dir, query, opts)
 	if err != nil {
 		return nil, NewError(ErrReadFailed, fmt.Sprintf("search failed: %v", err), err)
 	}

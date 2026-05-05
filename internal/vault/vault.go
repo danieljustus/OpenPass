@@ -101,6 +101,9 @@ func Open(vaultDir string, identity *age.X25519Identity) (*Vault, error) {
 	}
 
 	normalizeConfig(cfg)
+	if err := detectLegacyMode(cfg, vaultDir); err != nil {
+		return nil, fmt.Errorf("detect legacy mode: %w", err)
+	}
 	rememberSearchIdentity(identity)
 	if err := migrateLegacyEntries(vaultDir); err != nil {
 		return nil, fmt.Errorf("migrate legacy entries: %w", err)
@@ -115,11 +118,11 @@ func Open(vaultDir string, identity *age.X25519Identity) (*Vault, error) {
 }
 
 // OpenWithPassphrase opens a vault using a passphrase-protected identity file.
-func OpenWithPassphrase(vaultDir string, passphrase string) (*Vault, error) {
+func OpenWithPassphrase(vaultDir string, passphrase []byte) (*Vault, error) {
 	if vaultDir == "" {
 		return nil, ErrVaultDirEmpty
 	}
-	if passphrase == "" {
+	if len(passphrase) == 0 {
 		return nil, errors.New("passphrase is empty")
 	}
 
@@ -128,7 +131,7 @@ func OpenWithPassphrase(vaultDir string, passphrase string) (*Vault, error) {
 	}
 
 	identityPath := filepath.Join(vaultDir, "identity.age")
-	identity, err := vaultcrypto.LoadIdentity(identityPath, passphrase)
+	identity, err := vaultcrypto.LoadIdentity(identityPath, []byte(passphrase))
 	if err != nil {
 		return nil, fmt.Errorf("load identity: %w", err)
 	}
@@ -136,12 +139,24 @@ func OpenWithPassphrase(vaultDir string, passphrase string) (*Vault, error) {
 	return Open(vaultDir, identity)
 }
 
-// InitWithPassphrase initializes a new vault with a passphrase-protected identity.
-func InitWithPassphrase(vaultDir string, passphrase string, cfg *vaultconfig.Config) (*age.X25519Identity, error) {
+// OpenWithCachedIdentity opens a vault directly from an X25519 identity, skipping
+// the scrypt KDF. This is the fast path when identity is cached in the OS keyring.
+func OpenWithCachedIdentity(vaultDir string, identity *age.X25519Identity) (*Vault, error) {
 	if vaultDir == "" {
 		return nil, ErrVaultDirEmpty
 	}
-	if passphrase == "" {
+	if identity == nil {
+		return nil, ErrNilIdentity
+	}
+	return Open(vaultDir, identity)
+}
+
+// InitWithPassphrase initializes a new vault with a passphrase-protected identity.
+func InitWithPassphrase(vaultDir string, passphrase []byte, cfg *vaultconfig.Config) (*age.X25519Identity, error) {
+	if vaultDir == "" {
+		return nil, ErrVaultDirEmpty
+	}
+	if len(passphrase) == 0 {
 		return nil, errors.New("passphrase is empty")
 	}
 	if cfg == nil {
@@ -170,7 +185,7 @@ func InitWithPassphrase(vaultDir string, passphrase string, cfg *vaultconfig.Con
 	}
 
 	identityPath := filepath.Join(vaultDir, "identity.age")
-	if err := vaultcrypto.SaveIdentity(identity, identityPath, passphrase); err != nil {
+	if err := vaultcrypto.SaveIdentity(identity, identityPath, []byte(passphrase)); err != nil {
 		return nil, fmt.Errorf("save identity: %w", err)
 	}
 
@@ -266,4 +281,66 @@ func normalizeConfig(cfg *vaultconfig.Config) {
 		}
 		cfg.Agents[name] = profile
 	}
+}
+
+// detectLegacyMode checks if the vault directory contains legacy top-level .age files
+// (outside entries/) and persists the result in the vault config. This one-time
+// detection allows ListFast to skip the legacy directory walk for legacy-free vaults.
+func detectLegacyMode(cfg *vaultconfig.Config, vaultDir string) error {
+	if cfg == nil {
+		return nil
+	}
+
+	// Already detected — nothing to do
+	if cfg.Vault != nil && cfg.Vault.LegacyMode != nil {
+		return nil
+	}
+
+	hasLegacy, err := hasLegacyTopLevelAgeFiles(vaultDir)
+	if err != nil {
+		return err
+	}
+
+	mode := hasLegacy
+	if cfg.Vault == nil {
+		cfg.Vault = &vaultconfig.VaultConfig{
+			LegacyMode: &mode,
+		}
+	} else {
+		cfg.Vault.LegacyMode = &mode
+	}
+
+	return cfg.SaveTo(filepath.Join(vaultDir, "config.yaml"))
+}
+
+// hasLegacyTopLevelAgeFiles scans the top-level of vaultDir for .age files
+// that are NOT in the entries/ subdirectory and NOT identity.age.
+// Returns true if any legacy entries are found.
+func hasLegacyTopLevelAgeFiles(vaultDir string) (bool, error) {
+	entries, err := os.ReadDir(vaultDir)
+	if err != nil {
+		return false, err
+	}
+	entriesDirAbs := filepath.Join(vaultDir, entriesDirName)
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if filepath.Ext(entry.Name()) != ".age" {
+			continue
+		}
+		// Skip identity.age — it's always present and not a legacy entry
+		if entry.Name() == "identity.age" {
+			continue
+		}
+		// Ensure this is not inside entries/ (unlikely for top-level scan,
+		// but guard against symlinks or unusual mounts)
+		absPath := filepath.Join(vaultDir, entry.Name())
+		if absPath == entriesDirAbs {
+			continue
+		}
+		return true, nil
+	}
+	return false, nil
 }

@@ -113,6 +113,16 @@ var (
 		[]string{"event"},
 	)
 
+	identityCacheEventsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "openpass",
+			Subsystem: "session",
+			Name:      "identity_cache_events_total",
+			Help:      "Total number of identity cache events.",
+		},
+		[]string{"event"},
+	)
+
 	updateCheckTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "openpass",
@@ -134,6 +144,7 @@ func init() {
 		vaultEntriesTotal,
 		vaultOperationDurationSeconds,
 		sessionCacheEventsTotal,
+		identityCacheEventsTotal,
 		updateCheckTotal,
 	)
 }
@@ -179,6 +190,12 @@ func RecordVaultOperationDuration(op string, duration time.Duration) {
 // event should be one of: "hit", "miss", "refresh", "evict", "keyring_unavailable".
 func RecordSessionCacheEvent(event string) {
 	sessionCacheEventsTotal.WithLabelValues(event).Inc()
+}
+
+// RecordIdentityCacheEvent records an identity cache event.
+// event should be one of: "hit", "miss", "refresh", "evict".
+func RecordIdentityCacheEvent(event string) {
+	identityCacheEventsTotal.WithLabelValues(event).Inc()
 }
 
 // RecordUpdateCheck records an update check result.

@@ -34,7 +34,7 @@ func TestSaveIdentityPathTraversal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate identity: %v", err)
 	}
-	err = SaveIdentity(identity, "../evil/identity.age", "passphrase")
+	err = SaveIdentity(identity, "../evil/identity.age", []byte("passphrase"))
 	if err == nil {
 		t.Fatal("SaveIdentity() error = nil, want error for path traversal")
 	}
@@ -58,14 +58,14 @@ func TestSaveIdentityNonWritablePath(t *testing.T) {
 	}
 	defer os.Chmod(dir, 0o700) //nolint:errcheck
 
-	err = SaveIdentity(identity, filepath.Join(dir, "identity.age"), "passphrase")
+	err = SaveIdentity(identity, filepath.Join(dir, "identity.age"), []byte("passphrase"))
 	if err == nil {
 		t.Fatal("SaveIdentity() error = nil, want error for non-writable path")
 	}
 }
 
 func TestLoadIdentityPathTraversal(t *testing.T) {
-	_, err := LoadIdentity("../evil/identity.age", "passphrase")
+	_, err := LoadIdentity("../evil/identity.age", []byte("passphrase"))
 	if err == nil {
 		t.Fatal("LoadIdentity() error = nil, want error for path traversal")
 	}
@@ -78,7 +78,7 @@ func TestLoadIdentityCorruptContent(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	_, err := LoadIdentity(path, "passphrase")
+	_, err := LoadIdentity(path, []byte("passphrase"))
 	if err == nil {
 		t.Fatal("LoadIdentity() error = nil, want error for corrupt content")
 	}
@@ -96,12 +96,12 @@ func TestEncryptWithRecipientsNilInList(t *testing.T) {
 }
 
 func TestDecryptWithPassphraseWrongPassphrase(t *testing.T) {
-	ciphertext, err := EncryptWithPassphrase([]byte("secret"), "correct")
+	ciphertext, err := EncryptWithPassphrase([]byte("secret"), []byte("correct"))
 	if err != nil {
 		t.Fatalf("EncryptWithPassphrase() error = %v", err)
 	}
 
-	_, err = DecryptWithPassphrase(ciphertext, "wrong")
+	_, err = DecryptWithPassphrase(ciphertext, []byte("wrong"))
 	if err == nil {
 		t.Fatal("DecryptWithPassphrase() error = nil, want error for wrong passphrase")
 	}

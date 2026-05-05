@@ -10,7 +10,7 @@ import (
 
 func TestCmdFind_NoMatches(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	stderr := captureStderr(func() {
 		rootCmd.SetArgs([]string{"--vault", vaultDir, "find", "nomatch_xyz_abc"})
@@ -27,7 +27,7 @@ func TestCmdFind_WithFieldMatches(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "uniquevalue123"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "find-me", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	out := execWithStdout("--vault", vaultDir, "find", "find-me")
 	if !strings.Contains(out, "find-me") {
@@ -40,7 +40,7 @@ func TestCmdFind_SearchAlias(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "searchval"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "search-me", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	out := execWithStdout("--vault", vaultDir, "search", "search-me")
 	if !strings.Contains(out, "search-me") {

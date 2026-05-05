@@ -13,8 +13,8 @@ type MockCrypto struct {
 	EncryptFunc               func([]byte, *age.X25519Recipient) ([]byte, error)
 	EncryptWithRecipientsFunc func([]byte, ...*age.X25519Recipient) ([]byte, error)
 	DecryptFunc               func([]byte, *age.X25519Identity) ([]byte, error)
-	EncryptWithPassphraseFunc func([]byte, string) ([]byte, error)
-	DecryptWithPassphraseFunc func([]byte, string) ([]byte, error)
+	EncryptWithPassphraseFunc func([]byte, []byte) ([]byte, error)
+	DecryptWithPassphraseFunc func([]byte, []byte) ([]byte, error)
 }
 
 // NewMockCrypto creates a new MockCrypto with sensible defaults
@@ -32,10 +32,10 @@ func NewMockCrypto() *MockCrypto {
 			}
 			return nil, ErrDecryptionFailed
 		},
-		EncryptWithPassphraseFunc: func(plaintext []byte, passphrase string) ([]byte, error) {
+		EncryptWithPassphraseFunc: func(plaintext []byte, passphrase []byte) ([]byte, error) {
 			return []byte("passphrase_encrypted:" + string(plaintext)), nil
 		},
-		DecryptWithPassphraseFunc: func(ciphertext []byte, passphrase string) ([]byte, error) {
+		DecryptWithPassphraseFunc: func(ciphertext []byte, passphrase []byte) ([]byte, error) {
 			if bytes.HasPrefix(ciphertext, []byte("passphrase_encrypted:")) {
 				return bytes.TrimPrefix(ciphertext, []byte("passphrase_encrypted:")), nil
 			}
@@ -56,11 +56,11 @@ func (m *MockCrypto) Decrypt(ciphertext []byte, identity *age.X25519Identity) ([
 	return m.DecryptFunc(ciphertext, identity)
 }
 
-func (m *MockCrypto) EncryptWithPassphrase(plaintext []byte, passphrase string) ([]byte, error) {
+func (m *MockCrypto) EncryptWithPassphrase(plaintext []byte, passphrase []byte) ([]byte, error) {
 	return m.EncryptWithPassphraseFunc(plaintext, passphrase)
 }
 
-func (m *MockCrypto) DecryptWithPassphrase(ciphertext []byte, passphrase string) ([]byte, error) {
+func (m *MockCrypto) DecryptWithPassphrase(ciphertext []byte, passphrase []byte) ([]byte, error) {
 	return m.DecryptWithPassphraseFunc(ciphertext, passphrase)
 }
 
@@ -135,7 +135,7 @@ func TestMockCryptoEncryptWithPassphrase(t *testing.T) {
 	mock := NewMockCrypto()
 
 	plaintext := []byte("secret data")
-	passphrase := "my passphrase"
+	passphrase := []byte("my passphrase")
 
 	ciphertext, err := mock.EncryptWithPassphrase(plaintext, passphrase)
 	if err != nil {
@@ -156,7 +156,7 @@ func TestMockCryptoDecryptWithPassphraseFailure(t *testing.T) {
 	mock := NewMockCrypto()
 
 	// Try to decrypt invalid ciphertext
-	_, err := mock.DecryptWithPassphrase([]byte("invalid"), "passphrase")
+	_, err := mock.DecryptWithPassphrase([]byte("invalid"), []byte("passphrase"))
 	if err == nil {
 		t.Error("expected error for invalid ciphertext")
 	}

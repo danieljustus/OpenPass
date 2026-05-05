@@ -11,12 +11,13 @@ func TestInitWithPassphraseRoundTrip(t *testing.T) {
 	cfg := config.Default()
 	cfg.VaultDir = vaultDir
 
-	identity, err := InitWithPassphrase(vaultDir, "correct horse battery staple", cfg)
+	passphrase := []byte("correct horse battery staple")
+	identity, err := InitWithPassphrase(vaultDir, passphrase, cfg)
 	if err != nil {
 		t.Fatalf("InitWithPassphrase() error = %v", err)
 	}
 
-	v, err := OpenWithPassphrase(vaultDir, "correct horse battery staple")
+	v, err := OpenWithPassphrase(vaultDir, passphrase)
 	if err != nil {
 		t.Fatalf("OpenWithPassphrase() error = %v", err)
 	}
@@ -37,7 +38,7 @@ func TestListSkipsIdentityMetadata(t *testing.T) {
 	cfg := config.Default()
 	cfg.VaultDir = vaultDir
 
-	identity, err := InitWithPassphrase(vaultDir, "correct horse battery staple", cfg)
+	identity, err := InitWithPassphrase(vaultDir, []byte("correct horse battery staple"), cfg)
 	if err != nil {
 		t.Fatalf("InitWithPassphrase() error = %v", err)
 	}

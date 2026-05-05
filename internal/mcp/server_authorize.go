@@ -131,6 +131,14 @@ func (s *Server) canManageConfig() bool {
 	return s != nil && s.agent != nil && s.agent.CanManageConfig
 }
 
+func (s *Server) canUseClipboard() bool {
+	return s != nil && s.agent != nil && s.agent.CanUseClipboard
+}
+
+func (s *Server) canUseAutotype() bool {
+	return s != nil && s.agent != nil && s.agent.CanUseAutotype
+}
+
 func (s *Server) requiresApproval() bool {
 	if s == nil || s.agent == nil {
 		return false

@@ -92,7 +92,7 @@ func TestSaveAndLoadPassphraseRoundTrip(t *testing.T) {
 	vaultDir := "/tmp/vault"
 	passphrase := "correct horse battery staple"
 
-	if err := SavePassphrase(vaultDir, passphrase, time.Minute); err != nil {
+	if err := SavePassphrase(vaultDir, []byte(passphrase), time.Minute); err != nil {
 		t.Fatalf("SavePassphrase() error = %v", err)
 	}
 
@@ -100,7 +100,7 @@ func TestSaveAndLoadPassphraseRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadPassphrase() error = %v", err)
 	}
-	if got != passphrase {
+	if string(got) != passphrase {
 		t.Fatalf("LoadPassphrase() = %q, want %q", got, passphrase)
 	}
 }
@@ -110,7 +110,7 @@ func TestClearSessionRemovesFromKeyring(t *testing.T) {
 	stubKeyring(t, fake)
 
 	vaultDir := "/tmp/vault"
-	if err := SavePassphrase(vaultDir, "secret", time.Minute); err != nil {
+	if err := SavePassphrase(vaultDir, []byte("secret"), time.Minute); err != nil {
 		t.Fatalf("SavePassphrase() error = %v", err)
 	}
 
@@ -128,7 +128,7 @@ func TestLoadPassphraseExpiresAfterTTL(t *testing.T) {
 	stubKeyring(t, fake)
 
 	vaultDir := "/tmp/vault"
-	if err := SavePassphrase(vaultDir, "secret", 10*time.Millisecond); err != nil {
+	if err := SavePassphrase(vaultDir, []byte("secret"), 10*time.Millisecond); err != nil {
 		t.Fatalf("SavePassphrase() error = %v", err)
 	}
 
@@ -161,7 +161,7 @@ func TestIsSessionExpired_ExpiredSession(t *testing.T) {
 
 	vaultDir := "/tmp/vault"
 	// Save a session with very short TTL
-	if err := SavePassphrase(vaultDir, "secret", 10*time.Millisecond); err != nil {
+	if err := SavePassphrase(vaultDir, []byte("secret"), 10*time.Millisecond); err != nil {
 		t.Fatalf("SavePassphrase() error = %v", err)
 	}
 
@@ -183,7 +183,7 @@ func TestIsSessionExpired_ValidSession(t *testing.T) {
 	stubKeyring(t, fake)
 
 	vaultDir := "/tmp/vault"
-	if err := SavePassphrase(vaultDir, "secret", time.Hour); err != nil {
+	if err := SavePassphrase(vaultDir, []byte("secret"), time.Hour); err != nil {
 		t.Fatalf("SavePassphrase() error = %v", err)
 	}
 
@@ -223,7 +223,7 @@ func TestClearSession_DeleteError(t *testing.T) {
 	stubKeyring(t, fake)
 
 	vaultDir := "/tmp/vault"
-	if err := SavePassphrase(vaultDir, "secret", time.Minute); err != nil {
+	if err := SavePassphrase(vaultDir, []byte("secret"), time.Minute); err != nil {
 		t.Fatalf("SavePassphrase() error = %v", err)
 	}
 
@@ -241,7 +241,7 @@ func TestSavePassphrase_KeyringSetError(t *testing.T) {
 
 	fake.setErr = errors.New("keyring write failed")
 
-	err := SavePassphrase("/tmp/vault", "secret", time.Minute)
+	err := SavePassphrase("/tmp/vault", []byte("secret"), time.Minute)
 	if err == nil {
 		t.Fatal("SavePassphrase() error = nil, want keyring set error")
 	}
@@ -316,7 +316,7 @@ func TestEncryptDecryptRoundTrip(t *testing.T) {
 	vaultDir := "/tmp/vault-encrypt"
 	passphrase := "correct horse battery staple"
 
-	enc, nonce, err := encryptPassphrase(passphrase, vaultDir)
+	enc, nonce, err := encryptPassphrase([]byte(passphrase), deriveKey(vaultDir))
 	if err != nil {
 		t.Fatalf("encryptPassphrase() error = %v", err)
 	}
@@ -324,22 +324,22 @@ func TestEncryptDecryptRoundTrip(t *testing.T) {
 		t.Fatal("encryptPassphrase() returned empty enc or nonce")
 	}
 
-	got, err := decryptPassphrase(enc, nonce, vaultDir)
+	got, err := decryptPassphrase(enc, nonce, deriveKey(vaultDir))
 	if err != nil {
 		t.Fatalf("decryptPassphrase() error = %v", err)
 	}
-	if got != passphrase {
+	if string(got) != passphrase {
 		t.Fatalf("decryptPassphrase() = %q, want %q", got, passphrase)
 	}
 }
 
 func TestEncryptDifferentVaultsProduceDifferentCiphertext(t *testing.T) {
 	passphrase := "same passphrase"
-	enc1, nonce1, err := encryptPassphrase(passphrase, "/vault/a")
+	enc1, nonce1, err := encryptPassphrase([]byte(passphrase), deriveKey("/vault/a"))
 	if err != nil {
 		t.Fatalf("encryptPassphrase(/vault/a) error = %v", err)
 	}
-	enc2, nonce2, err := encryptPassphrase(passphrase, "/vault/b")
+	enc2, nonce2, err := encryptPassphrase([]byte(passphrase), deriveKey("/vault/b"))
 	if err != nil {
 		t.Fatalf("encryptPassphrase(/vault/b) error = %v", err)
 	}
@@ -348,17 +348,17 @@ func TestEncryptDifferentVaultsProduceDifferentCiphertext(t *testing.T) {
 	}
 
 	// Decrypting with wrong vault identity should fail
-	if _, err := decryptPassphrase(enc1, nonce1, "/vault/b"); err == nil {
+	if _, err := decryptPassphrase(enc1, nonce1, deriveKey("/vault/b")); err == nil {
 		t.Fatal("decryptPassphrase() with wrong vault identity should fail")
 	}
 }
 
 func TestDecryptFailsWithWrongKey(t *testing.T) {
-	enc, nonce, err := encryptPassphrase("secret", "/vault/correct")
+	enc, nonce, err := encryptPassphrase([]byte("secret"), deriveKey("/vault/correct"))
 	if err != nil {
 		t.Fatalf("encryptPassphrase() error = %v", err)
 	}
-	if _, err := decryptPassphrase(enc, nonce, "/vault/wrong"); err == nil {
+	if _, err := decryptPassphrase(enc, nonce, deriveKey("/vault/wrong")); err == nil {
 		t.Fatal("decryptPassphrase() with wrong key should fail")
 	}
 }
@@ -382,7 +382,7 @@ func TestBackwardCompat_LoadOldPlaintextFormat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadPassphrase() error = %v", err)
 	}
-	if got != passphrase {
+	if string(got) != passphrase {
 		t.Fatalf("LoadPassphrase() = %q, want %q", got, passphrase)
 	}
 }
@@ -407,7 +407,7 @@ func TestMigration_OldFormatAutoMigratesToEncrypted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadPassphrase() error = %v", err)
 	}
-	if got != passphrase {
+	if string(got) != passphrase {
 		t.Fatalf("LoadPassphrase() = %q, want %q", got, passphrase)
 	}
 
@@ -432,7 +432,7 @@ func TestMigration_OldFormatAutoMigratesToEncrypted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second LoadPassphrase() error = %v", err)
 	}
-	if got2 != passphrase {
+	if string(got2) != passphrase {
 		t.Fatalf("second LoadPassphrase() = %q, want %q", got2, passphrase)
 	}
 }
@@ -444,7 +444,7 @@ func TestNewFormatStoredEncrypted(t *testing.T) {
 	vaultDir := "/tmp/vault-new-format"
 	passphrase := "new-encrypted-secret"
 
-	if err := SavePassphrase(vaultDir, passphrase, time.Hour); err != nil {
+	if err := SavePassphrase(vaultDir, []byte(passphrase), time.Hour); err != nil {
 		t.Fatalf("SavePassphrase() error = %v", err)
 	}
 
@@ -469,7 +469,7 @@ func TestNewFormatStoredEncrypted(t *testing.T) {
 }
 
 func TestDecryptPassphrase_InvalidBase64Ciphertext(t *testing.T) {
-	_, err := decryptPassphrase("not-valid-base64!!!", "dGVzdA==", "/tmp/vault")
+	_, err := decryptPassphrase("not-valid-base64!!!", "dGVzdA==", deriveKey("/tmp/vault"))
 	if err == nil {
 		t.Fatal("decryptPassphrase() error = nil, want base64 decode error for invalid ciphertext")
 	}
@@ -477,7 +477,7 @@ func TestDecryptPassphrase_InvalidBase64Ciphertext(t *testing.T) {
 
 func TestDecryptPassphrase_InvalidBase64Nonce(t *testing.T) {
 	// Valid base64 for ciphertext but invalid base64 for nonce
-	_, err := decryptPassphrase("dGVzdA==", "!!!not-base64", "/tmp/vault")
+	_, err := decryptPassphrase("dGVzdA==", "!!!not-base64", deriveKey("/tmp/vault"))
 	if err == nil {
 		t.Fatal("decryptPassphrase() error = nil, want base64 decode error for invalid nonce")
 	}
@@ -488,7 +488,7 @@ func TestEncryptPassphrase_RandomReaderError(t *testing.T) {
 	crand.Reader = errReader{}
 	t.Cleanup(func() { crand.Reader = oldReader })
 
-	_, _, err := encryptPassphrase("secret", "/tmp/vault-rand-error")
+	_, _, err := encryptPassphrase([]byte("secret"), deriveKey("/tmp/vault-rand-error"))
 	if err == nil {
 		t.Fatal("encryptPassphrase() error = nil, want random reader error")
 	}
@@ -502,7 +502,7 @@ func TestSavePassphrase_EncryptError(t *testing.T) {
 	crand.Reader = errReader{}
 	t.Cleanup(func() { crand.Reader = oldReader })
 
-	if err := SavePassphrase("/tmp/vault-save-encrypt-error", "secret", time.Hour); err == nil {
+	if err := SavePassphrase("/tmp/vault-save-encrypt-error", []byte("secret"), time.Hour); err == nil {
 		t.Fatal("SavePassphrase() error = nil, want encrypt error")
 	}
 }
@@ -542,7 +542,7 @@ func TestLoadPassphrase_UpdateKeyringSetError(t *testing.T) {
 	passphrase := "update-test-secret"
 
 	// Save a valid session first
-	if err := SavePassphrase(vaultDir, passphrase, time.Hour); err != nil {
+	if err := SavePassphrase(vaultDir, []byte(passphrase), time.Hour); err != nil {
 		t.Fatalf("SavePassphrase() error = %v", err)
 	}
 
@@ -553,7 +553,7 @@ func TestLoadPassphrase_UpdateKeyringSetError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadPassphrase() error = %v, want nil (should not fail on update error)", err)
 	}
-	if loaded != passphrase {
+	if string(loaded) != passphrase {
 		t.Errorf("LoadPassphrase() = %q, want %q", loaded, passphrase)
 	}
 }
@@ -644,7 +644,7 @@ func TestEncryptPassphrase_AESCipherError(t *testing.T) {
 	vaultDir := "/tmp/vault"
 	passphrase := "test"
 
-	result, nonce, err := encryptPassphrase(passphrase, vaultDir)
+	result, nonce, err := encryptPassphrase([]byte(passphrase), deriveKey(vaultDir))
 	if err != nil {
 		t.Fatalf("encryptPassphrase should not return error for valid input: %v", err)
 	}
@@ -654,12 +654,12 @@ func TestEncryptPassphrase_AESCipherError(t *testing.T) {
 }
 
 func TestDecryptPassphrase_AESCipherError(t *testing.T) {
-	enc, nonce, err := encryptPassphrase("secret", "/tmp/vault-test")
+	enc, nonce, err := encryptPassphrase([]byte("secret"), deriveKey("/tmp/vault-test"))
 	if err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
 
-	_, err = decryptPassphrase(enc, nonce, "/tmp/vault-test")
+	_, err = decryptPassphrase(enc, nonce, deriveKey("/tmp/vault-test"))
 	if err != nil {
 		t.Fatalf("decryptPassphrase failed: %v", err)
 	}
@@ -671,7 +671,7 @@ func TestSavePassphrase_MarshalError(t *testing.T) {
 
 	vaultDir := "/tmp/vault-marshal"
 
-	if err := SavePassphrase(vaultDir, "secret", time.Hour); err != nil {
+	if err := SavePassphrase(vaultDir, []byte("secret"), time.Hour); err != nil {
 		t.Fatalf("SavePassphrase failed: %v", err)
 	}
 
@@ -691,7 +691,7 @@ func TestLoadPassphrase_UpdateSessionOnAccess(t *testing.T) {
 	vaultDir := "/tmp/vault-update"
 	passphrase := "update-test"
 
-	if err := SavePassphrase(vaultDir, passphrase, time.Hour); err != nil {
+	if err := SavePassphrase(vaultDir, []byte(passphrase), time.Hour); err != nil {
 		t.Fatalf("SavePassphrase error = %v", err)
 	}
 
@@ -699,7 +699,7 @@ func TestLoadPassphrase_UpdateSessionOnAccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadPassphrase error = %v", err)
 	}
-	if got != passphrase {
+	if string(got) != passphrase {
 		t.Errorf("LoadPassphrase = %q, want %q", got, passphrase)
 	}
 
@@ -735,7 +735,7 @@ func TestLoadPassphrase_LastAccessBeforeSavedAt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadPassphrase() error = %v", err)
 	}
-	if got != "secret" {
+	if string(got) != "secret" {
 		t.Errorf("LoadPassphrase() = %q, want %q", got, "secret")
 	}
 }
@@ -756,7 +756,7 @@ func TestLoadPassphrase_ZeroLastAccessUsesSavedAt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadPassphrase() error = %v", err)
 	}
-	if got != "secret" {
+	if string(got) != "secret" {
 		t.Errorf("LoadPassphrase() = %q, want %q", got, "secret")
 	}
 }
@@ -766,7 +766,7 @@ func TestResolvePassphrase_BothEncryptedAndPlaintext(t *testing.T) {
 	stubKeyring(t, fake)
 
 	vaultDir := "/tmp/vault-both"
-	enc, nonce, err := encryptPassphrase("actual-secret", vaultDir)
+	enc, nonce, err := encryptPassphrase([]byte("actual-secret"), deriveKey(vaultDir))
 	if err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
@@ -791,7 +791,7 @@ func TestResolvePassphrase_BothEncryptedAndPlaintext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadPassphrase() error = %v", err)
 	}
-	if got != "actual-secret" {
+	if string(got) != "actual-secret" {
 		t.Errorf("LoadPassphrase() = %q, want encrypted value to be used", got)
 	}
 }
@@ -820,7 +820,7 @@ func TestResolvePassphrase_LegacyFormatMigrates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadPassphrase() error = %v", err)
 	}
-	if got != passphrase {
+	if string(got) != passphrase {
 		t.Errorf("LoadPassphrase() = %q, want %q", got, passphrase)
 	}
 
@@ -839,7 +839,7 @@ func TestSavePassphrase_UpdatesLastAccessOnLoad(t *testing.T) {
 	stubKeyring(t, fake)
 
 	vaultDir := "/tmp/vault-updates-la"
-	if err := SavePassphrase(vaultDir, "secret", time.Hour); err != nil {
+	if err := SavePassphrase(vaultDir, []byte("secret"), time.Hour); err != nil {
 		t.Fatalf("SavePassphrase error = %v", err)
 	}
 
@@ -866,7 +866,7 @@ func TestSavePassphrase_EncryptFails(t *testing.T) {
 	vaultDir := "/tmp/vault-enc-fail"
 	passphrase := "secret"
 
-	enc, nonce, err := encryptPassphrase(passphrase, vaultDir)
+	enc, nonce, err := encryptPassphrase([]byte(passphrase), deriveKey(vaultDir))
 	if err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
@@ -874,7 +874,7 @@ func TestSavePassphrase_EncryptFails(t *testing.T) {
 		t.Error("setup produced empty values")
 	}
 
-	err = SavePassphrase(vaultDir, passphrase, time.Hour)
+	err = SavePassphrase(vaultDir, []byte(passphrase), time.Hour)
 	if err != nil {
 		t.Fatalf("SavePassphrase failed: %v", err)
 	}
@@ -885,7 +885,7 @@ func TestLoadPassphrase_ResolveError(t *testing.T) {
 	stubKeyring(t, fake)
 
 	vaultDir := "/tmp/vault-resolve-err"
-	enc, nonce, err := encryptPassphrase("secret", vaultDir)
+	enc, nonce, err := encryptPassphrase([]byte("secret"), deriveKey(vaultDir))
 	if err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
@@ -952,7 +952,7 @@ func TestResolvePassphrase_EncryptFailsDuringMigration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadPassphrase failed: %v", err)
 	}
-	if got != plain {
+	if string(got) != plain {
 		t.Errorf("LoadPassphrase = %q, want %q", got, plain)
 	}
 }

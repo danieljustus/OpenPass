@@ -126,6 +126,7 @@ func ReadEntry(vaultDir, path string, identity *age.X25519Identity) (*Entry, err
 	if err != nil {
 		return nil, err
 	}
+	defer vaultcrypto.Wipe(plaintext)
 
 	var entry Entry
 	if err := json.Unmarshal(plaintext, &entry); err != nil {
@@ -422,6 +423,7 @@ func GetEntryMetadata(vaultDir, path string, identity *age.X25519Identity) (*Ent
 	if err != nil {
 		return nil, err
 	}
+	defer vaultcrypto.Wipe(plaintext)
 
 	// Only unmarshal the metadata portion for efficiency
 	var entry struct {

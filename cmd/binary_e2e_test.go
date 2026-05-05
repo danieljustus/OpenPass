@@ -44,15 +44,15 @@ func TestBinaryE2E_Flow(t *testing.T) {
 	}
 	binPath := buildBinary(t)
 	vaultDir := t.TempDir()
-	passphrase := "correct horse battery staple"
+	passphrase := []byte("correct horse battery staple")
 	env := []string{
 		"GOWORK=off",
-		"OPENPASS_PASSPHRASE=" + passphrase,
+		"OPENPASS_PASSPHRASE=" + string(passphrase),
 	}
 
 	initCmd := exec.Command(binPath, "init", vaultDir)
 	initCmd.Env = append(os.Environ(), env...)
-	initCmd.Stdin = strings.NewReader(passphrase + "\n")
+	initCmd.Stdin = strings.NewReader(string(passphrase) + "\n")
 	if output, err := initCmd.CombinedOutput(); err != nil {
 		t.Fatalf("init: %v\n%s", err, output)
 	}
@@ -91,15 +91,15 @@ func TestBinaryE2E_Recipients(t *testing.T) {
 	}
 	binPath := buildBinary(t)
 	vaultDir := t.TempDir()
-	passphrase := "correct horse battery staple"
+	passphrase := []byte("correct horse battery staple")
 	env := []string{
 		"GOWORK=off",
-		"OPENPASS_PASSPHRASE=" + passphrase,
+		"OPENPASS_PASSPHRASE=" + string(passphrase),
 	}
 
 	initCmd := exec.Command(binPath, "init", vaultDir)
 	initCmd.Env = append(os.Environ(), env...)
-	initCmd.Stdin = strings.NewReader(passphrase + "\n")
+	initCmd.Stdin = strings.NewReader(string(passphrase) + "\n")
 	if output, err := initCmd.CombinedOutput(); err != nil {
 		t.Fatalf("init: %v\n%s", err, output)
 	}

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"filippo.io/age"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
@@ -16,8 +18,10 @@ import (
 	configpkg "github.com/danieljustus/OpenPass/internal/config"
 	cryptopkg "github.com/danieljustus/OpenPass/internal/crypto"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
+	"github.com/danieljustus/OpenPass/internal/metrics"
 	"github.com/danieljustus/OpenPass/internal/session"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
+	vaultsvc "github.com/danieljustus/OpenPass/internal/vaultsvc"
 )
 
 var osExit = os.Exit
@@ -27,63 +31,65 @@ const requiresVaultAnnotation = "openpass/requires-vault"
 var readPasswordFunc func(int) ([]byte, error) = term.ReadPassword
 var isTerminalFunc func(int) bool = term.IsTerminal
 
-func readHiddenInput(prompt string, reader *bufio.Reader) (string, error) {
+func readHiddenInput(prompt string, reader *bufio.Reader) ([]byte, error) {
 	fmt.Fprint(os.Stderr, prompt)
 	fdRaw := os.Stdin.Fd()
 	// Bounds check: file descriptors are small non-negative integers; ensure they fit in int
 	if fdRaw > uintptr(^uint(0)>>1) {
-		return "", fmt.Errorf("file descriptor %d exceeds int range", fdRaw)
+		return nil, fmt.Errorf("file descriptor %d exceeds int range", fdRaw)
 	}
 	fd := int(fdRaw)
 	if isTerminalFunc(fd) {
 		passphrase, err := readPasswordFunc(fd)
 		fmt.Fprintln(os.Stderr)
 		if err != nil {
-			return "", fmt.Errorf("read %s: %w", strings.TrimSuffix(strings.TrimSuffix(prompt, ": "), ":"), err)
+			return nil, fmt.Errorf("read %s: %w", strings.TrimSuffix(strings.TrimSuffix(prompt, ": "), ":"), err)
 		}
-		return strings.TrimSpace(string(passphrase)), nil
+		return bytes.TrimSpace(passphrase), nil
 	}
 	if reader != nil {
 		line, err := reader.ReadString('\n')
 		if err != nil && line == "" {
-			return "", fmt.Errorf("read %s: %w", strings.TrimSuffix(strings.TrimSuffix(prompt, ": "), ":"), err)
+			return nil, fmt.Errorf("read %s: %w", strings.TrimSuffix(strings.TrimSuffix(prompt, ": "), ":"), err)
 		}
-		return strings.TrimSpace(line), nil
+		return bytes.TrimSpace([]byte(line)), nil
 	}
 	line, err := readLineFromStdin()
-	if err != nil && line == "" {
-		return "", fmt.Errorf("read %s: %w", strings.TrimSuffix(strings.TrimSuffix(prompt, ": "), ":"), err)
+	if err != nil && line == nil {
+		return nil, fmt.Errorf("read %s: %w", strings.TrimSuffix(strings.TrimSuffix(prompt, ": "), ":"), err)
 	}
-	return strings.TrimSpace(line), nil
+	return bytes.TrimSpace(line), nil
 }
 
-func readLineFromStdin() (string, error) {
+func readLineFromStdin() ([]byte, error) {
 	var result []byte
 	var buf [1]byte
 	for {
 		n, err := os.Stdin.Read(buf[:])
 		if n > 0 {
 			if buf[0] == '\n' {
-				return string(result), nil
+				return result, nil
 			}
 			result = append(result, buf[0])
 		}
 		if err != nil {
 			if len(result) == 0 {
-				return "", err
+				return nil, err
 			}
-			return string(result), nil
+			return result, nil
 		}
 	}
 }
 
 var (
-	sessionLoadPassphrase = session.LoadPassphrase
-	sessionSavePassphrase = session.SavePassphrase
-	sessionIsExpired      = session.IsSessionExpired
-	sessionLoadBiometric  = session.LoadBiometricPassphrase
-	sessionSaveBiometric  = session.SaveBiometricPassphrase
-	sessionGetCacheStatus = session.GetCacheStatus
+	sessionLoadPassphrase func(vaultDir string) ([]byte, error)                               = session.LoadPassphrase
+	sessionSavePassphrase func(vaultDir string, passphrase []byte, ttl time.Duration) error   = session.SavePassphrase
+	sessionIsExpired      func(vaultDir string) bool                                          = session.IsSessionExpired
+	sessionLoadBiometric  func(ctx context.Context, vaultDir string) ([]byte, error)          = session.LoadBiometricPassphrase
+	sessionSaveBiometric  func(ctx context.Context, vaultDir string, passphrase []byte) error = session.SaveBiometricPassphrase
+	sessionGetCacheStatus func() session.CacheStatus                                          = session.GetCacheStatus
+	sessionLoadIdentity   func(vaultDir string) (string, error)                               = session.LoadIdentity
+	sessionSaveIdentity   func(vaultDir string, identity string, ttl time.Duration) error     = session.SaveIdentity
 )
 
 var vault string
@@ -91,6 +97,7 @@ var vaultFlag *pflag.Flag
 var quietMode bool
 var profile string
 var profileFlag *pflag.Flag
+var outputFormat string
 
 var rootCmd = &cobra.Command{
 	Use:           "openpass",
@@ -135,6 +142,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&quietMode, "quiet", false, "suppress non-error output")
 	rootCmd.PersistentFlags().StringVar(&profile, "profile", "", "use a named vault profile")
 	profileFlag = rootCmd.PersistentFlags().Lookup("profile")
+	rootCmd.PersistentFlags().StringVar(&outputFormat, "output", "text", "Output format (text, json, yaml)")
 }
 
 func vaultPath() (string, error) {
@@ -228,25 +236,43 @@ func unlockVault(vaultDir string, interactive bool) (*vaultpkg.Vault, error) {
 }
 
 func unlockVaultWithTTL(vaultDir string, interactive bool, ttlOverride time.Duration, cacheEnvPassphrase bool) (*vaultpkg.Vault, time.Duration, error) {
+	// 1. Try identity cache first — skips scrypt entirely on cache hit
+	if cachedIdentity, cacheErr := sessionLoadIdentity(vaultDir); cacheErr == nil && cachedIdentity != "" {
+		if identity, parseErr := age.ParseX25519Identity(cachedIdentity); parseErr == nil {
+			v, openErr := vaultpkg.OpenWithCachedIdentity(vaultDir, identity)
+			if openErr == nil {
+				metrics.RecordIdentityCacheEvent("hit")
+				ttl := configuredSessionTTL(v, ttlOverride)
+				return v, ttl, nil
+			}
+		}
+		metrics.RecordIdentityCacheEvent("miss")
+	} else {
+		metrics.RecordIdentityCacheEvent("miss")
+	}
+
+	// 2. Fall back to passphrase-based flow
 	passphrase, err := sessionLoadPassphrase(vaultDir)
 	passphraseFromEnv := false
 	passphraseFromBiometric := false
 	cfg := loadVaultConfigForUnlock(vaultDir)
-	if err != nil || passphrase == "" {
+	if err != nil || len(passphrase) == 0 {
 		if cfg.EffectiveAuthMethod() == configpkg.AuthMethodTouchID {
-			if biometricPassphrase, biometricErr := sessionLoadBiometric(context.Background(), vaultDir); biometricErr == nil && biometricPassphrase != "" {
+			if biometricPassphrase, biometricErr := sessionLoadBiometric(context.Background(), vaultDir); biometricErr == nil && len(biometricPassphrase) > 0 {
 				passphrase = biometricPassphrase
 				passphraseFromBiometric = true
 			}
 		}
-		if passphrase == "" {
-			passphrase = os.Getenv("OPENPASS_PASSPHRASE")
-			passphraseFromEnv = passphrase != ""
+		if len(passphrase) == 0 {
+			if envPass := os.Getenv("OPENPASS_PASSPHRASE"); envPass != "" {
+				passphrase = []byte(envPass)
+				passphraseFromEnv = true
+			}
 			// Clear the env var immediately to prevent exposure via /proc/<pid>/environ
 			_ = os.Unsetenv("OPENPASS_PASSPHRASE")
 		}
 	}
-	if passphrase == "" {
+	if len(passphrase) == 0 {
 		if !interactive {
 			return nil, 0, errorspkg.NewCLIError(errorspkg.ExitLocked, lockedMessageForCache(), nil)
 		}
@@ -258,7 +284,7 @@ func unlockVaultWithTTL(vaultDir string, interactive bool, ttlOverride time.Dura
 	}
 	defer func() {
 		// Overwrite passphrase in memory after use
-		cryptopkg.Wipe([]byte(passphrase))
+		cryptopkg.Wipe(passphrase)
 	}()
 
 	v, err := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
@@ -273,6 +299,10 @@ func unlockVaultWithTTL(vaultDir string, interactive bool, ttlOverride time.Dura
 		if err := sessionSavePassphrase(vaultDir, passphrase, ttl); err != nil {
 			return nil, 0, errorspkg.NewCLIError(errorspkg.ExitGeneralError, "save session", err)
 		}
+		// Cache the derived identity so future commands skip scrypt entirely.
+		if v != nil && v.Identity != nil {
+			_ = sessionSaveIdentity(vaultDir, v.Identity.String(), ttl)
+		}
 	}
 	if cfg.EffectiveAuthMethod() == configpkg.AuthMethodTouchID && !passphraseFromBiometric && (!passphraseFromEnv || cacheEnvPassphrase) {
 		if err := sessionSaveBiometric(context.Background(), vaultDir, passphrase); err != nil && interactive {
@@ -281,6 +311,23 @@ func unlockVaultWithTTL(vaultDir string, interactive bool, ttlOverride time.Dura
 	}
 
 	return v, ttl, nil
+}
+
+func withVault(fn func(*vaultsvc.Service) error) error {
+	vaultDir, err := vaultPath()
+	if err != nil {
+		return err
+	}
+	if !vaultpkg.IsInitialized(vaultDir) {
+		return errorspkg.NewCLIError(errorspkg.ExitNotInitialized,
+			"vault not initialized. Run 'openpass init' first",
+			errorspkg.ErrVaultNotInitialized)
+	}
+	v, err := unlockVault(vaultDir, true)
+	if err != nil {
+		return err
+	}
+	return fn(vaultsvc.New(v))
 }
 
 func loadVaultConfigForUnlock(vaultDir string) *configpkg.Config {

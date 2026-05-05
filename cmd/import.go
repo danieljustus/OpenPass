@@ -11,7 +11,6 @@ import (
 
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/importer"
-	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 	vaultsvc "github.com/danieljustus/OpenPass/internal/vaultsvc"
 )
 
@@ -50,20 +49,6 @@ var importCmd = &cobra.Command{
 			return errorspkg.NewCLIError(errorspkg.ExitGeneralError, "invalid CSV mapping", err)
 		}
 
-		vaultDir, err := vaultPath()
-		if err != nil {
-			return err
-		}
-
-		if !vaultpkg.IsInitialized(vaultDir) {
-			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
-		}
-
-		v, err := unlockVault(vaultDir, true)
-		if err != nil {
-			return err
-		}
-
 		source, err := os.Open(args[1])
 		if err != nil {
 			return errorspkg.NewCLIError(errorspkg.ExitGeneralError, "open import source", err)
@@ -80,48 +65,49 @@ var importCmd = &cobra.Command{
 			return errorspkg.NewCLIError(errorspkg.ExitGeneralError, "parse import source", err)
 		}
 
-		svc := vaultsvc.New(v)
-		imported, skipped := 0, 0
-		for _, entry := range entries {
-			entryPath := importEntryPath(options.Prefix, entry.Path)
-			if entryPath == "" {
-				skipped++
-				printQuietAware("Skipped entry with empty path\n")
-				continue
-			}
-
-			exists, err := importEntryExists(svc, entryPath)
-			if err != nil {
-				return mapVaultSvcError(err, "cannot check entry")
-			}
-
-			if exists && options.SkipExisting {
-				skipped++
-				printQuietAware("Skipped existing: %s\n", entryPath)
-				continue
-			}
-
-			if options.DryRun {
-				printQuietAware("Would import: %s\n", entryPath)
-				imported++
-				continue
-			}
-
-			if exists && options.Overwrite {
-				if err := svc.Delete(entryPath); err != nil {
-					return mapVaultSvcError(err, "cannot overwrite entry")
+		return withVault(func(svc *vaultsvc.Service) error {
+			imported, skipped := 0, 0
+			for _, entry := range entries {
+				entryPath := importEntryPath(options.Prefix, entry.Path)
+				if entryPath == "" {
+					skipped++
+					printQuietAware("Skipped entry with empty path\n")
+					continue
 				}
+
+				exists, err := importEntryExists(svc, entryPath)
+				if err != nil {
+					return mapVaultSvcError(err, "cannot check entry")
+				}
+
+				if exists && options.SkipExisting {
+					skipped++
+					printQuietAware("Skipped existing: %s\n", entryPath)
+					continue
+				}
+
+				if options.DryRun {
+					printQuietAware("Would import: %s\n", entryPath)
+					imported++
+					continue
+				}
+
+				if exists && options.Overwrite {
+					if err := svc.Delete(entryPath); err != nil {
+						return mapVaultSvcError(err, "cannot overwrite entry")
+					}
+				}
+
+				if err := svc.SetFields(entryPath, entry.Data); err != nil {
+					return mapVaultSvcError(err, "cannot write entry")
+				}
+				printQuietAware("Imported: %s\n", entryPath)
+				imported++
 			}
 
-			if err := svc.SetFields(entryPath, entry.Data); err != nil {
-				return mapVaultSvcError(err, "cannot write entry")
-			}
-			printQuietAware("Imported: %s\n", entryPath)
-			imported++
-		}
-
-		printQuietAware("Import summary: %d imported, %d skipped\n", imported, skipped)
-		return nil
+			printQuietAware("Import summary: %d imported, %d skipped\n", imported, skipped)
+			return nil
+		})
 	},
 }
 

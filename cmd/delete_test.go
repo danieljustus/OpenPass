@@ -16,7 +16,7 @@ func TestCmdDelete_Cancel(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "keep"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "keep-me", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	oldStdin := os.Stdin
 	r, w, _ := os.Pipe()
@@ -40,7 +40,7 @@ func TestCmdDelete_StdinError(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "keep"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "keep-me", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	restore := pipeStdin(t, "")
 	defer restore()
@@ -56,7 +56,7 @@ func TestCmdDelete_StdinError(t *testing.T) {
 
 func TestCmdDelete_NotFound(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	oldStdin := os.Stdin
 	r, w, _ := os.Pipe()
@@ -80,15 +80,15 @@ func TestCmdDelete_YesJSON(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "secret"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "delete-json", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	t.Cleanup(func() {
 		deleteYes = false
-		deleteJSON = false
+		outputFormat = "text"
 	})
 
 	output := captureStdout(func() {
-		rootCmd.SetArgs([]string{"--vault", vaultDir, "delete", "delete-json", "--yes", "--json"})
+		rootCmd.SetArgs([]string{"--vault", vaultDir, "delete", "delete-json", "--yes", "--output", "json"})
 		_ = rootCmd.Execute()
 		rootCmd.SetArgs(nil)
 	})
@@ -124,7 +124,7 @@ func TestCmdDelete_EmptyConfirm(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "x"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "del-empty", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	oldStdin := os.Stdin
 	r, w, _ := os.Pipe()
@@ -148,7 +148,7 @@ func TestCmdDelete_AutoCommitError(t *testing.T) {
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "del"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "autocommit-del", entry, identity.Identity)
 	setupGitWithBrokenObjects(t, vaultDir)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	oldStdin := os.Stdin
@@ -192,7 +192,7 @@ func TestDelete_ErrorPaths(t *testing.T) {
 		defer func() { _ = os.Unsetenv("OPENPASS_VAULT") }()
 
 		cfg := config.Default()
-		_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+		_, _ = vaultpkg.InitWithPassphrase(tmpDir, []byte("test"), cfg)
 		_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
 		defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 

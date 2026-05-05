@@ -43,8 +43,8 @@ func stubSessionFuncs(t *testing.T) func() {
 	oldLoadBiometric := sessionLoadBiometric
 	oldSaveBiometric := sessionSaveBiometric
 	oldGetCacheStatus := sessionGetCacheStatus
-	sessionLoadBiometric = func(context.Context, string) (string, error) { return "", errors.New("not configured") }
-	sessionSaveBiometric = func(context.Context, string, string) error { return nil }
+	sessionLoadBiometric = func(context.Context, string) ([]byte, error) { return nil, errors.New("not configured") }
+	sessionSaveBiometric = func(context.Context, string, []byte) error { return nil }
 	sessionGetCacheStatus = func() session.CacheStatus { return session.CacheStatus{Persistent: true} }
 
 	return func() {
@@ -258,8 +258,8 @@ func TestUnlockVault_InteractivePrompt(t *testing.T) {
 	defer setupVaultFlag(t, vaultDir)()
 
 	restoreSessionFuncs := stubSessionFuncs(t)
-	sessionLoadPassphrase = func(string) (string, error) { return "", errors.New("not found") }
-	sessionSavePassphrase = func(string, string, time.Duration) error { return nil }
+	sessionLoadPassphrase = func(string) ([]byte, error) { return nil, errors.New("not found") }
+	sessionSavePassphrase = func(string, []byte, time.Duration) error { return nil }
 	defer restoreSessionFuncs()
 
 	// Ensure no env var is set
@@ -272,7 +272,7 @@ func TestUnlockVault_InteractivePrompt(t *testing.T) {
 	}()
 
 	// Pipe passphrase via stdin
-	restore := pipeStdin(t, passphrase+"\n")
+	restore := pipeStdin(t, string(passphrase)+"\n")
 	defer restore()
 
 	v, err := unlockVault(vaultDir, true)
@@ -286,7 +286,7 @@ func TestUnlockVault_InteractivePrompt(t *testing.T) {
 
 func TestUnlockVault_UsesConfiguredSessionTimeout(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 	cfg := config.Default()
 	cfg.SessionTimeout = 2 * time.Minute
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, cfg); err != nil {
@@ -296,18 +296,18 @@ func TestUnlockVault_UsesConfiguredSessionTimeout(t *testing.T) {
 	restoreSessionFuncs := stubSessionFuncs(t)
 	var savedPassphrase string
 	var savedTTL time.Duration
-	sessionLoadPassphrase = func(string) (string, error) {
-		return "", errors.New("not found")
+	sessionLoadPassphrase = func(string) ([]byte, error) {
+		return nil, errors.New("not found")
 	}
-	sessionSavePassphrase = func(_ string, passphrase string, ttl time.Duration) error {
-		savedPassphrase = passphrase
+	sessionSavePassphrase = func(_ string, passphrase []byte, ttl time.Duration) error {
+		savedPassphrase = string(passphrase)
 		savedTTL = ttl
 		return nil
 	}
 	defer restoreSessionFuncs()
 
 	t.Setenv("OPENPASS_PASSPHRASE", "")
-	restoreStdin := pipeStdin(t, passphrase+"\n")
+	restoreStdin := pipeStdin(t, string(passphrase)+"\n")
 	defer restoreStdin()
 
 	v, err := unlockVault(vaultDir, true)
@@ -317,7 +317,7 @@ func TestUnlockVault_UsesConfiguredSessionTimeout(t *testing.T) {
 	if v == nil {
 		t.Fatal("unlockVault returned nil vault")
 	}
-	if savedPassphrase != passphrase {
+	if savedPassphrase != string(passphrase) {
 		t.Fatalf("saved passphrase = %q, want %q", savedPassphrase, passphrase)
 	}
 	if savedTTL != cfg.SessionTimeout {
@@ -329,7 +329,7 @@ func TestUnlockCommand_UsesConfiguredSessionTimeoutByDefault(t *testing.T) {
 	resetVaultFlag(t)
 
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 	cfg := config.Default()
 	cfg.SessionTimeout = 3 * time.Minute
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, cfg); err != nil {
@@ -338,17 +338,17 @@ func TestUnlockCommand_UsesConfiguredSessionTimeoutByDefault(t *testing.T) {
 
 	restoreSessionFuncs := stubSessionFuncs(t)
 	var savedTTL time.Duration
-	sessionLoadPassphrase = func(string) (string, error) {
-		return "", errors.New("not found")
+	sessionLoadPassphrase = func(string) ([]byte, error) {
+		return nil, errors.New("not found")
 	}
-	sessionSavePassphrase = func(_ string, _ string, ttl time.Duration) error {
+	sessionSavePassphrase = func(_ string, _ []byte, ttl time.Duration) error {
 		savedTTL = ttl
 		return nil
 	}
 	defer restoreSessionFuncs()
 
 	t.Setenv("OPENPASS_PASSPHRASE", "")
-	restoreStdin := pipeStdin(t, passphrase+"\n")
+	restoreStdin := pipeStdin(t, string(passphrase)+"\n")
 	defer restoreStdin()
 
 	ttlFlag := unlockCmd.Flags().Lookup("ttl")
@@ -449,7 +449,7 @@ func TestUnlockVault_EnvVar(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
 	defer setupVaultFlag(t, vaultDir)()
 
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	v, err := unlockVault(vaultDir, false)
@@ -487,8 +487,8 @@ func TestUnlockVault_HiddenInput(t *testing.T) {
 	defer setupVaultFlag(t, vaultDir)()
 
 	restoreSessionFuncs := stubSessionFuncs(t)
-	sessionLoadPassphrase = func(string) (string, error) { return "", errors.New("not found") }
-	sessionSavePassphrase = func(string, string, time.Duration) error { return nil }
+	sessionLoadPassphrase = func(string) ([]byte, error) { return nil, errors.New("not found") }
+	sessionSavePassphrase = func(string, []byte, time.Duration) error { return nil }
 	defer restoreSessionFuncs()
 
 	origPass := os.Getenv("OPENPASS_PASSPHRASE")
@@ -499,7 +499,7 @@ func TestUnlockVault_HiddenInput(t *testing.T) {
 		}
 	}()
 
-	restore := pipeStdin(t, passphrase+"\n")
+	restore := pipeStdin(t, string(passphrase)+"\n")
 	defer restore()
 
 	v, err := unlockVault(vaultDir, true)
@@ -521,7 +521,7 @@ func TestConfiguredSessionTTL_WithOverride(t *testing.T) {
 
 func TestConfiguredSessionTTL_WithVaultConfig(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 	cfg := config.Default()
 	cfg.SessionTimeout = 45 * time.Minute
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, cfg); err != nil {
@@ -556,7 +556,7 @@ func TestConfiguredSessionTTL_VaultWithNilConfig(t *testing.T) {
 
 func TestConfiguredSessionTTL_ZeroSessionTimeout(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 	cfg := config.Default()
 	cfg.SessionTimeout = 0
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, cfg); err != nil {

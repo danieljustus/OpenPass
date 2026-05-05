@@ -1,6 +1,7 @@
 package session
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -34,11 +35,21 @@ func (m *memoryKeyring) Set(service, account, value string) error {
 
 	var sess storedSession
 	if err := json.Unmarshal([]byte(value), &sess); err != nil {
+		if account == wrapKeyAccount {
+			// Wrap keys are stored as raw base64 (not session JSON)
+			key := service + "|" + account
+			if old, ok := m.store[key]; ok {
+				zeroBytes(old)
+			}
+			m.store[key] = []byte(value)
+			return nil
+		}
 		return fmt.Errorf("unmarshal session: %w", err)
 	}
 
 	if sess.Passphrase != "" {
-		enc, nonce, err := encryptPassphrase(sess.Passphrase, vaultDirFromService(service))
+		key := m.encryptionKeyForStore(service)
+		enc, nonce, err := encryptPassphrase([]byte(sess.Passphrase), key)
 		if err != nil {
 			return fmt.Errorf("encrypt passphrase: %w", err)
 		}
@@ -63,6 +74,20 @@ func (m *memoryKeyring) Set(service, account, value string) error {
 	return nil
 }
 
+// encryptionKeyForStore returns the encryption key for the given service,
+// looking up the wrap key from the store directly (must be called while holding m.mu).
+func (m *memoryKeyring) encryptionKeyForStore(service string) []byte {
+	vaultDir := vaultDirFromService(service)
+	// Try to find wrap key in our store
+	wrapKeyKey := service + "|" + wrapKeyAccount
+	if w, ok := m.store[wrapKeyKey]; ok {
+		if k, err := base64.StdEncoding.DecodeString(string(w)); err == nil && len(k) == wrapKeyLen {
+			return k
+		}
+	}
+	return deriveKey(vaultDir)
+}
+
 func (m *memoryKeyring) Get(service, account string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -79,6 +104,10 @@ func (m *memoryKeyring) Get(service, account string) (string, error) {
 
 	var sess storedSession
 	if err := json.Unmarshal(payload, &sess); err != nil {
+		if account == wrapKeyAccount {
+			// Wrap keys are stored as raw base64 (not session JSON)
+			return string(payload), nil
+		}
 		delete(m.store, key)
 		return "", fmt.Errorf("not found")
 	}
@@ -100,11 +129,14 @@ func (m *memoryKeyring) Get(service, account string) (string, error) {
 	}
 
 	if sess.EncryptedPassphrase != "" && sess.Nonce != "" {
-		if _, err := decryptPassphrase(sess.EncryptedPassphrase, sess.Nonce, vaultDirFromService(service)); err != nil {
+		k := m.encryptionKeyForStore(service)
+		plain, err := decryptPassphrase(sess.EncryptedPassphrase, sess.Nonce, k)
+		if err != nil {
 			zeroBytes(payload)
 			delete(m.store, key)
 			return "", fmt.Errorf("not found")
 		}
+		zeroBytes(plain)
 	} else if sess.Passphrase == "" {
 		delete(m.store, key)
 		return "", fmt.Errorf("not found")

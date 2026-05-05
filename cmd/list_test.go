@@ -10,7 +10,7 @@ import (
 
 func TestCmdList_Empty(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	out := execWithStdout("--vault", vaultDir, "list")
 	_ = out
@@ -22,7 +22,7 @@ func TestCmdList_Prefix(t *testing.T) {
 	e := &vaultpkg.Entry{Data: map[string]any{"password": "p"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "work/aws", e, identity.Identity)
 	_ = vaultpkg.WriteEntry(vaultDir, "personal/bank", e, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	out := execWithStdout("--vault", vaultDir, "list", "work/")
 	if !strings.Contains(out, "work/aws") {
@@ -38,7 +38,7 @@ func TestCmdList_Alias(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "p"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "ls-entry", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	out := execWithStdout("--vault", vaultDir, "ls")
 	if !strings.Contains(out, "ls-entry") {

@@ -154,6 +154,23 @@ func toolDefinitions() []toolDefinition {
 			Handler: (*Server).handleSetAuthMethod,
 		},
 		{
+			Name:        "copy_to_clipboard",
+			Description: "Copy a vault entry's password field to the system clipboard without exposing the value to the agent",
+			InputSchema: objectSchema([]string{"path"}, map[string]schemaProperty{
+				"path": {Type: "string", Description: "Entry path"},
+			}),
+			Handler: (*Server).handleCopyToClipboard,
+		},
+		{
+			Name:        "autotype",
+			Description: "Type a vault entry's field value as keyboard input into the currently focused application without exposing the value to the agent",
+			InputSchema: objectSchema([]string{"path"}, map[string]schemaProperty{
+				"path":  {Type: "string", Description: "Entry path"},
+				"field": {Type: "string", Description: "Field name to type (default: password)"},
+			}),
+			Handler: (*Server).handleAutotype,
+		},
+		{
 			Name:        "secure_input",
 			Description: "Prompt the user for sensitive data via an interactive TTY and store it without exposing the value to the agent",
 			InputSchema: objectSchema([]string{"path", "field"}, map[string]schemaProperty{

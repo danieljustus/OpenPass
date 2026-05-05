@@ -33,7 +33,7 @@ func TestOpenWithMissingConfig(t *testing.T) {
 
 // TestOpenWithPassphrasePathTraversal covers validateVaultDir error in OpenWithPassphrase.
 func TestOpenWithPassphrasePathTraversal(t *testing.T) {
-	_, err := OpenWithPassphrase("../evil-vault", "passphrase")
+	_, err := OpenWithPassphrase("../evil-vault", []byte("passphrase"))
 	if err == nil {
 		t.Fatal("OpenWithPassphrase() error = nil, want ErrVaultDirEscapes")
 	}
@@ -102,7 +102,7 @@ func TestInitWithPassphraseMkdirAllError(t *testing.T) {
 	}
 	defer os.Chmod(parent, 0o700) //nolint:errcheck
 
-	_, err := InitWithPassphrase(parent+"/new-vault", "passphrase", config.Default())
+	_, err := InitWithPassphrase(parent+"/new-vault", []byte("passphrase"), config.Default())
 	if err == nil {
 		t.Fatal("InitWithPassphrase() error = nil, want error when parent dir is not writable")
 	}
@@ -141,10 +141,10 @@ func TestRememberSearchIdentityNilSkips(t *testing.T) {
 
 // TestFindListError covers the List error return path in Find.
 func TestFindListError(t *testing.T) {
-	// vaultDir does not exist → List will fail → Find returns error
-	_, err := Find("/nonexistent/vault/dir/that/does/not/exist", "query")
+	// vaultDir does not exist → List will fail → FindWithOptions returns error
+	_, err := FindWithOptions("/nonexistent/vault/dir/that/does/not/exist", "query", FindOptions{MaxWorkers: 0})
 	if err == nil {
-		t.Fatal("Find() error = nil, want error when vault dir does not exist")
+		t.Fatal("FindWithOptions() error = nil, want error when vault dir does not exist")
 	}
 }
 
@@ -253,7 +253,7 @@ func TestFindReturnsEmptyForNoMatches(t *testing.T) {
 
 	mustWriteEntryCoverage(t, vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
 
-	got, err := Find(vaultDir, "nomatch")
+	got, err := FindWithOptions(vaultDir, "nomatch", FindOptions{MaxWorkers: 0})
 	if err != nil {
 		t.Fatalf("Find() error = %v", err)
 	}
@@ -262,20 +262,20 @@ func TestFindReturnsEmptyForNoMatches(t *testing.T) {
 	}
 }
 
-// TestFindConcurrentReturnsEmptyForNoMatches covers FindConcurrent with query that matches nothing.
-func TestFindConcurrentReturnsEmptyForNoMatches(t *testing.T) {
+// TestFindWithOptionsReturnsEmptyForNoMatches covers FindWithOptions with query that matches nothing.
+func TestFindWithOptionsReturnsEmptyForNoMatches(t *testing.T) {
 	vaultDir := t.TempDir()
 	id := testutil.TempIdentity(t)
 	rememberSearchIdentity(id)
 
 	mustWriteEntryCoverage(t, vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
 
-	got, err := FindConcurrent(vaultDir, "nomatch", 4)
+	got, err := FindWithOptions(vaultDir, "nomatch", FindOptions{MaxWorkers: 4})
 	if err != nil {
-		t.Fatalf("FindConcurrent() error = %v", err)
+		t.Fatalf("FindWithOptions() error = %v", err)
 	}
 	if len(got) != 0 {
-		t.Fatalf("FindConcurrent() with no matches returned %d results, want 0", len(got))
+		t.Fatalf("FindWithOptions() with no matches returned %d results, want 0", len(got))
 	}
 }
 
@@ -287,7 +287,7 @@ func TestFindWithUnicodeQuery(t *testing.T) {
 
 	mustWriteEntryCoverage(t, vaultDir, id, "test/entry", map[string]interface{}{"data": "日本語テスト"})
 
-	got, err := Find(vaultDir, "日本語")
+	got, err := FindWithOptions(vaultDir, "日本語", FindOptions{MaxWorkers: 0})
 	if err != nil {
 		t.Fatalf("Find() error = %v", err)
 	}
@@ -307,7 +307,7 @@ func TestFindPathMatchesBeforeFieldSearch(t *testing.T) {
 		"password": "secret123",
 	})
 
-	got, err := Find(vaultDir, "github")
+	got, err := FindWithOptions(vaultDir, "github", FindOptions{MaxWorkers: 0})
 	if err != nil {
 		t.Fatalf("Find() error = %v", err)
 	}
@@ -319,8 +319,8 @@ func TestFindPathMatchesBeforeFieldSearch(t *testing.T) {
 	}
 }
 
-// TestFindConcurrentPathMatchesBeforeFieldSearch covers path matching in concurrent search.
-func TestFindConcurrentPathMatchesBeforeFieldSearch(t *testing.T) {
+// TestFindWithOptionsPathMatchesBeforeFieldSearch covers path matching in concurrent search.
+func TestFindWithOptionsPathMatchesBeforeFieldSearch(t *testing.T) {
 	vaultDir := t.TempDir()
 	id := testutil.TempIdentity(t)
 	rememberSearchIdentity(id)
@@ -330,12 +330,12 @@ func TestFindConcurrentPathMatchesBeforeFieldSearch(t *testing.T) {
 		"password": "secret123",
 	})
 
-	got, err := FindConcurrent(vaultDir, "github", 4)
+	got, err := FindWithOptions(vaultDir, "github", FindOptions{MaxWorkers: 4})
 	if err != nil {
-		t.Fatalf("FindConcurrent() error = %v", err)
+		t.Fatalf("FindWithOptions() error = %v", err)
 	}
 	if len(got) != 1 {
-		t.Fatalf("FindConcurrent() returned %d results, want 1", len(got))
+		t.Fatalf("FindWithOptions() returned %d results, want 1", len(got))
 	}
 	if !containsStringCoverage(got[0].Fields, "path") {
 		t.Errorf("expected path match, got fields %v", got[0].Fields)
@@ -390,15 +390,15 @@ func TestInitWriteFileError(t *testing.T) {
 	}
 }
 
-// TestFindConcurrentListError covers List error path in FindConcurrent.
-func TestFindConcurrentListError(t *testing.T) {
+// TestFindWithOptionsListError covers List error path in FindWithOptions.
+func TestFindWithOptionsListError(t *testing.T) {
 	searchIdentityMu.Lock()
 	searchIdentity = nil
 	searchIdentityMu.Unlock()
 
-	_, err := FindConcurrent("/nonexistent/path", "query", 4)
+	_, err := FindWithOptions("/nonexistent/path", "query", FindOptions{MaxWorkers: 4})
 	if err == nil {
-		t.Fatal("FindConcurrent() error = nil, want error for nonexistent vault")
+		t.Fatal("FindWithOptions() error = nil, want error for nonexistent vault")
 	}
 }
 
@@ -438,7 +438,7 @@ func TestAutoCommitNilConfig(t *testing.T) {
 // TestOpenWithPassphraseFileNotFound covers OpenWithPassphrase when identity file is missing.
 func TestOpenWithPassphraseFileNotFound(t *testing.T) {
 	vaultDir := t.TempDir()
-	_, err := OpenWithPassphrase(vaultDir, "passphrase")
+	_, err := OpenWithPassphrase(vaultDir, []byte("passphrase"))
 	if err == nil {
 		t.Fatal("OpenWithPassphrase() error = nil, want error when identity file is missing")
 	}
@@ -455,7 +455,7 @@ func TestFindNoPathMatchesDecryptsAll(t *testing.T) {
 		"password": "secret123",
 	})
 
-	got, err := Find(vaultDir, "secret")
+	got, err := FindWithOptions(vaultDir, "secret", FindOptions{MaxWorkers: 0})
 	if err != nil {
 		t.Fatalf("Find() error = %v", err)
 	}
@@ -467,7 +467,7 @@ func TestFindNoPathMatchesDecryptsAll(t *testing.T) {
 	}
 }
 
-// TestFindMatchesMultipleEntries covers Find when multiple entries match.
+// TestFindMatchesMultipleEntries covers FindWithOptions when multiple entries match.
 func TestFindMatchesMultipleEntries(t *testing.T) {
 	vaultDir := t.TempDir()
 	id := testutil.TempIdentity(t)
@@ -477,17 +477,17 @@ func TestFindMatchesMultipleEntries(t *testing.T) {
 	mustWriteEntryCoverage(t, vaultDir, id, "github.com/work", map[string]interface{}{"username": "bob"})
 	mustWriteEntryCoverage(t, vaultDir, id, "gitlab.com/user", map[string]interface{}{"username": "carol"})
 
-	got, err := Find(vaultDir, "github")
+	got, err := FindWithOptions(vaultDir, "github", FindOptions{MaxWorkers: 0})
 	if err != nil {
-		t.Fatalf("Find() error = %v", err)
+		t.Fatalf("FindWithOptions() error = %v", err)
 	}
 	if len(got) != 2 {
-		t.Fatalf("Find() returned %d results, want 2", len(got))
+		t.Fatalf("FindWithOptions() returned %d results, want 2", len(got))
 	}
 }
 
-// TestFindConcurrentMatchesMultipleEntries covers FindConcurrent when multiple entries match.
-func TestFindConcurrentMatchesMultipleEntries(t *testing.T) {
+// TestFindWithOptionsMatchesMultipleEntries covers FindWithOptions when multiple entries match.
+func TestFindWithOptionsMatchesMultipleEntries(t *testing.T) {
 	vaultDir := t.TempDir()
 	id := testutil.TempIdentity(t)
 	rememberSearchIdentity(id)
@@ -496,12 +496,12 @@ func TestFindConcurrentMatchesMultipleEntries(t *testing.T) {
 	mustWriteEntryCoverage(t, vaultDir, id, "github.com/work", map[string]interface{}{"username": "bob"})
 	mustWriteEntryCoverage(t, vaultDir, id, "gitlab.com/user", map[string]interface{}{"username": "carol"})
 
-	got, err := FindConcurrent(vaultDir, "github", 4)
+	got, err := FindWithOptions(vaultDir, "github", FindOptions{MaxWorkers: 4})
 	if err != nil {
-		t.Fatalf("FindConcurrent() error = %v", err)
+		t.Fatalf("FindWithOptions() error = %v", err)
 	}
 	if len(got) != 2 {
-		t.Fatalf("FindConcurrent() returned %d results, want 2", len(got))
+		t.Fatalf("FindWithOptions() returned %d results, want 2", len(got))
 	}
 }
 

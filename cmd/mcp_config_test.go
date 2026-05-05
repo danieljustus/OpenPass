@@ -281,7 +281,7 @@ func TestCmdMCPConfig_StdioCustomVaultIncludesVaultArg(t *testing.T) {
 
 func TestCmdMCPConfig_HTTP(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "correcthorsebatterystaple"
+	passphrase := []byte("correcthorsebatterystaple")
 	vaultFlagReset(t)
 	_ = os.Setenv("OPENPASS_VAULT", vaultDir)
 	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_VAULT") })

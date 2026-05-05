@@ -11,7 +11,7 @@ import (
 
 func TestCmdRun_Basic(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	out := execWithStdout("--vault", vaultDir, "run", "--", "echo", "hello")
@@ -25,7 +25,7 @@ func TestCmdRun_SecretInjection(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"api_key": "secret123"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "github", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	out := execWithStdout("--vault", vaultDir, "run", "--env", "API_KEY=github.api_key", "--", "sh", "-c", "echo $API_KEY")
@@ -36,7 +36,7 @@ func TestCmdRun_SecretInjection(t *testing.T) {
 
 func TestCmdRun_MissingSecretRef(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	rootCmd.SetArgs([]string{"--vault", vaultDir, "run", "--env", "FOO=missing.value", "--", "echo", "hello"})
@@ -55,7 +55,7 @@ func TestCmdRun_MissingSecretRef(t *testing.T) {
 
 func TestCmdRun_Timeout(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	rootCmd.SetArgs([]string{"--vault", vaultDir, "run", "--timeout", "100ms", "--", "sleep", "10"})
@@ -77,7 +77,7 @@ func TestCmdRun_WorkingDir(t *testing.T) {
 		t.Skip("skipping on windows: path format differs")
 	}
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	tmpDir := t.TempDir()
@@ -103,7 +103,7 @@ func TestCmdRun_MultipleEnvFlags(t *testing.T) {
 	entry2 := &vaultpkg.Entry{Data: map[string]any{"secret": "sec1"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "svc1", entry1, identity.Identity)
 	_ = vaultpkg.WriteEntry(vaultDir, "svc2", entry2, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	out := execWithStdout("--vault", vaultDir, "run",
@@ -120,7 +120,7 @@ func TestCmdRun_MultipleEnvFlags(t *testing.T) {
 
 func TestCmdRun_NonZeroExit(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	rootCmd.SetArgs([]string{"--vault", vaultDir, "run", "--", "sh", "-c", "exit 42"})
@@ -166,7 +166,7 @@ func TestCmdRun_TooManyEnvironmentVariables(t *testing.T) {
 		_ = vaultpkg.WriteEntry(vaultDir, svc, entry, identity.Identity)
 	}
 
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	rootCmd.SetArgs([]string{"--vault", vaultDir, "run",
@@ -188,7 +188,7 @@ func TestCmdRun_EnvWithBareRef(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "thepass"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "db", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	out := execWithStdout("--vault", vaultDir, "run", "--env", "DB_PASSWORD=db.password", "--", "sh", "-c", "echo $DB_PASSWORD")
@@ -199,7 +199,7 @@ func TestCmdRun_EnvWithBareRef(t *testing.T) {
 
 func TestCmdRun_StdoutStderrPassthrough(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	var stdout, stderr string
@@ -222,7 +222,7 @@ func TestCmdRun_StdoutStderrPassthrough(t *testing.T) {
 
 func TestCmdRun_NoArgsError(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	rootCmd.SetArgs([]string{"--vault", vaultDir, "run"})
@@ -236,7 +236,7 @@ func TestCmdRun_NoArgsError(t *testing.T) {
 
 func TestCmdRun_InvalidEnvFormat(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	rootCmd.SetArgs([]string{"--vault", vaultDir, "run", "--env", "NOEQUALSIGN", "--", "echo", "hello"})

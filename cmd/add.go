@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/danieljustus/OpenPass/internal/crypto"
+	cryptopkg "github.com/danieljustus/OpenPass/internal/crypto"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
@@ -34,10 +34,8 @@ var addCmd = &cobra.Command{
 	Long: `Creates a new password entry in the vault.
 
 The entry name can use slash notation for organization (e.g., work/aws).
-Interactive mode prompts for username, password, and URL.
-
-Examples:
-  openpass add github
+Interactive mode prompts for username, password, and URL.`,
+	Example: `  openpass add github
   openpass add work/aws
   openpass add personal/bank
   openpass add github-token --value "my-secret-token"
@@ -75,7 +73,7 @@ Examples:
 		if addValue != "" {
 			data["password"] = addValue
 			if !addForce {
-				if err := crypto.ValidatePasswordStrength(addValue); err != nil {
+				if err := cryptopkg.ValidatePasswordStrength(addValue); err != nil {
 					return err
 				}
 			}
@@ -100,13 +98,14 @@ Examples:
 			}
 
 			password, err := readHiddenInput("Password: ", reader)
-			if err != nil && password == "" {
+			if err != nil && len(password) == 0 {
 				return fmt.Errorf("read password: %w", err)
 			}
-			if password != "" {
-				data["password"] = password
+			defer cryptopkg.Wipe(password)
+			if len(password) > 0 {
+				data["password"] = string(password)
 				if !addForce {
-					if err := crypto.ValidatePasswordStrength(password); err != nil {
+					if err := cryptopkg.ValidatePasswordStrength(string(password)); err != nil {
 						return err
 					}
 				}
@@ -196,7 +195,7 @@ Examples:
 			}
 		}
 
-		if err := crypto.ValidateTOTPData(data); err != nil {
+		if err := cryptopkg.ValidateTOTPData(data); err != nil {
 			return err
 		}
 

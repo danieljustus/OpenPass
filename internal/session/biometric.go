@@ -16,8 +16,8 @@ type BiometricAuthenticator interface {
 
 type BiometricPassphraseStore interface {
 	IsAvailable() bool
-	Save(ctx context.Context, vaultDir string, passphrase string) error
-	Load(ctx context.Context, vaultDir string) (string, error)
+	Save(ctx context.Context, vaultDir string, passphrase []byte) error
+	Load(ctx context.Context, vaultDir string) ([]byte, error)
 	Delete(vaultDir string) error
 }
 
@@ -50,11 +50,11 @@ func BiometricAvailable() bool {
 	return DefaultBiometricPassphraseStore().IsAvailable()
 }
 
-func SaveBiometricPassphrase(ctx context.Context, vaultDir string, passphrase string) error {
+func SaveBiometricPassphrase(ctx context.Context, vaultDir string, passphrase []byte) error {
 	return DefaultBiometricPassphraseStore().Save(ctx, vaultDir, passphrase)
 }
 
-func LoadBiometricPassphrase(ctx context.Context, vaultDir string) (string, error) {
+func LoadBiometricPassphrase(ctx context.Context, vaultDir string) ([]byte, error) {
 	return DefaultBiometricPassphraseStore().Load(ctx, vaultDir)
 }
 
@@ -78,13 +78,13 @@ func (noopBiometricPassphraseStore) IsAvailable() bool {
 	return false
 }
 
-func (noopBiometricPassphraseStore) Save(_ context.Context, _ string, _ string) error {
+func (noopBiometricPassphraseStore) Save(_ context.Context, _ string, _ []byte) error {
 	return ErrBiometricNotAvailable
 }
 
-func (noopBiometricPassphraseStore) Load(ctx context.Context, vaultDir string) (string, error) {
+func (noopBiometricPassphraseStore) Load(ctx context.Context, vaultDir string) ([]byte, error) {
 	_, _ = ctx, vaultDir
-	return "", ErrBiometricNotAvailable
+	return nil, ErrBiometricNotAvailable
 }
 
 func (noopBiometricPassphraseStore) Delete(vaultDir string) error {

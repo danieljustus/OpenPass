@@ -15,7 +15,7 @@ import (
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
-const testPassphrase = "test-passphrase"
+var testPassphrase = []byte("test-passphrase")
 
 func newTestService(t *testing.T, withGit bool) *Service {
 	t.Helper()
@@ -229,12 +229,12 @@ func TestFind(t *testing.T) {
 	tests := []struct {
 		name      string
 		query     string
-		opts      FindOptions
+		opts      vaultpkg.FindOptions
 		wantPaths []string
 	}{
 		{name: "matching query", query: "cloud", wantPaths: []string{"work/aws"}},
 		{name: "no results", query: "does-not-exist", wantPaths: []string{}},
-		{name: "max workers option", query: "github", opts: FindOptions{MaxWorkers: 2}, wantPaths: []string{"github"}},
+		{name: "max workers option", query: "github", opts: vaultpkg.FindOptions{MaxWorkers: 2}, wantPaths: []string{"github"}},
 	}
 
 	for _, tt := range tests {
@@ -400,7 +400,7 @@ func TestServiceErrorPaths(t *testing.T) {
 	_, err = missingVault.List("")
 	assertServiceErrorKind(t, err, ErrReadFailed)
 
-	_, err = missingVault.Find("anything", FindOptions{})
+	_, err = missingVault.Find("anything", vaultpkg.FindOptions{})
 	assertServiceErrorKind(t, err, ErrReadFailed)
 }
 

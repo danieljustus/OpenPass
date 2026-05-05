@@ -16,6 +16,11 @@ type VaultConfig struct {
 	ConfirmRemove     bool     `yaml:"confirm_remove,omitempty"`
 	AuthMethod        string   `yaml:"authMethod,omitempty"`
 	UseTouchID        bool     `yaml:"useTouchID,omitempty"`
+	// LegacyMode indicates whether the vault may contain legacy top-level .age files
+	// outside the entries/ directory. nil means "not yet detected" (assume legacy).
+	// false means the vault has been confirmed to have no legacy entries, allowing
+	// ListFast to skip the legacy directory walk.
+	LegacyMode *bool `yaml:"legacy_mode,omitempty"`
 }
 
 // GitConfig holds git-related configuration for automatic commits and pushes.
@@ -48,7 +53,8 @@ type UpdateConfig struct {
 
 // ClipboardConfig holds clipboard-related configuration.
 type ClipboardConfig struct {
-	AutoClearDuration int `yaml:"auto_clear_duration,omitempty"` // seconds, 0 = disabled
+	AutoClearDuration int  `yaml:"auto_clear_duration,omitempty"` // seconds, 0 = disabled
+	PrintByDefault    bool `yaml:"printByDefault,omitempty"`
 }
 
 // AuditConfig holds audit log rotation configuration.
@@ -117,6 +123,7 @@ func defaultUpdateConfig() UpdateConfig {
 func defaultClipboardConfig() ClipboardConfig {
 	return ClipboardConfig{
 		AutoClearDuration: 30,
+		PrintByDefault:    true,
 	}
 }
 
@@ -143,6 +150,7 @@ type fileVaultConfig struct {
 	ConfirmRemove     *bool    `yaml:"confirm_remove,omitempty"`
 	AuthMethod        *string  `yaml:"authMethod,omitempty"`
 	UseTouchID        *bool    `yaml:"useTouchID,omitempty"`
+	LegacyMode        *bool    `yaml:"legacy_mode,omitempty"`
 	Path              string   `yaml:"path,omitempty"`
 	DefaultRecipients []string `yaml:"default_recipients,omitempty"`
 }
@@ -181,7 +189,8 @@ type fileUpdateConfig struct {
 // fileClipboardConfig is the file-based clipboard configuration with pointer fields
 // for optional YAML unmarshaling.
 type fileClipboardConfig struct {
-	AutoClearDuration *int `yaml:"auto_clear_duration,omitempty"`
+	AutoClearDuration *int  `yaml:"auto_clear_duration,omitempty"`
+	PrintByDefault    *bool `yaml:"printByDefault,omitempty"`
 }
 
 // fileAuditConfig is the file-based audit configuration with pointer fields
@@ -213,6 +222,9 @@ func MergeFileVaultConfig(fileCfg *fileVaultConfig, defaults VaultConfig) VaultC
 	}
 	if fileCfg.UseTouchID != nil {
 		result.UseTouchID = *fileCfg.UseTouchID
+	}
+	if fileCfg.LegacyMode != nil {
+		result.LegacyMode = fileCfg.LegacyMode
 	}
 	return result
 }
@@ -305,6 +317,9 @@ func MergeFileClipboardConfig(fileCfg *fileClipboardConfig, defaults ClipboardCo
 	if fileCfg.AutoClearDuration != nil {
 		result.AutoClearDuration = *fileCfg.AutoClearDuration
 	}
+	if fileCfg.PrintByDefault != nil {
+		result.PrintByDefault = *fileCfg.PrintByDefault
+	}
 	return result
 }
 
@@ -364,4 +379,14 @@ func (c *Config) VaultDirForProfile(name string) string {
 		return ""
 	}
 	return profile.VaultPath
+}
+
+// IsLegacyMode reports whether the vault may contain legacy top-level .age files
+// outside the entries/ directory. Returns true (assume legacy) when the mode is
+// unknown (nil), matching the safe default for backward compatibility.
+func (c *Config) IsLegacyMode() bool {
+	if c == nil || c.Vault == nil || c.Vault.LegacyMode == nil {
+		return true
+	}
+	return *c.Vault.LegacyMode
 }

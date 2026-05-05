@@ -60,11 +60,12 @@ func resetCommandFlagGlobals() {
 	addTOTPAccount = ""
 	editorFlag = ""
 	confirmRemove = false
-	getCopyToClipboard = false
+	getPrint = false
 	genLength = 20
 	genSymbols = false
 	genStore = ""
 	getClipboard = clipboardapp.DefaultClipboard
+	outputFormat = "text"
 }
 
 func resetCobraCommand(cmd *cobra.Command) {

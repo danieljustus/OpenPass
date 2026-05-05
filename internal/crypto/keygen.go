@@ -51,12 +51,12 @@ func GenerateIdentityString() (string, error) {
 // SaveIdentity encrypts and saves an identity to a file using a passphrase.
 // The identity is encrypted with scrypt before being written to disk.
 // The file permissions are set to 0o600 (readable/writable by owner only).
-func SaveIdentity(id *age.X25519Identity, path string, passphrase string) error {
+func SaveIdentity(id *age.X25519Identity, path string, passphrase []byte) error {
 	if id == nil {
 		return ErrNilIdentity
 	}
 
-	if passphrase == "" {
+	if len(passphrase) == 0 {
 		return errors.New("passphrase is empty")
 	}
 
@@ -64,7 +64,7 @@ func SaveIdentity(id *age.X25519Identity, path string, passphrase string) error 
 		return err
 	}
 
-	recipient, err := age.NewScryptRecipient(passphrase)
+	recipient, err := age.NewScryptRecipient(string(passphrase))
 	if err != nil {
 		return fmt.Errorf("create scrypt recipient: %w", err)
 	}
@@ -93,8 +93,8 @@ func SaveIdentity(id *age.X25519Identity, path string, passphrase string) error 
 
 // LoadIdentity loads and decrypts an identity from a file using a passphrase.
 // Returns the decrypted identity or an error if loading/decryption fails.
-func LoadIdentity(path string, passphrase string) (*age.X25519Identity, error) {
-	if passphrase == "" {
+func LoadIdentity(path string, passphrase []byte) (*age.X25519Identity, error) {
+	if len(passphrase) == 0 {
 		return nil, errors.New("passphrase is empty")
 	}
 
@@ -107,7 +107,7 @@ func LoadIdentity(path string, passphrase string) (*age.X25519Identity, error) {
 		return nil, fmt.Errorf("read file: %w", err)
 	}
 
-	identity, err := age.NewScryptIdentity(passphrase)
+	identity, err := age.NewScryptIdentity(string(passphrase))
 	if err != nil {
 		return nil, fmt.Errorf("create scrypt identity: %w", err)
 	}
@@ -121,6 +121,7 @@ func LoadIdentity(path string, passphrase string) (*age.X25519Identity, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read decrypted data: %w", err)
 	}
+	defer Wipe(plaintext)
 
 	parsed, err := age.ParseX25519Identity(strings.TrimSpace(string(plaintext)))
 	if err != nil {

@@ -198,7 +198,7 @@ func TestCmdGet_WholeEntry(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "mypass", "username": "bob"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "full-entry", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	out := execWithStdout("--vault", vaultDir, "get", "full-entry")
 	if !strings.Contains(out, "full-entry") || !strings.Contains(out, "mypass") {
@@ -211,7 +211,7 @@ func TestCmdGet_FieldNotFound(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "mypass"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "getfield", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	stderr := captureStderr(func() {
 		rootCmd.SetArgs([]string{"--vault", vaultDir, "get", "getfield.nofield"})
@@ -225,7 +225,7 @@ func TestCmdGet_FieldNotFound(t *testing.T) {
 
 func TestCmdGet_NotFound(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	stderr := captureStderr(func() {
 		rootCmd.SetArgs([]string{"--vault", vaultDir, "get", "ghost-entry"})
@@ -243,7 +243,7 @@ func TestCmdGet_FuzzyMultipleMatches(t *testing.T) {
 	e := &vaultpkg.Entry{Data: map[string]any{"password": "p"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "work/aws", e, identity.Identity)
 	_ = vaultpkg.WriteEntry(vaultDir, "work/gcp", e, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	allOutput := captureStdout(func() {
 		captureStderr(func() {
@@ -267,7 +267,7 @@ func TestCmdGet_TOTP(t *testing.T) {
 		},
 	}
 	_ = vaultpkg.WriteEntry(vaultDir, "totp-get", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	out := execWithStdout("--vault", vaultDir, "get", "totp-get")
 	if !strings.Contains(out, "totp-get") {
@@ -295,7 +295,7 @@ func TestCmdGet_FuzzySingleMatch(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	e := &vaultpkg.Entry{Data: map[string]any{"password": "p"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "workstation", e, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	out := execWithStdout("--vault", vaultDir, "get", "workstat")
 	if !strings.Contains(out, "workstation") {
@@ -315,7 +315,7 @@ func TestCmdGet_TOTPDisplay(t *testing.T) {
 		},
 	}
 	_ = vaultpkg.WriteEntry(vaultDir, "totp-display", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	rootCmd.SetArgs([]string{"--vault", vaultDir, "get", "totp-display"})
 	defer rootCmd.SetArgs(nil)
@@ -330,7 +330,7 @@ func TestCmdGet_TOTPDisplay(t *testing.T) {
 	}
 }
 
-func TestCmdGet_FieldWithClipboard(t *testing.T) {
+func TestCmdGet_FieldTTY_DefaultClipboard(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
 	if err := os.WriteFile(filepath.Join(vaultDir, "config.yaml"), []byte("clipboard:\n  auto_clear_duration: 0\n"), 0o600); err != nil {
 		t.Fatalf("disable clipboard auto-clear: %v", err)
@@ -338,16 +338,20 @@ func TestCmdGet_FieldWithClipboard(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "clip-pass-123"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "clip-entry", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	clipboardapp.SetClipboard(clipboardapp.NewNullClipboard())
 	t.Cleanup(func() { clipboardapp.SetClipboard(nil) })
+
+	oldIsTerminal := isTerminalFunc
+	isTerminalFunc = func(int) bool { return true }
+	defer func() { isTerminalFunc = oldIsTerminal }()
 
 	var stdout string
 	var execErr error
 	stderr := captureStderr(func() {
 		stdout = captureStdout(func() {
-			rootCmd.SetArgs([]string{"--vault", vaultDir, "get", "clip-entry.password", "--clip"})
+			rootCmd.SetArgs([]string{"--vault", vaultDir, "get", "clip-entry.password"})
 			execErr = rootCmd.Execute()
 			rootCmd.SetArgs(nil)
 		})
@@ -356,7 +360,7 @@ func TestCmdGet_FieldWithClipboard(t *testing.T) {
 		t.Fatalf("get command failed: %v", execErr)
 	}
 	if stdout != "" {
-		t.Fatalf("stdout = %q, want empty when --clip is set", stdout)
+		t.Fatalf("stdout = %q, want empty when TTY defaults to clipboard", stdout)
 	}
 	copied, _ := clipboardapp.DefaultClipboard().Read()
 	if copied != "clip-pass-123" {
@@ -367,12 +371,48 @@ func TestCmdGet_FieldWithClipboard(t *testing.T) {
 	}
 }
 
+func TestCmdGet_FieldPipe_DefaultPrint(t *testing.T) {
+	vaultDir, passphrase := initVault(t)
+	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
+	entry := &vaultpkg.Entry{Data: map[string]any{"password": "pipe-pass-456"}}
+	_ = vaultpkg.WriteEntry(vaultDir, "pipe-entry", entry, identity.Identity)
+	setPassEnv(t, string(passphrase))
+	defer setupVaultFlag(t, vaultDir)()
+
+	oldIsTerminal := isTerminalFunc
+	isTerminalFunc = func(int) bool { return false }
+	defer func() { isTerminalFunc = oldIsTerminal }()
+
+	out := execWithStdout("--vault", vaultDir, "get", "pipe-entry.password")
+	if strings.TrimSpace(out) != "pipe-pass-456" {
+		t.Fatalf("stdout = %q, want pipe-pass-456", out)
+	}
+}
+
+func TestCmdGet_FieldPrintFlag_OverridesTTY(t *testing.T) {
+	vaultDir, passphrase := initVault(t)
+	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
+	entry := &vaultpkg.Entry{Data: map[string]any{"password": "print-pass-789"}}
+	_ = vaultpkg.WriteEntry(vaultDir, "print-entry", entry, identity.Identity)
+	setPassEnv(t, string(passphrase))
+	defer setupVaultFlag(t, vaultDir)()
+
+	oldIsTerminal := isTerminalFunc
+	isTerminalFunc = func(int) bool { return true }
+	defer func() { isTerminalFunc = oldIsTerminal }()
+
+	out := execWithStdout("--vault", vaultDir, "get", "print-entry.password", "--print")
+	if strings.TrimSpace(out) != "print-pass-789" {
+		t.Fatalf("stdout = %q, want print-pass-789", out)
+	}
+}
+
 func TestCmdGet_FuzzyFieldLookup(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "secret123", "username": "admin"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "work/aws", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	out := execWithStdout("--vault", vaultDir, "get", "work/aws.password")
 	if !strings.Contains(out, "secret123") {
@@ -392,7 +432,7 @@ func TestCmdGet_TOTPGenerationError(t *testing.T) {
 		},
 	}
 	_ = vaultpkg.WriteEntry(vaultDir, "bad-totp", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	stderr := captureStderr(func() {
@@ -427,7 +467,7 @@ func TestGet_ErrorPaths(t *testing.T) {
 				tmpDir := t.TempDir()
 				_ = os.Setenv("OPENPASS_VAULT", tmpDir)
 				cfg := config.Default()
-				_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+				_, _ = vaultpkg.InitWithPassphrase(tmpDir, []byte("test"), cfg)
 				_ = os.Setenv("OPENPASS_PASSPHRASE", "test")
 				return tmpDir
 			},

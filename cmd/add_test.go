@@ -12,7 +12,7 @@ import (
 
 func TestAddCommand_HiddenPassword(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	restore := pipeStdin(t, "myuser\nsecret-password\n\n\n\n")
@@ -34,7 +34,7 @@ func TestAddCommand_HiddenPassword(t *testing.T) {
 
 func TestAddCommand_InvalidTOTPSecretRejected(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	stderr := captureStderr(func() {
@@ -54,7 +54,7 @@ func TestAddCommand_InvalidTOTPSecretRejected(t *testing.T) {
 
 func TestAddCommand_ValidTOTPSecretAccepted(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	out := execWithStdout("--vault", vaultDir, "add", "valid-totp-entry",
@@ -66,7 +66,7 @@ func TestAddCommand_ValidTOTPSecretAccepted(t *testing.T) {
 
 func TestAddCommand_TOTPSecretWithSpacesAccepted(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	out := execWithStdout("--vault", vaultDir, "add", "spaced-totp-entry",
@@ -78,7 +78,7 @@ func TestAddCommand_TOTPSecretWithSpacesAccepted(t *testing.T) {
 
 func TestAddCommand_GenerateWithLength(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	rootCmd.SetArgs([]string{"--vault", vaultDir, "add", "generated-entry", "--generate", "--length", "24"})
@@ -112,7 +112,7 @@ func TestAddCommand_GenerateWithLength(t *testing.T) {
 
 func TestCmdAdd_Interactive(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	restore := pipeStdin(t, "myuser\nStrongP@ssw0rd123\n")
 	defer restore()
@@ -129,7 +129,7 @@ func TestCmdAdd_Interactive(t *testing.T) {
 
 func TestCmdAdd_InteractiveStdinError(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	restore := pipeStdin(t, "myuser\n")
 	defer restore()
@@ -145,7 +145,7 @@ func TestCmdAdd_InteractiveStdinError(t *testing.T) {
 
 func TestCmdAdd_Generate(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	out := execWithStdout("--vault", vaultDir, "add", "gen-entry", "--generate")
 	if !strings.Contains(out, "Entry created") {
@@ -155,7 +155,7 @@ func TestCmdAdd_Generate(t *testing.T) {
 
 func TestCmdAdd_WithUsernameAndURL(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	out := execWithStdout("--vault", vaultDir, "add", "tagged-entry",
 		"--value", "StrongP@ssw0rd123", "--username", "alice", "--url", "https://example.com")
@@ -166,7 +166,7 @@ func TestCmdAdd_WithUsernameAndURL(t *testing.T) {
 
 func TestCmdAdd_WithTOTPFlags(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	out := execWithStdout("--vault", vaultDir, "add", "totp-entry",
 		"--value", "StrongP@ssw0rd123", "--totp-secret", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "--totp-issuer", "GitHub", "--totp-account", "alice")
@@ -195,7 +195,7 @@ func TestCmdAdd_AlreadyExists(t *testing.T) {
 	identity, _ := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "existing"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "exists", entry, identity.Identity)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	stderr := captureStderr(func() {
 		rootCmd.SetArgs([]string{"--vault", vaultDir, "add", "exists", "--value", "v"})
@@ -209,7 +209,7 @@ func TestCmdAdd_AlreadyExists(t *testing.T) {
 
 func TestCmdAdd_Notes(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	out := execWithStdout("--vault", vaultDir, "add", "notes-entry",
 		"--value", "StrongP@ssw0rd123", "--notes", "important note here")
@@ -220,7 +220,7 @@ func TestCmdAdd_Notes(t *testing.T) {
 
 func TestCmdAdd_InteractiveFull(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	restore := pipeStdin(t, "myuser\nStrongP@ssw0rd123\n")
 	defer restore()
@@ -268,7 +268,7 @@ func TestCmdAdd_InteractiveFull(t *testing.T) {
 
 func TestCmdAdd_InteractiveURLPrompt(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	restore := pipeStdin(t, "testuser\nStrongP@ssw0rd123\n")
 	defer restore()
@@ -300,7 +300,7 @@ func TestCmdAdd_AutoCommitError(t *testing.T) {
 	}
 	vaultDir, passphrase := initVault(t)
 	setupGitWithBrokenObjects(t, vaultDir)
-	setPassEnv(t, passphrase)
+	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 
 	stderr := captureStderr(func() {
@@ -338,7 +338,7 @@ func TestAdd_ErrorPaths(t *testing.T) {
 				tmpDir := t.TempDir()
 				_ = os.Setenv("OPENPASS_VAULT", tmpDir)
 				cfg := config.Default()
-				identity, _ := vaultpkg.InitWithPassphrase(tmpDir, "testpass", cfg)
+				identity, _ := vaultpkg.InitWithPassphrase(tmpDir, []byte("testpass"), cfg)
 				_ = os.Setenv("OPENPASS_PASSPHRASE", "testpass")
 				_ = vaultpkg.WriteEntry(tmpDir, "existing", &vaultpkg.Entry{Data: map[string]any{"password": "secret"}}, identity)
 			},
@@ -392,7 +392,7 @@ func TestAdd_InteractiveMode(t *testing.T) {
 	}()
 
 	cfg := config.Default()
-	_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+	_, _ = vaultpkg.InitWithPassphrase(tmpDir, []byte("test"), cfg)
 
 	// Reset all add flags to ensure we're in interactive mode
 	addValue = ""
@@ -457,7 +457,7 @@ func TestAdd_InteractiveReadErrors(t *testing.T) {
 	}()
 
 	cfg := config.Default()
-	_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+	_, _ = vaultpkg.InitWithPassphrase(tmpDir, []byte("test"), cfg)
 
 	addValue = ""
 	addGenerate = false

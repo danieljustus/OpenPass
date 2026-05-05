@@ -67,7 +67,7 @@ func TestGeneratePassword_WithSymbols(t *testing.T) {
 
 func TestCmdGenerate_StoreExisting(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "correcthorsebatterystaple"
+	passphrase := []byte("correcthorsebatterystaple")
 	vaultFlagReset(t)
 
 	identity, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default())
@@ -84,7 +84,7 @@ func TestCmdGenerate_StoreExisting(t *testing.T) {
 	origGenLength := genLength
 	t.Cleanup(func() { genStore = origGenStore; genLength = origGenLength })
 
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") })
 
 	rootCmd.SetArgs([]string{"--vault", vaultDir, "generate", "--length", "16", "--store", "existing.password"})
@@ -101,7 +101,7 @@ func TestCmdGenerate_StoreExisting(t *testing.T) {
 
 func TestCmdGenerate_StoreJSONDoesNotRevealByDefault(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "correcthorsebatterystaple"
+	passphrase := []byte("correcthorsebatterystaple")
 	vaultFlagReset(t)
 
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
@@ -110,15 +110,15 @@ func TestCmdGenerate_StoreJSONDoesNotRevealByDefault(t *testing.T) {
 
 	t.Cleanup(func() {
 		genStore = ""
-		genJSON = false
 		genReveal = false
 		genQuiet = false
+		outputFormat = "text"
 	})
 
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") })
 
-	rootCmd.SetArgs([]string{"--vault", vaultDir, "generate", "--length", "16", "--store", "json.password", "--json"})
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "generate", "--length", "16", "--store", "json.password", "--output", "json"})
 	t.Cleanup(func() { rootCmd.SetArgs(nil) })
 
 	output := captureStdout(func() {
@@ -139,7 +139,7 @@ func TestCmdGenerate_StoreJSONDoesNotRevealByDefault(t *testing.T) {
 
 func TestCmdGenerate_ZeroLength(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "correcthorsebatterystaple"
+	passphrase := []byte("correcthorsebatterystaple")
 	vaultFlagReset(t)
 
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
@@ -149,7 +149,7 @@ func TestCmdGenerate_ZeroLength(t *testing.T) {
 	origGenLength := genLength
 	t.Cleanup(func() { genLength = origGenLength })
 
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	t.Cleanup(func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") })
 
 	rootCmd.SetArgs([]string{"--vault", vaultDir, "generate", "--length", "0"})
@@ -169,7 +169,7 @@ func TestCmdGenerate_NoStore(t *testing.T) {
 	vaultDir := t.TempDir()
 	vaultFlagReset(t)
 
-	if _, err := vaultpkg.InitWithPassphrase(vaultDir, "testpassphrase", config.Default()); err != nil {
+	if _, err := vaultpkg.InitWithPassphrase(vaultDir, []byte("testpassphrase"), config.Default()); err != nil {
 		t.Fatalf("init vault: %v", err)
 	}
 
@@ -201,7 +201,7 @@ func TestGenerate_ErrorPaths(t *testing.T) {
 		}()
 
 		cfg := config.Default()
-		_, _ = vaultpkg.InitWithPassphrase(tmpDir, "test", cfg)
+		_, _ = vaultpkg.InitWithPassphrase(tmpDir, []byte("test"), cfg)
 
 		rootCmd.SetArgs([]string{"--vault", tmpDir, "generate", "--length", "0"})
 		defer rootCmd.SetArgs(nil)

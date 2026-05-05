@@ -14,7 +14,7 @@ import (
 
 func TestVaultInitWithPassphrase_Integration(t *testing.T) {
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase-123"
+	passphrase := []byte("test-passphrase-123")
 
 	identity, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default())
 	if err != nil {
@@ -157,7 +157,7 @@ func TestVaultGitAutoCommit_Integration(t *testing.T) {
 
 func TestVaultSessionCaching_Integration(t *testing.T) {
 	probeDir := t.TempDir()
-	if err := session.SavePassphrase(probeDir, "probe", time.Second); err != nil {
+	if err := session.SavePassphrase(probeDir, []byte("probe"), time.Second); err != nil {
 		t.Skipf("OS keyring not available in test environment: %v", err)
 	}
 	// Verify the keyring can also load back what was saved; some CI
@@ -168,7 +168,7 @@ func TestVaultSessionCaching_Integration(t *testing.T) {
 	_ = session.ClearSession(probeDir)
 
 	vaultDir := t.TempDir()
-	passphrase := "session-test-passphrase"
+	passphrase := []byte("session-test-passphrase")
 
 	if err := session.SavePassphrase(vaultDir, passphrase, 2*time.Second); err != nil {
 		t.Fatalf("SavePassphrase() error = %v", err)
@@ -178,7 +178,7 @@ func TestVaultSessionCaching_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadPassphrase() immediately after save error = %v", err)
 	}
-	if loaded != passphrase {
+	if string(loaded) != string(passphrase) {
 		t.Errorf("LoadPassphrase() = %q, want %q", loaded, passphrase)
 	}
 

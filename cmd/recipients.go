@@ -13,8 +13,10 @@ import (
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
-var confirmRemove bool
-var recipientsListJSON bool
+var (
+	confirmRemove      bool
+	recipientsListJSON bool
+)
 
 var recipientsCmd = &cobra.Command{
 	Use:   "recipients",
@@ -23,18 +25,17 @@ var recipientsCmd = &cobra.Command{
 
 Recipients are stored in recipients.txt in the vault directory.
 Each line contains one public key in age format (starting with "age1").
-Lines starting with # are treated as comments.
-
-Examples:
-  openpass recipients list              # List all recipients
+Lines starting with # are treated as comments.`,
+	Example: `  openpass recipients list              # List all recipients
   openpass recipients add age1...       # Add a new recipient
   openpass recipients remove age1...    # Remove a recipient`,
 }
 
 var recipientsListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all recipients",
-	Long:  `List all recipients from the recipients.txt file.`,
+	Use:     "list",
+	Short:   "List all recipients",
+	Long:    `List all recipients from the recipients.txt file.`,
+	Example: `  openpass recipients list`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultDir, err := vaultPath()
 		if err != nil {
@@ -52,33 +53,36 @@ var recipientsListCmd = &cobra.Command{
 		}
 
 		if len(recipients) == 0 {
-			if recipientsListJSON {
-				PrintJSON(map[string]interface{}{"recipients": []string{}})
-				return nil
+			if outputFormat == "text" {
+				printlnQuietAware("No recipients configured.")
+				printlnQuietAware("Use 'openpass recipients add <public-key>' to add a recipient.")
+			} else {
+				if err := PrintResult(map[string]interface{}{"recipients": []string{}}); err != nil {
+					return err
+				}
 			}
-			printlnQuietAware("No recipients configured.")
-			printlnQuietAware("Use 'openpass recipients add <public-key>' to add a recipient.")
 			return nil
 		}
 
-		if recipientsListJSON {
+		if outputFormat == "text" {
+			printQuietAware("Recipients (%d):\n\n", len(recipients))
+			for _, r := range recipients {
+				status := "✓"
+				if !r.Valid {
+					status = "✗"
+				}
+				printlnQuietAware("  " + status + " " + r.Normalized)
+				if !r.Valid {
+					printlnQuietAware("    Error: " + r.Error)
+				}
+			}
+		} else {
 			recipientStrings := make([]string, 0, len(recipients))
 			for _, r := range recipients {
 				recipientStrings = append(recipientStrings, r.Normalized)
 			}
-			PrintJSON(map[string]interface{}{"recipients": recipientStrings})
-			return nil
-		}
-
-		printQuietAware("Recipients (%d):\n\n", len(recipients))
-		for _, r := range recipients {
-			status := "✓"
-			if !r.Valid {
-				status = "✗"
-			}
-			printlnQuietAware("  " + status + " " + r.Normalized)
-			if !r.Valid {
-				printlnQuietAware("    Error: " + r.Error)
+			if err := PrintResult(map[string]interface{}{"recipients": recipientStrings}); err != nil {
+				return err
 			}
 		}
 
@@ -92,11 +96,9 @@ var recipientsAddCmd = &cobra.Command{
 	Long: `Add a new recipient (public key) to the vault.
 
 The public key must be a valid age public key starting with "age1".
-Once added, all new entries will be encrypted for this recipient.
-
-Example:
-  openpass recipients add age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p`,
-	Args: cobra.ExactArgs(1),
+Once added, all new entries will be encrypted for this recipient.`,
+	Example: `  openpass recipients add age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p`,
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultDir, err := vaultPath()
 		if err != nil {
@@ -138,11 +140,9 @@ var recipientsRemoveCmd = &cobra.Command{
 
 The public key must match exactly. Use 'openpass recipients list' to see current recipients.
 
-Use --yes to skip confirmation (useful for scripts).
-
-Example:
-  openpass recipients remove age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p`,
-	Args: cobra.ExactArgs(1),
+Use --yes to skip confirmation (useful for scripts).`,
+	Example: `  openpass recipients remove age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p`,
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultDir, err := vaultPath()
 		if err != nil {
@@ -194,6 +194,5 @@ func init() {
 	recipientsCmd.AddCommand(recipientsListCmd)
 	recipientsCmd.AddCommand(recipientsAddCmd)
 	recipientsCmd.AddCommand(recipientsRemoveCmd)
-	recipientsListCmd.Flags().BoolVarP(&recipientsListJSON, "json", "j", false, "Output as JSON")
 	recipientsRemoveCmd.Flags().BoolVarP(&confirmRemove, "yes", "y", false, "Skip confirmation prompt")
 }

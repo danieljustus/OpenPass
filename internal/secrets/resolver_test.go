@@ -9,7 +9,7 @@ import (
 	vaultsvc "github.com/danieljustus/OpenPass/internal/vaultsvc"
 )
 
-const testPassphrase = "test-passphrase"
+var testPassphrase = []byte("test-passphrase")
 
 func newTestService(t *testing.T) *vaultsvc.Service {
 	t.Helper()

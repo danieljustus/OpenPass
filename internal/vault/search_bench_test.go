@@ -51,58 +51,58 @@ func BenchmarkFind_50kEntries_FieldSearch(b *testing.B) {
 	benchmarkFindFieldSearch(b, 50000)
 }
 
-// BenchmarkFindConcurrent_* benchmarks with varying worker counts and vault sizes
-func BenchmarkFindConcurrent_100_Entries_1_Worker(b *testing.B) {
-	benchmarkFindConcurrent(b, 100, 1)
+// BenchmarkFindWithOptions_* benchmarks with varying worker counts and vault sizes
+func BenchmarkFindWithOptions_100_Entries_1_Worker(b *testing.B) {
+	benchmarkFindWithOptions(b, 100, 1)
 }
 
-func BenchmarkFindConcurrent_100_Entries_2_Workers(b *testing.B) {
-	benchmarkFindConcurrent(b, 100, 2)
+func BenchmarkFindWithOptions_100_Entries_2_Workers(b *testing.B) {
+	benchmarkFindWithOptions(b, 100, 2)
 }
 
-func BenchmarkFindConcurrent_100_Entries_4_Workers(b *testing.B) {
-	benchmarkFindConcurrent(b, 100, 4)
+func BenchmarkFindWithOptions_100_Entries_4_Workers(b *testing.B) {
+	benchmarkFindWithOptions(b, 100, 4)
 }
 
-func BenchmarkFindConcurrent_100_Entries_8_Workers(b *testing.B) {
-	benchmarkFindConcurrent(b, 100, 8)
+func BenchmarkFindWithOptions_100_Entries_8_Workers(b *testing.B) {
+	benchmarkFindWithOptions(b, 100, 8)
 }
 
-func BenchmarkFindConcurrent_1k_Entries_1_Worker(b *testing.B) {
-	benchmarkFindConcurrent(b, 1000, 1)
+func BenchmarkFindWithOptions_1k_Entries_1_Worker(b *testing.B) {
+	benchmarkFindWithOptions(b, 1000, 1)
 }
 
-func BenchmarkFindConcurrent_1k_Entries_2_Workers(b *testing.B) {
-	benchmarkFindConcurrent(b, 1000, 2)
+func BenchmarkFindWithOptions_1k_Entries_2_Workers(b *testing.B) {
+	benchmarkFindWithOptions(b, 1000, 2)
 }
 
-func BenchmarkFindConcurrent_1k_Entries_4_Workers(b *testing.B) {
-	benchmarkFindConcurrent(b, 1000, 4)
+func BenchmarkFindWithOptions_1k_Entries_4_Workers(b *testing.B) {
+	benchmarkFindWithOptions(b, 1000, 4)
 }
 
-func BenchmarkFindConcurrent_1k_Entries_8_Workers(b *testing.B) {
-	benchmarkFindConcurrent(b, 1000, 8)
+func BenchmarkFindWithOptions_1k_Entries_8_Workers(b *testing.B) {
+	benchmarkFindWithOptions(b, 1000, 8)
 }
 
-func BenchmarkFindConcurrent_10k_Entries_1_Worker(b *testing.B) {
-	benchmarkFindConcurrent(b, 10000, 1)
+func BenchmarkFindWithOptions_10k_Entries_1_Worker(b *testing.B) {
+	benchmarkFindWithOptions(b, 10000, 1)
 }
 
-func BenchmarkFindConcurrent_10k_Entries_2_Workers(b *testing.B) {
-	benchmarkFindConcurrent(b, 10000, 2)
+func BenchmarkFindWithOptions_10k_Entries_2_Workers(b *testing.B) {
+	benchmarkFindWithOptions(b, 10000, 2)
 }
 
-func BenchmarkFindConcurrent_10k_Entries_4_Workers(b *testing.B) {
-	benchmarkFindConcurrent(b, 10000, 4)
+func BenchmarkFindWithOptions_10k_Entries_4_Workers(b *testing.B) {
+	benchmarkFindWithOptions(b, 10000, 4)
 }
 
-func BenchmarkFindConcurrent_10k_Entries_8_Workers(b *testing.B) {
-	benchmarkFindConcurrent(b, 10000, 8)
+func BenchmarkFindWithOptions_10k_Entries_8_Workers(b *testing.B) {
+	benchmarkFindWithOptions(b, 10000, 8)
 }
 
-// BenchmarkFindConcurrent_10k_Entries_DefaultWorkers uses default worker count (4)
-func BenchmarkFindConcurrent_10k_Entries_DefaultWorkers(b *testing.B) {
-	benchmarkFindConcurrent(b, 10000, 0)
+// BenchmarkFindWithOptions_10k_Entries_DefaultWorkers uses default worker count (0=sequential)
+func BenchmarkFindWithOptions_10k_Entries_DefaultWorkers(b *testing.B) {
+	benchmarkFindWithOptions(b, 10000, 0)
 }
 
 func benchmarkList(b *testing.B, numEntries int) {
@@ -138,7 +138,7 @@ func benchmarkFindPathOnly(b *testing.B, numEntries int) {
 
 	for i := 0; i < b.N; i++ {
 		// Query that matches path - uses fast path (no decryption)
-		matches, err := Find(vaultDir, pathQuery)
+		matches, err := FindWithOptions(vaultDir, pathQuery, FindOptions{MaxWorkers: 0})
 		if err != nil {
 			b.Fatalf("Find failed: %v", err)
 		}
@@ -160,7 +160,7 @@ func benchmarkFindFieldSearch(b *testing.B, numEntries int) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		matches, err := Find(vaultDir, fieldQuery)
+		matches, err := FindWithOptions(vaultDir, fieldQuery, FindOptions{MaxWorkers: 0})
 		if err != nil {
 			b.Fatalf("Find failed: %v", err)
 		}
@@ -170,7 +170,7 @@ func benchmarkFindFieldSearch(b *testing.B, numEntries int) {
 	}
 }
 
-func benchmarkFindConcurrent(b *testing.B, numEntries int, maxWorkers int) {
+func benchmarkFindWithOptions(b *testing.B, numEntries int, maxWorkers int) {
 	vaultDir := b.TempDir()
 	identity := generateTestIdentity(b)
 	createTestEntries(b, vaultDir, identity, numEntries)
@@ -182,9 +182,9 @@ func benchmarkFindConcurrent(b *testing.B, numEntries int, maxWorkers int) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		matches, err := FindConcurrent(vaultDir, fieldQuery, maxWorkers)
+		matches, err := FindWithOptions(vaultDir, fieldQuery, FindOptions{MaxWorkers: maxWorkers})
 		if err != nil {
-			b.Fatalf("FindConcurrent failed: %v", err)
+			b.Fatalf("FindWithOptions failed: %v", err)
 		}
 		if len(matches) != 1 {
 			b.Fatalf("expected 1 match, got %d", len(matches))

@@ -67,6 +67,8 @@ type AgentProfile struct {
 	CanWrite        bool          `yaml:"canWrite"`
 	CanRunCommands  bool          `yaml:"canRunCommands,omitempty"`
 	CanManageConfig bool          `yaml:"canManageConfig,omitempty"`
+	CanUseClipboard bool          `yaml:"canUseClipboard,omitempty"`
+	CanUseAutotype  bool          `yaml:"canUseAutotype,omitempty"`
 	RequireApproval bool          `yaml:"requireApproval"`
 	ApprovalTimeout time.Duration `yaml:"approvalTimeout,omitempty"`
 }
@@ -76,6 +78,8 @@ type fileAgentProfile struct {
 	CanWrite        *bool          `yaml:"canWrite,omitempty"`
 	CanRunCommands  *bool          `yaml:"canRunCommands,omitempty"`
 	CanManageConfig *bool          `yaml:"canManageConfig,omitempty"`
+	CanUseClipboard *bool          `yaml:"canUseClipboard,omitempty"`
+	CanUseAutotype  *bool          `yaml:"canUseAutotype,omitempty"`
 	RequireApproval *bool          `yaml:"requireApproval,omitempty"`
 	ApprovalMode    *string        `yaml:"approvalMode,omitempty"`
 	AllowedPaths    []string       `yaml:"allowedPaths,omitempty"`
@@ -184,6 +188,12 @@ func Load(path string) (*Config, error) {
 			}
 			if profile.CanManageConfig != nil {
 				current.CanManageConfig = *profile.CanManageConfig
+			}
+			if profile.CanUseClipboard != nil {
+				current.CanUseClipboard = *profile.CanUseClipboard
+			}
+			if profile.CanUseAutotype != nil {
+				current.CanUseAutotype = *profile.CanUseAutotype
 			}
 			if profile.RequireApproval != nil {
 				current.RequireApproval = *profile.RequireApproval
@@ -332,6 +342,7 @@ func (c *Config) SaveTo(path string) error {
 			DefaultRecipients: append([]string(nil), c.Vault.DefaultRecipients...),
 			ConfirmRemove:     &confirmRemove,
 			AuthMethod:        &vaultAuthMethod,
+			LegacyMode:        c.Vault.LegacyMode,
 		}
 	}
 
@@ -399,12 +410,16 @@ func (c *Config) SaveTo(path string) error {
 		canWrite := profile.CanWrite
 		canRunCommands := profile.CanRunCommands
 		canManageConfig := profile.CanManageConfig
+		canUseClipboard := profile.CanUseClipboard
+		canUseAutotype := profile.CanUseAutotype
 		requireApproval := profile.RequireApproval
 		fap := fileAgentProfile{
 			AllowedPaths:    allowed,
 			CanWrite:        &canWrite,
 			CanRunCommands:  &canRunCommands,
 			CanManageConfig: &canManageConfig,
+			CanUseClipboard: &canUseClipboard,
+			CanUseAutotype:  &canUseAutotype,
 			RequireApproval: &requireApproval,
 		}
 		if profile.ApprovalMode != "" {

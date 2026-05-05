@@ -86,7 +86,7 @@ var authSetCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
-			defer cryptopkg.Wipe([]byte(passphrase))
+			defer cryptopkg.Wipe(passphrase)
 			if err := session.SaveBiometricPassphrase(context.Background(), vaultDir, passphrase); err != nil {
 				return fmt.Errorf("save Touch ID unlock item: %w", err)
 			}
@@ -126,26 +126,26 @@ func loadAuthConfig() (string, *configpkg.Config, error) {
 	return vaultDir, cfg, nil
 }
 
-func passphraseForBiometricSetup(vaultDir string) (string, error) {
-	if passphrase, err := sessionLoadPassphrase(vaultDir); err == nil && passphrase != "" {
+func passphraseForBiometricSetup(vaultDir string) ([]byte, error) {
+	if passphrase, err := sessionLoadPassphrase(vaultDir); err == nil && len(passphrase) > 0 {
 		return passphrase, nil
 	}
 
-	passphrase := os.Getenv("OPENPASS_PASSPHRASE")
-	if passphrase != "" {
+	if envPass := os.Getenv("OPENPASS_PASSPHRASE"); envPass != "" {
+		passphrase := []byte(envPass)
 		_ = os.Unsetenv("OPENPASS_PASSPHRASE")
 		if _, err := vaultpkg.OpenWithPassphrase(vaultDir, passphrase); err != nil {
-			return "", fmt.Errorf("open vault: %w", err)
+			return nil, fmt.Errorf("open vault: %w", err)
 		}
 		return passphrase, nil
 	}
 
 	passphrase, err := readHiddenInput("Passphrase: ", nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if _, err := vaultpkg.OpenWithPassphrase(vaultDir, passphrase); err != nil {
-		return "", fmt.Errorf("open vault: %w", err)
+		return nil, fmt.Errorf("open vault: %w", err)
 	}
 	return passphrase, nil
 }

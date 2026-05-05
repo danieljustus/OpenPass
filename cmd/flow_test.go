@@ -50,12 +50,12 @@ func TestCmdSet(t *testing.T) {
 		t.Skip("skipping slow CLI flow test in short mode")
 	}
 	vaultDir := t.TempDir()
-	passphrase := "correct horse battery staple"
+	passphrase := []byte("correct horse battery staple")
 
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
 		t.Fatalf("init vault: %v", err)
 	}
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	origVault := vault
@@ -79,11 +79,11 @@ func TestCmdGet(t *testing.T) {
 		t.Skip("skipping slow CLI flow test in short mode")
 	}
 	vaultDir := t.TempDir()
-	passphrase := "correct horse battery staple"
+	passphrase := []byte("correct horse battery staple")
 	identity, _ := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default())
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "secret123"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "demo", entry, identity)
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	origVault := vault
@@ -107,11 +107,11 @@ func TestCmdList(t *testing.T) {
 		t.Skip("skipping slow CLI flow test in short mode")
 	}
 	vaultDir := t.TempDir()
-	passphrase := "correct horse battery staple"
+	passphrase := []byte("correct horse battery staple")
 	identity, _ := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default())
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "secret123"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "demo", entry, identity)
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	origVault := vault
@@ -135,11 +135,11 @@ func TestCmdFind(t *testing.T) {
 		t.Skip("skipping slow CLI flow test in short mode")
 	}
 	vaultDir := t.TempDir()
-	passphrase := "correct horse battery staple"
+	passphrase := []byte("correct horse battery staple")
 	identity, _ := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default())
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "secret123"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "demo", entry, identity)
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	origVault := vault
@@ -163,12 +163,12 @@ func TestCmdGenerate(t *testing.T) {
 		t.Skip("skipping slow CLI flow test in short mode")
 	}
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
 		t.Fatalf("init vault: %v", err)
 	}
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	origVault := vault
@@ -192,11 +192,11 @@ func TestCmdDelete(t *testing.T) {
 		t.Skip("skipping slow CLI flow test in short mode")
 	}
 	vaultDir := t.TempDir()
-	passphrase := "test-passphrase"
+	passphrase := []byte("test-passphrase")
 	identity, _ := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default())
 	entry := &vaultpkg.Entry{Data: map[string]any{"password": "secret"}}
 	_ = vaultpkg.WriteEntry(vaultDir, "delme", entry, identity)
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	origVault := vault
@@ -233,12 +233,12 @@ func TestCmdAdd(t *testing.T) {
 		t.Skip("skipping slow CLI flow test in short mode")
 	}
 	vaultDir := t.TempDir()
-	passphrase := "correct horse battery staple"
+	passphrase := []byte("correct horse battery staple")
 
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
 		t.Fatalf("init vault: %v", err)
 	}
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	origVault := vault
@@ -264,16 +264,16 @@ func TestCmdUnlock(t *testing.T) {
 
 	restoreSession := stubSessionFuncs(t)
 	t.Cleanup(restoreSession)
-	sessionLoadPassphrase = func(string) (string, error) { return "", nil }
-	sessionSavePassphrase = func(string, string, time.Duration) error { return nil }
+	sessionLoadPassphrase = func(string) ([]byte, error) { return nil, nil }
+	sessionSavePassphrase = func(string, []byte, time.Duration) error { return nil }
 
 	vaultDir := t.TempDir()
-	passphrase := "correct horse battery staple"
+	passphrase := []byte("correct horse battery staple")
 
 	if _, err := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default()); err != nil {
 		t.Fatalf("init vault: %v", err)
 	}
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	origVault := vault
@@ -301,9 +301,9 @@ func TestCmdRecipientsAddAndRemove(t *testing.T) {
 		t.Skip("skipping slow CLI flow test in short mode")
 	}
 	vaultDir := t.TempDir()
-	passphrase := "correct horse battery staple"
+	passphrase := []byte("correct horse battery staple")
 	identity, _ := vaultpkg.InitWithPassphrase(vaultDir, passphrase, config.Default())
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	defer func() { _ = os.Unsetenv("OPENPASS_PASSPHRASE") }()
 
 	origVault := vault
@@ -323,7 +323,7 @@ func TestCmdRecipientsAddAndRemove(t *testing.T) {
 		t.Errorf("recipients add output unexpected: %s", output)
 	}
 
-	_ = os.Setenv("OPENPASS_PASSPHRASE", passphrase)
+	_ = os.Setenv("OPENPASS_PASSPHRASE", string(passphrase))
 	output = execWithStdout("--vault", vaultDir, "recipients", "remove", recipient, "-y")
 	if !strings.Contains(output, "removed") {
 		t.Errorf("recipients remove output unexpected: %s", output)
