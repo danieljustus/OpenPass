@@ -55,7 +55,7 @@ var authSetCmd = &cobra.Command{
 	Short: "Set the vault unlock authentication method",
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
-			cmd.Help()
+			_ = cmd.Help()
 			return fmt.Errorf("set requires exactly 1 argument: passphrase or touchid")
 		}
 		return nil
