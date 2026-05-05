@@ -12,10 +12,13 @@
 
 ```
 OpenPass
-└── github.com/go-git/go-git/v5 v5.18.0 (direct)
-    └── github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 (indirect)
-        └── github.com/golang/protobuf v1.5.4 (indirect, DEPRECATED)
-            └── google.golang.org/protobuf v1.33.0+ (indirect)
+├── github.com/go-git/go-git/v5 v5.18.0 (direct)
+│   └── github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 (indirect)
+│       └── github.com/golang/protobuf v1.5.4 (indirect, DEPRECATED)
+│           └── google.golang.org/protobuf v1.33.0+ (indirect)
+└── google.golang.org/grpc v1.80.0 (indirect)
+    └── github.com/golang/protobuf v1.5.4 (indirect, DEPRECATED)
+        └── google.golang.org/protobuf v1.33.0+ (indirect)
 ```
 
 ### 1.2 go.mod Evidence
@@ -37,11 +40,14 @@ require (
 ### 1.3 Why OpenPass Cannot Directly Fix This
 
 - OpenPass has **zero direct imports** of either protobuf package
-- The deprecated dependency enters exclusively through `go-git` → `groupcache`
+- The deprecated dependency enters through **two independent paths**:
+  1. `go-git` → `groupcache` → `golang/protobuf`
+  2. `grpc` → `golang/protobuf`
 - Any replacement or exclusion would require either:
   - Forking/replacing `groupcache` (breaks `go-git` compatibility)
+  - Forking/replacing `grpc` (used by transitive deps, high blast radius)
   - Using `replace` directives in `go.mod` (fragile, shifts maintenance burden)
-  - Patching upstream `groupcache` (requires community coordination)
+  - Patching upstream `groupcache` and `grpc` (requires community coordination)
 
 ---
 
@@ -115,6 +121,18 @@ Groupcache still **directly requires** the deprecated module. There is no branch
 | go-git activity | High — active development, but no move away from groupcache |
 
 go-git is a widely used library (7K+ stars, consumed by Kubernetes ecosystem, Gitea, Pulumi). If go-git moves away from groupcache, that would break the chain for OpenPass automatically. However, there is **no indication** go-git plans to replace groupcache.
+
+---
+
+## 4.5 grpc Upstream Assessment
+
+| Attribute | Value |
+|-----------|-------|
+| grpc v1.80.0 | Still depends on `github.com/golang/protobuf` v1.5.4 |
+| grpc v1.81.0 (latest) | **Still depends on `github.com/golang/protobuf` v1.5.4** |
+| grpc migration status | No active migration off deprecated protobuf observed |
+
+**Verdict:** Even upgrading to the latest grpc release (v1.81.0) does **not** remove the deprecated `golang/protobuf` dependency. grpc remains a second, independent path for the deprecated module. This was verified by testing `go get google.golang.org/grpc@v1.81.0` — the `golang/protobuf` edge persists in the module graph.
 
 ---
 
@@ -192,6 +210,7 @@ Acknowledge the deprecated transitive dependency, document it, and move on. Re-a
 | Re-audit dependency tree for groupcache/protobuf changes | OpenPass maintainers | Every 6 months |
 | Monitor `golang/groupcache#150` for any activity | OpenPass maintainers | Ad hoc |
 | Monitor `go-git` release notes for groupcache replacement | OpenPass maintainers | Per go-git update |
+| Monitor `grpc` release notes for protobuf migration | OpenPass maintainers | Per grpc update |
 | Update this document if upstream situation changes | OpenPass maintainers | As needed |
 
 ---
@@ -202,6 +221,7 @@ Acknowledge the deprecated transitive dependency, document it, and move on. Re-a
 |------|-----------|--------|-------|
 | 2026-04-20 | Sisyphus-Junior | DEFER | groupcache issue #150 still open; no upstream migration |
 | 2026-04-28 | Sisyphus | DEFER | Quarterly check: no upstream changes; scheduled workflow active |
+| 2026-05-05 | Sisyphus | DEFER | Re-audit discovered **second path**: `grpc` → `golang/protobuf`. Tested grpc v1.81.0 upgrade — deprecated dep persists. No viable resolution path. |
 
 ---
 
