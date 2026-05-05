@@ -42,6 +42,7 @@ func stubSessionFuncs(t *testing.T) func() {
 	oldIsExpired := sessionIsExpired
 	oldLoadBiometric := sessionLoadBiometric
 	oldSaveBiometric := sessionSaveBiometric
+	oldSaveIdentity := sessionSaveIdentity
 	oldGetCacheStatus := sessionGetCacheStatus
 	sessionLoadBiometric = func(context.Context, string) ([]byte, error) { return nil, errors.New("not configured") }
 	sessionSaveBiometric = func(context.Context, string, []byte) error { return nil }
@@ -53,6 +54,7 @@ func stubSessionFuncs(t *testing.T) func() {
 		sessionIsExpired = oldIsExpired
 		sessionLoadBiometric = oldLoadBiometric
 		sessionSaveBiometric = oldSaveBiometric
+		sessionSaveIdentity = oldSaveIdentity
 		sessionGetCacheStatus = oldGetCacheStatus
 	}
 }

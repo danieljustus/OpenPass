@@ -266,6 +266,7 @@ func TestCmdUnlock(t *testing.T) {
 	t.Cleanup(restoreSession)
 	sessionLoadPassphrase = func(string) ([]byte, error) { return nil, nil }
 	sessionSavePassphrase = func(string, []byte, time.Duration) error { return nil }
+	sessionSaveIdentity = func(string, string, time.Duration) error { return nil }
 
 	vaultDir := t.TempDir()
 	passphrase := []byte("correct horse battery staple")
