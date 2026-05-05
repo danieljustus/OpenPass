@@ -164,6 +164,46 @@ Platform expansion, transport hardening, and developer experience release.
 - golangci-lint findings across bodyclose, errorlint, shadow, and staticcheck
 - Session prompt logic now checks active session before requesting passphrase
 
+## [v2.2.0] - 2026-05-05
+
+Autotype, secure secret execution, MCP token management, and session hardening release.
+
+### Added
+
+- Cross-platform autotype package for automatic password entry (macOS, Linux, Windows)
+- MCP tools for autotype and clipboard operations
+- Secure wrap key and encrypted identity storage in vault sessions
+- Vault legacy mode detection for migration optimization
+- Extended secure memory wipe to decrypted entries and additional paths
+- `openpass run` command for executing commands with vault secrets as environment variables
+- MCP tools for command execution with secret injection
+- `CanRunCommands` permission for agent profiles
+- MCP scoped token management with fine-grained access control
+- Token registry with SHA-256 hashed storage
+- `openpass mcp token` CLI commands (create, list, revoke)
+- Tool registry for introspecting available MCP tools
+- Scoped token authentication integrated into HTTP server authorization
+- Fuzz test coverage for importer path normalization
+- Windows arm64 to distribution platform matrix
+- Installation problem issue template
+
+### Changed
+
+- Updated config schema with `PrintByDefault` and `LegacyMode` fields
+- Moved OpenTelemetry dependencies to direct in go.mod
+- Enhanced MCP tool registration across all tools
+- Refactored touchid session handling
+- Improved metrics infrastructure
+
+### Fixed
+
+- Resolved golangci-lint v2 compatibility failures across the codebase
+- Fixed pre-existing lint issues: shadowed variables, copylocks, errorlint, exhaustive switches
+- Fixed gofmt formatting and Windows path test failures in CI
+- Added gosec nosec annotation for intentional subprocess execution
+- Fixed macOS keychain hang in CI by stubbing session save identity
+- Updated ADR-0003 with completed memory wipe phases
+
 ## [v2.1.0] - 2026-04-29
 
 Interactive TUI, vault management, and observability release.
@@ -203,3 +243,4 @@ Interactive TUI, vault management, and observability release.
 [v1.3.0]: https://github.com/danieljustus/OpenPass/releases/tag/v1.3.0
 [v2.0.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.0.0
 [v2.1.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.1.0
+[v2.2.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.2.0
