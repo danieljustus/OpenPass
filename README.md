@@ -212,16 +212,38 @@ For the full configuration reference, see [docs/configuration.md](docs/configura
 - [Architecture](ARCHITECTURE.md)
 - [Security policy](SECURITY.md)
 
-## Comparison with pass
+## Comparison
 
-| Feature | OpenPass | pass (zx2c4) |
-|---------|----------|--------------|
-| Encryption | age | GPG |
-| Session caching | OS keyring | gpg-agent |
-| Entry format | Individual encrypted files | Individual encrypted files |
-| Git support | Built-in | Via hooks |
-| MCP server | Built-in (stdio + HTTP) | No |
-| Password generation | Built-in | External tools |
+| Feature | OpenPass | 1Password | Bitwarden | pass (zx2c4) | Sharing with AI Agents in Chat |
+|---------|----------|-----------|-----------|--------------|-------------------------------|
+| **Encryption** | age (X25519 + ChaCha20-Poly1305) | AES-256 | AES-256 | GPG | None (plaintext) |
+| **Primary Interface** | Terminal-first | GUI-first (CLI available) | GUI-first (CLI available) | Terminal-only | Chat interface |
+| **AI Integration** | MCP server (stdio + HTTP) with scoped tokens | No native AI integration | No native AI integration | No AI integration | Paste secrets into prompts |
+| **Pricing** | Free (MIT) | Subscription ($36+/yr) | Freemium / Subscription ($10+/yr) | Free (GPL) | Free (but risky) |
+| **Sync** | Git (built-in) | Cloud (1Password servers) | Cloud (Bitwarden servers) or self-host | Git (via hooks) | Manual copy-paste |
+| **Self-hosting** | Full control (local vault + git) | No | Yes (Vaultwarden) | Full control | N/A |
+| **Open Source** | Yes (MIT) | No (proprietary) | Yes (GPL) | Yes (GPL) | N/A |
+| **TOTP** | Built-in | Built-in | Built-in | External tools | Manual entry |
+| **Autotype** | Built-in (cross-platform) | Browser extension | Browser extension | External tools | Manual entry |
+| **Secret Execution** | Built-in (`openpass run`) | No | No | External tools | Not applicable |
+| **Session Caching** | OS keyring (15m TTL) | Device unlock | Device unlock | gpg-agent | None |
+| **Git Integration** | Built-in | No | No | Via hooks | No |
+| **MCP Server** | Built-in (stdio + HTTP) | No | No | No | No |
+| **Password Generation** | Built-in | Built-in | Built-in | External tools | Manual / ad-hoc |
+| **Cross-Platform** | macOS, Linux, Windows, FreeBSD | macOS, Linux, Windows, mobile | macOS, Linux, Windows, mobile, web | Unix-like | Any chat platform |
+| **Telemetry** | **None** | Required for sync | Required for cloud sync | None | Logged by chat providers |
+| **Entry Format** | Individual encrypted files | Proprietary database | Encrypted JSON / SQLite | Individual encrypted files | Plaintext in chat history |
+
+**OpenPass differentiators:**
+
+- **Terminal-native**: Designed for keyboard-driven workflows without GUI dependency
+- **Modern encryption**: age instead of GPG — simpler key management, no web of trust
+- **MCP-ready**: Native AI agent integration via Model Context Protocol with scoped tokens and audit logging
+- **Zero telemetry**: No analytics, no cloud dependency, no account required
+- **Built-in utilities**: TOTP, autotype, secret execution, and password generation without external tools
+- **Git-native**: Automatic sync with full version history of encrypted entries
+
+> **Security note on AI agent chat sharing**: Pasting passwords into chat interfaces exposes secrets in plaintext chat history, model training logs, and provider databases. Unlike OpenPass's MCP integration — which keeps credentials encrypted and uses scoped tokens with audit logging — chat sharing provides no access control, rotation, or revocation capabilities.
 
 ## Dependencies
 
