@@ -12,8 +12,7 @@ import (
 )
 
 var (
-	deleteYes  bool
-	deleteJSON bool
+	deleteYes bool
 )
 
 var deleteCmd = &cobra.Command{

@@ -31,7 +31,7 @@ var listCmd = &cobra.Command{
 				return mapVaultSvcError(err, "cannot list entries")
 			}
 
-			if outputFormat != "text" {
+			if outputFormat != "text" { //nolint:goconst // output format literal
 				if err := PrintResult(entries); err != nil {
 					return err
 				}

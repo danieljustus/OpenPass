@@ -14,8 +14,7 @@ import (
 )
 
 var (
-	confirmRemove      bool
-	recipientsListJSON bool
+	confirmRemove bool
 )
 
 var recipientsCmd = &cobra.Command{

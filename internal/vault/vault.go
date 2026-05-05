@@ -131,7 +131,7 @@ func OpenWithPassphrase(vaultDir string, passphrase []byte) (*Vault, error) {
 	}
 
 	identityPath := filepath.Join(vaultDir, "identity.age")
-	identity, err := vaultcrypto.LoadIdentity(identityPath, []byte(passphrase))
+	identity, err := vaultcrypto.LoadIdentity(identityPath, passphrase)
 	if err != nil {
 		return nil, fmt.Errorf("load identity: %w", err)
 	}
@@ -185,7 +185,7 @@ func InitWithPassphrase(vaultDir string, passphrase []byte, cfg *vaultconfig.Con
 	}
 
 	identityPath := filepath.Join(vaultDir, "identity.age")
-	if err := vaultcrypto.SaveIdentity(identity, identityPath, []byte(passphrase)); err != nil {
+	if err := vaultcrypto.SaveIdentity(identity, identityPath, passphrase); err != nil {
 		return nil, fmt.Errorf("save identity: %w", err)
 	}
 

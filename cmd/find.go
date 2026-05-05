@@ -12,10 +12,6 @@ import (
 	vaultsvc "github.com/danieljustus/OpenPass/internal/vaultsvc"
 )
 
-var (
-	findJSON bool
-)
-
 var findCmd = &cobra.Command{
 	Use:     "find <query>",
 	Aliases: []string{"search"},

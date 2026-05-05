@@ -76,6 +76,7 @@ func PrintResult(v interface{}) error {
 }
 
 // PrintJSON outputs the given value as JSON to stdout.
+//
 // Deprecated: use PrintResult with json format instead.
 func PrintJSON(v interface{}) {
 	if quietMode {

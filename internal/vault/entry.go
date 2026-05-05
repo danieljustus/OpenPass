@@ -252,7 +252,7 @@ func migrateLegacyEntries(vaultDir string) error {
 			}
 			return nil
 		}
-		if filepath.Ext(path) != ".age" {
+		if filepath.Ext(path) != ".age" { //nolint:goconst // file extension literal
 			return nil
 		}
 
@@ -260,7 +260,7 @@ func migrateLegacyEntries(vaultDir string) error {
 		if err != nil {
 			return err
 		}
-		if filepath.ToSlash(rel) == "identity.age" {
+		if filepath.ToSlash(rel) == "identity.age" { //nolint:goconst // filename literal
 			return nil
 		}
 

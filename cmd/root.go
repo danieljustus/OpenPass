@@ -252,6 +252,41 @@ func unlockVaultWithTTL(vaultDir string, interactive bool, ttlOverride time.Dura
 	}
 
 	// 2. Fall back to passphrase-based flow
+	passphrase, passphraseFromEnv, passphraseFromBiometric, err := resolveUnlockPassphrase(vaultDir, interactive)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() {
+		cryptopkg.Wipe(passphrase)
+	}()
+
+	v, err := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
+	if err != nil {
+		return nil, 0, errorspkg.NewCLIError(errorspkg.ExitGeneralError, "open vault", err)
+	}
+
+	ttl := configuredSessionTTL(v, ttlOverride)
+	cfg := loadVaultConfigForUnlock(vaultDir)
+
+	// Normal commands avoid persisting env-provided secrets; the unlock command opts in.
+	if !passphraseFromEnv || cacheEnvPassphrase {
+		if err := sessionSavePassphrase(vaultDir, passphrase, ttl); err != nil {
+			return nil, 0, errorspkg.NewCLIError(errorspkg.ExitGeneralError, "save session", err)
+		}
+		if v != nil && v.Identity != nil {
+			_ = sessionSaveIdentity(vaultDir, v.Identity.String(), ttl)
+		}
+	}
+	if cfg.EffectiveAuthMethod() == configpkg.AuthMethodTouchID && !passphraseFromBiometric && (!passphraseFromEnv || cacheEnvPassphrase) {
+		if err := sessionSaveBiometric(context.Background(), vaultDir, passphrase); err != nil && interactive {
+			fmt.Fprintf(os.Stderr, "Warning: could not update Touch ID unlock: %v\n", err)
+		}
+	}
+
+	return v, ttl, nil
+}
+
+func resolveUnlockPassphrase(vaultDir string, interactive bool) ([]byte, bool, bool, error) {
 	passphrase, err := sessionLoadPassphrase(vaultDir)
 	passphraseFromEnv := false
 	passphraseFromBiometric := false
@@ -268,49 +303,20 @@ func unlockVaultWithTTL(vaultDir string, interactive bool, ttlOverride time.Dura
 				passphrase = []byte(envPass)
 				passphraseFromEnv = true
 			}
-			// Clear the env var immediately to prevent exposure via /proc/<pid>/environ
 			_ = os.Unsetenv("OPENPASS_PASSPHRASE")
 		}
 	}
 	if len(passphrase) == 0 {
 		if !interactive {
-			return nil, 0, errorspkg.NewCLIError(errorspkg.ExitLocked, lockedMessageForCache(), nil)
+			return nil, false, false, errorspkg.NewCLIError(errorspkg.ExitLocked, lockedMessageForCache(), nil)
 		}
 		var readErr error
 		passphrase, readErr = readHiddenInput("Passphrase: ", nil)
 		if readErr != nil {
-			return nil, 0, errorspkg.NewCLIError(errorspkg.ExitLocked, "read passphrase", readErr)
+			return nil, false, false, errorspkg.NewCLIError(errorspkg.ExitLocked, "read passphrase", readErr)
 		}
 	}
-	defer func() {
-		// Overwrite passphrase in memory after use
-		cryptopkg.Wipe(passphrase)
-	}()
-
-	v, err := vaultpkg.OpenWithPassphrase(vaultDir, passphrase)
-	if err != nil {
-		return nil, 0, errorspkg.NewCLIError(errorspkg.ExitGeneralError, "open vault", err)
-	}
-
-	ttl := configuredSessionTTL(v, ttlOverride)
-
-	// Normal commands avoid persisting env-provided secrets; the unlock command opts in.
-	if !passphraseFromEnv || cacheEnvPassphrase {
-		if err := sessionSavePassphrase(vaultDir, passphrase, ttl); err != nil {
-			return nil, 0, errorspkg.NewCLIError(errorspkg.ExitGeneralError, "save session", err)
-		}
-		// Cache the derived identity so future commands skip scrypt entirely.
-		if v != nil && v.Identity != nil {
-			_ = sessionSaveIdentity(vaultDir, v.Identity.String(), ttl)
-		}
-	}
-	if cfg.EffectiveAuthMethod() == configpkg.AuthMethodTouchID && !passphraseFromBiometric && (!passphraseFromEnv || cacheEnvPassphrase) {
-		if err := sessionSaveBiometric(context.Background(), vaultDir, passphrase); err != nil && interactive {
-			fmt.Fprintf(os.Stderr, "Warning: could not update Touch ID unlock: %v\n", err)
-		}
-	}
-
-	return v, ttl, nil
+	return passphrase, passphraseFromEnv, passphraseFromBiometric, nil
 }
 
 func withVault(fn func(*vaultsvc.Service) error) error {

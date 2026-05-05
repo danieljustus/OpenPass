@@ -17,7 +17,6 @@ var (
 	genStore   string
 	genReveal  bool
 	genQuiet   bool
-	genJSON    bool
 )
 
 var generateCmd = &cobra.Command{

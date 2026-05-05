@@ -127,8 +127,8 @@ var getCmd = &cobra.Command{
 				// 5. Config override: clipboard.printByDefault=false restores old behavior
 
 				if outputFormat != "text" {
-					if err := PrintResult(strValue); err != nil {
-						return err
+					if printErr := PrintResult(strValue); printErr != nil {
+						return printErr
 					}
 					return nil
 				}

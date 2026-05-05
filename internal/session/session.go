@@ -305,20 +305,17 @@ func LoadPassphrase(vaultDir string) ([]byte, error) {
 	return passphrase, nil
 }
 
-func encryptionKey(vaultDir string) ([]byte, error) {
+func encryptionKey(vaultDir string) []byte {
 	wrapKey, err := loadWrapKey(vaultDir)
 	if err == nil {
-		return wrapKey, nil
+		return wrapKey
 	}
-	return deriveKey(vaultDir), nil
+	return deriveKey(vaultDir)
 }
 
 func resolvePassphrase(sess *storedSession, vaultDir string) ([]byte, error) {
 	if sess.EncryptedPassphrase != "" && sess.Nonce != "" {
-		key, keyErr := encryptionKey(vaultDir)
-		if keyErr != nil {
-			return nil, fmt.Errorf("encryption key: %w", keyErr)
-		}
+		key := encryptionKey(vaultDir)
 		plain, err := decryptPassphrase(sess.EncryptedPassphrase, sess.Nonce, key)
 		if err != nil {
 			return nil, fmt.Errorf("decrypt session: %w", err)
@@ -328,10 +325,7 @@ func resolvePassphrase(sess *storedSession, vaultDir string) ([]byte, error) {
 
 	if sess.Passphrase != "" {
 		plain := []byte(sess.Passphrase)
-		key, keyErr := encryptionKey(vaultDir)
-		if keyErr != nil {
-			return nil, fmt.Errorf("encryption key: %w", keyErr)
-		}
+		key := encryptionKey(vaultDir)
 		enc, nonce, encErr := encryptPassphrase(plain, key)
 		if encErr == nil {
 			sess.EncryptedPassphrase = enc

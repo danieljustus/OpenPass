@@ -283,7 +283,7 @@ func (t *touchIDPassphraseStore) Load(ctx context.Context, vaultDir string) ([]b
 	defer C.free(unsafe.Pointer(reason))
 
 	var out *C.char
-	status := int(C.touch_id_load_passphrase(service, account, reason, &out))
+	status := int(C.touch_id_load_passphrase(service, account, reason, &out)) //nolint:gocritic // Cgo call, dupSubExpr false positive
 	if status == errSecItemNotFound {
 		return nil, ErrBiometricNotConfigured
 	}
