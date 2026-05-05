@@ -53,7 +53,13 @@ var authStatusCmd = &cobra.Command{
 var authSetCmd = &cobra.Command{
 	Use:   "set passphrase|touchid",
 	Short: "Set the vault unlock authentication method",
-	Args:  cobra.ExactArgs(1),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			cmd.Help()
+			return fmt.Errorf("set requires exactly 1 argument: passphrase or touchid")
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		_, _ = cmd, args
 		method, err := configpkg.NormalizeAuthMethod(args[0])
