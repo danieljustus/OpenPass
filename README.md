@@ -214,25 +214,29 @@ For the full configuration reference, see [docs/configuration.md](docs/configura
 
 ## Comparison
 
+> _Last updated: May 2026. Features, pricing, and availability are subject to change. Please verify all details on the respective product's official website before making decisions._
+>
+> **Disclaimer:** All product names, logos, and brands referenced in this comparison are trademarks or registered trademarks of their respective owners. Use of these names is for identification and informational purposes only and does not imply endorsement, affiliation, or sponsorship. The information in this comparison is provided "as is" without warranty of any kind.
+
 | Feature | OpenPass | 1Password | Bitwarden | pass (zx2c4) | Sharing with AI Agents in Chat |
 |---------|----------|-----------|-----------|--------------|-------------------------------|
 | **Encryption** | age (X25519 + ChaCha20-Poly1305) | AES-256 | AES-256 | GPG | None (plaintext) |
 | **Primary Interface** | Terminal-first | GUI-first (CLI available) | GUI-first (CLI available) | Terminal-only | Chat interface |
-| **AI Integration** | MCP server (stdio + HTTP) with scoped tokens | No native AI integration | No native AI integration | No AI integration | Paste secrets into prompts |
-| **Pricing** | Free (MIT) | Subscription ($36+/yr) | Freemium / Subscription ($10+/yr) | Free (GPL) | Free (but risky) |
-| **Sync** | Git (built-in) | Cloud (1Password servers) | Cloud (Bitwarden servers) or self-host | Git (via hooks) | Manual copy-paste |
-| **Self-hosting** | Full control (local vault + git) | No | Yes (Vaultwarden) | Full control | N/A |
-| **Open Source** | Yes (MIT) | No (proprietary) | Yes (GPL) | Yes (GPL) | N/A |
-| **TOTP** | Built-in | Built-in | Built-in | External tools | Manual entry |
-| **Autotype** | Built-in (cross-platform) | Browser extension | Browser extension | External tools | Manual entry |
-| **Secret Execution** | Built-in (`openpass run`) | No | No | External tools | Not applicable |
-| **Session Caching** | OS keyring (15m TTL) | Device unlock | Device unlock | gpg-agent | None |
-| **Git Integration** | Built-in | No | No | Via hooks | No |
-| **MCP Server** | Built-in (stdio + HTTP) | No | No | No | No |
-| **Password Generation** | Built-in | Built-in | Built-in | External tools | Manual / ad-hoc |
-| **Cross-Platform** | macOS, Linux, Windows, FreeBSD | macOS, Linux, Windows, mobile | macOS, Linux, Windows, mobile, web | Unix-like | Any chat platform |
-| **Telemetry** | **None** | Required for sync | Required for cloud sync | None | Logged by chat providers |
-| **Entry Format** | Individual encrypted files | Proprietary database | Encrypted JSON / SQLite | Individual encrypted files | Plaintext in chat history |
+| **AI Integration** | MCP server (stdio + HTTP) with scoped tokens | Agentic Autofill, SDKs for AI agents | MCP server, Agent Access SDK | No AI integration | Paste secrets into prompts |
+| **Pricing** | Free (MIT) | Subscription ($47.88/yr Individual) | Freemium / Subscription ($19.80/yr Premium) | Free (GPL) | Free (but risky) |
+| **Sync** | Git (built-in) | Cloud (1Password servers) | Cloud (Bitwarden servers) or self-host | Git (automatic commits) | Manual copy-paste |
+| **Self-hosting** | Full control (local vault + git) | Partial (Connect Server, SCIM Bridge) | Yes (official Docker/K8s or Vaultwarden) | Full control | N/A |
+| **Open Source** | Yes (MIT) | Partial (SDKs open, core proprietary) | Mostly (core GPL/AGPL, Enterprise Bitwarden License) | Yes (GPLv2+) | N/A |
+| **TOTP** | Built-in | Built-in | Premium feature | Extension only | Manual entry |
+| **Autotype** | Built-in (cross-platform) | Built-in (Windows Auto-Type, macOS Universal Autofill) | Browser autofill only (desktop autotype in development) | No built-in | Manual entry |
+| **Secret Execution** | Built-in (`openpass run`) | Built-in (`op run`) | Built-in (`bws run`) | No built-in | Not applicable |
+| **Session Caching** | OS keyring (15m TTL) | Biometric unlock, Magic Unlock, SSO | Biometric unlock, PIN, `BW_SESSION` token | gpg-agent | None |
+| **Git Integration** | Built-in | SSH agent, commit signing | SSH agent, GitHub Actions, GitLab CI | Built-in (automatic commits) | No |
+| **MCP Server** | Built-in (stdio + HTTP) | Community (official: no raw secrets via MCP) | Official (`bitwarden-mcp`) | No | No |
+| **Password Generation** | Built-in | Built-in | Built-in | Built-in | Manual / ad-hoc |
+| **Cross-Platform** | macOS, Linux, Windows, FreeBSD | macOS, Linux, Windows, mobile | macOS, Linux, Windows, mobile, web | Unix-like (Linux, macOS, FreeBSD) | Any chat platform |
+| **Telemetry** | **None** | Opt-in (personal), on-by-default (business) | Administrative data only (vault zero-knowledge) | None | Logged by chat providers |
+| **Entry Format** | Individual encrypted files | Proprietary database (1PUX export documented) | Encrypted JSON / SQLite | Individual encrypted files | Plaintext in chat history |
 
 **OpenPass differentiators:**
 
