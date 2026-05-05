@@ -45,6 +45,33 @@ When connected, Hermes registers the tools with the `mcp_openpass_` prefix, for
 example `mcp_openpass_list_entries`, `mcp_openpass_get_entry`, and
 `mcp_openpass_set_entry_field`.
 
+### Available MCP Tools
+
+OpenPass exposes the following MCP tools for agent integration:
+
+**Read Operations**:
+- `list_entries` — List all vault entries
+- `get_entry` — Retrieve entry contents (respects `redactFields`)
+- `get_entry_metadata` — Get entry metadata without sensitive data
+- `find_entries` — Search entries by query string
+- `generate_password` — Generate secure passwords
+- `generate_totp` — Generate TOTP codes (returns code, not secret)
+
+**Write Operations**:
+- `set_entry_field` — Store or update a field in an entry
+- `delete_entry` — Delete an entry
+- `secure_input` — Prompt user for sensitive data via TTY
+
+**Automation** (v2.2.0+):
+- `run_command` — Execute commands with vault secrets injected as environment variables
+- `copy_to_clipboard` — Copy entry password to system clipboard (auto-clears after 30s)
+- `autotype` — Type entry field as keyboard input into focused application
+
+**Management**:
+- `health` — Check server health status
+- `get_auth_status` — Check unlock authentication status
+- `set_auth_method` — Change unlock method (passphrase / touchid)
+
 ## OpenClaw and Other Local Agents
 
 For agents that support stdio MCP, use:
@@ -104,6 +131,24 @@ the passphrase is cached in the OS keyring, or provide a controlled environment
 for `OPENPASS_PASSPHRASE`.
 
 ## Token Management
+
+### Scoped Tokens (v2.2.0+)
+
+Create fine-grained access tokens with restricted tool access and optional expiration:
+
+```bash
+# Create a token limited to specific tools
+openpass mcp token create --agent hermes --tools list_entries,get_entry --expires 24h
+
+# List all active tokens
+openpass mcp token list
+
+# Revoke a token
+openpass mcp token revoke <token-id>
+```
+
+Scoped tokens are stored with SHA-256 hashing and can be restricted to specific MCP tools
+and time windows. This is safer than the global bearer token for multi-agent setups.
 
 ### Token Rotation
 

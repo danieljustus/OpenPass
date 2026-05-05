@@ -19,10 +19,12 @@ A modern, secure command-line password manager written in Go. Uses [age](https:/
 - **Modern Encryption**: [age](https://age-encryption.org/) (X25519 + ChaCha20-Poly1305)
 - **TOTP Support**: Store and generate TOTP codes
 - **Clipboard Auto-Clear**: Automatic clearing after timeout
+- **Autotype**: Cross-platform automatic password entry (macOS, Linux, Windows)
+- **Secret Execution**: Run commands with vault secrets injected as environment variables
 - **Session Caching**: OS keyring with 15-minute TTL
 - **Git Integration**: Automatic commits and sync
 - **Multi-User Vaults**: age recipients for shared access
-- **MCP Server**: stdio and HTTP for AI agent integration
+- **MCP Server**: stdio and HTTP for AI agent integration with scoped token management
 - **Cross-Platform**: macOS, Linux, Windows, FreeBSD
 
 ## Installation
@@ -82,6 +84,9 @@ openpass add github --totp-secret JBSWY3DPEHPK3PXP --totp-issuer GitHub
 # Retrieve (auto-copies to clipboard with 45s timeout)
 openpass get github.password --clip
 
+# Autotype password into focused application (macOS/Linux/Windows)
+openpass get github.password --autotype
+
 # Show entry details, including the current TOTP code when configured
 openpass get github
 
@@ -107,6 +112,9 @@ openpass recipients add age1...
 # Git sync
 openpass git pull
 openpass git push
+
+# Secret execution (injects vault secrets as env vars)
+openpass run --env API_KEY=api.kimi-key -- curl -H "Authorization: Bearer $API_KEY" https://api.example.com
 
 # Backup/Restore
 openpass backup ~/backups/openpass-$(date +%Y%m%d).tar.gz
@@ -149,7 +157,16 @@ openpass mcp-config claude-code --http
 openpass mcp-config hermes --http --format hermes
 ```
 
-HTTP mode binds to `127.0.0.1` by default and uses bearer token authentication. Agents can use the MCP `generate_totp` tool to get current TOTP codes without receiving the stored TOTP secret. For detailed agent setup, profiles, token management, and observability, see [docs/agent-integration.md](docs/agent-integration.md).
+HTTP mode binds to `127.0.0.1` by default and uses bearer token authentication. Agents can use the MCP `generate_totp` tool to get current TOTP codes without receiving the stored TOTP secret.
+
+**Scoped Token Management** (v2.2.0+): Create fine-grained access tokens for agents:
+```bash
+openpass mcp token create --agent hermes --tools list_entries,get_entry --expires 24h
+openpass mcp token list
+openpass mcp token revoke <token-id>
+```
+
+For detailed agent setup, profiles, token management, and observability, see [docs/agent-integration.md](docs/agent-integration.md).
 
 ## Configuration
 

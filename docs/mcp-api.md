@@ -41,6 +41,8 @@ OpenPass exposes a Model Context Protocol (MCP) server that allows AI agents to 
 | `find_entries` | Search entries by path | No |
 | `generate_password` | Generate secure passwords | No |
 | `generate_totp` | Generate TOTP codes | No |
+| `copy_to_clipboard` | Copy entry password to system clipboard (auto-clears) | No |
+| `autotype` | Type entry field as keyboard input into focused app | No |
 | `set_entry_field` | Store or update a field | **Yes** |
 | `run_command` | Execute command with secret env injection | **Yes** |
 | `delete_entry` | Delete an entry | **Yes** |
@@ -421,9 +423,7 @@ Generate a cryptographically secure password.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `length` | integer | No | 16 | Password length (8-128) |
-| `include_symbols` | boolean | No | true | Include special characters |
-| `include_numbers` | boolean | No | true | Include numbers |
-| `include_uppercase` | boolean | No | true | Include uppercase letters |
+| `symbols` | boolean | No | true | Include special characters |
 
 **Response**:
 
@@ -467,6 +467,95 @@ Generate a Time-based One-Time Password (TOTP) code from a stored TOTP secret.
 ```
 
 **Security Note**: This tool only returns the generated code, not the underlying TOTP secret. Use `redactFields` in agent configuration to prevent access to raw secrets while still allowing code generation.
+
+---
+
+### copy_to_clipboard
+
+Copy a vault entry's password field to the system clipboard without exposing the value to the agent. The clipboard auto-clears after 30 seconds.
+
+**Request**:
+
+```json
+{
+  "tool": "copy_to_clipboard",
+  "arguments": {
+    "path": "github"
+  }
+}
+```
+
+**Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `path` | string | Yes | Entry path whose password field to copy |
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "path": "github",
+  "clears_at": "2026-05-05T15:30:00Z"
+}
+```
+
+**Notes**:
+- Requires `canUseClipboard: true` in agent profile (separate from `canWrite`)
+- The password value is never exposed in the MCP response
+- Clipboard is automatically cleared after 30 seconds
+- Only copies the `password` field of the entry
+
+**Errors**:
+- `clipboard_denied`: Agent profile has `canUseClipboard: false`
+- `not_found`: Entry does not exist
+
+---
+
+### autotype
+
+Type a vault entry's field value as keyboard input into the currently focused application without exposing the value to the agent.
+
+**Request**:
+
+```json
+{
+  "tool": "autotype",
+  "arguments": {
+    "path": "github",
+    "field": "password"
+  }
+}
+```
+
+**Parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `path` | string | Yes | - | Entry path |
+| `field` | string | No | `password` | Field name to type (e.g., `password`, `username`) |
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "path": "github",
+  "field": "password"
+}
+```
+
+**Notes**:
+- Requires `canUseAutotype: true` in agent profile (separate from `canWrite`)
+- The field value is never exposed in the MCP response
+- Types into the currently focused application window
+- Cross-platform: macOS, Linux (via xdotool), Windows (via AutoIt)
+- Falls back gracefully on unsupported platforms
+
+**Errors**:
+- `autotype_denied`: Agent profile has `canUseAutotype: false`
+- `not_found`: Entry or field does not exist
 
 ---
 
@@ -800,6 +889,8 @@ agents:
     allowedPaths: ["*"]           # Path patterns agent can access
     canWrite: false               # Whether agent can create/update/delete entries
     canRunCommands: false         # Whether agent can execute commands with secrets
+    canUseClipboard: false        # Whether agent can copy passwords to clipboard
+    canUseAutotype: false         # Whether agent can type passwords via autotype
     approvalMode: "none"          # Approval behavior: none | deny | prompt
     redactFields: []              # Fields to redact from responses
 ```
@@ -811,6 +902,8 @@ agents:
 | `allowedPaths` | array | `["*"]` | Path patterns the agent can access. Use `*` for all paths, or prefixes like `["work/", "personal/"]` |
 | `canWrite` | boolean | `false` | Whether the agent can modify vault entries |
 | `canRunCommands` | boolean | `false` | Whether the agent can execute commands with secret env injection via `run_command` |
+| `canUseClipboard` | boolean | `false` | Whether the agent can copy passwords to clipboard via `copy_to_clipboard` |
+| `canUseAutotype` | boolean | `false` | Whether the agent can type passwords via keyboard input through `autotype` |
 | `approvalMode` | string | `"none"` | Write approval behavior: `none` (allow), `deny` (reject), `prompt` (degrades to deny in MCP) |
 | `redactFields` | array | `[]` | Field names to redact from `get_entry` responses (e.g., `["totp.secret"]` shows `[REDACTED]`) |
 
@@ -818,14 +911,14 @@ agents:
 
 OpenPass includes several pre-configured profiles:
 
-| Profile | `allowedPaths` | `canWrite` | `canRunCommands` | Use Case |
-|---------|----------------|------------|-------------------|----------|
-| `default` | `["*"]` | `false` | `false` | Read-only access to all entries |
-| `claude-code` | `["*"]` | `true` | `false` | Full vault access for Claude Code |
-| `codex` | `["*"]` | `false` | `false` | Read-only access for Codex |
-| `hermes` | `["*"]` | `true` | `false` | Full vault access for Hermes |
-| `openclaw` | `["*"]` | `true` | `false` | Full vault access for OpenClaw |
-| `opencode` | `["*"]` | `false` | `false` | Read-only access for OpenCode |
+| Profile | `allowedPaths` | `canWrite` | `canRunCommands` | `canUseClipboard` | `canUseAutotype` | Use Case |
+|---------|----------------|------------|-------------------|-------------------|-------------------|----------|
+| `default` | `["*"]` | `false` | `false` | `false` | `false` | Read-only access to all entries |
+| `claude-code` | `["*"]` | `true` | `false` | `false` | `false` | Full vault access for Claude Code |
+| `codex` | `["*"]` | `false` | `false` | `false` | `false` | Read-only access for Codex |
+| `hermes` | `["*"]` | `true` | `false` | `false` | `false` | Full vault access for Hermes |
+| `openclaw` | `["*"]` | `true` | `false` | `false` | `false` | Full vault access for OpenClaw |
+| `opencode` | `["*"]` | `false` | `false` | `false` | `false` | Read-only access for OpenCode |
 
 ### Custom Profile Example
 
@@ -848,6 +941,19 @@ agents:
     allowedPaths: ["*"]
     canWrite: false
     redactFields: ["totp.secret"]
+
+  # Clipboard agent (can copy but not read passwords)
+  clipboard-agent:
+    allowedPaths: ["*"]
+    canWrite: false
+    canUseClipboard: true
+
+  # Full automation agent (run commands + autotype)
+  automation-agent:
+    allowedPaths: ["*"]
+    canWrite: false
+    canRunCommands: true
+    canUseAutotype: true
 ```
 
 ### Path Pattern Syntax
@@ -1110,6 +1216,8 @@ async function getCredential(path) {
 
 | Version | Changes |
 |---------|---------|
+| 2.2.0 | Added `copy_to_clipboard`, `autotype`, and `run_command` tools; added `canUseClipboard` and `canUseAutotype` agent permissions; added scoped token management |
+| 2.0.0 | Added `run_command` tool, `canRunCommands` permission, and HTTP MCP authentication |
 | 1.0.0 | Initial MCP API documentation |
 
 ---
