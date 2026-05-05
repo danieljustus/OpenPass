@@ -46,6 +46,7 @@ func stubSessionFuncs(t *testing.T) func() {
 	oldGetCacheStatus := sessionGetCacheStatus
 	sessionLoadBiometric = func(context.Context, string) ([]byte, error) { return nil, errors.New("not configured") }
 	sessionSaveBiometric = func(context.Context, string, []byte) error { return nil }
+	sessionSaveIdentity = func(string, string, time.Duration) error { return nil }
 	sessionGetCacheStatus = func() session.CacheStatus { return session.CacheStatus{Persistent: true} }
 
 	return func() {
