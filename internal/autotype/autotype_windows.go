@@ -1,5 +1,7 @@
 //go:build windows
 
+// Package autotype provides cross-platform automated typing functionality
+// for filling credentials into other applications.
 package autotype
 
 import (

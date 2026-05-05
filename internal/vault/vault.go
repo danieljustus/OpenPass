@@ -327,11 +327,11 @@ func hasLegacyTopLevelAgeFiles(vaultDir string) (bool, error) {
 		if entry.IsDir() {
 			continue
 		}
-		if filepath.Ext(entry.Name()) != ".age" {
+		if filepath.Ext(entry.Name()) != ".age" { //nolint:goconst // file extension literal
 			continue
 		}
 		// Skip identity.age — it's always present and not a legacy entry
-		if entry.Name() == "identity.age" {
+		if entry.Name() == "identity.age" { //nolint:goconst // filename literal
 			continue
 		}
 		// Ensure this is not inside entries/ (unlikely for top-level scan,

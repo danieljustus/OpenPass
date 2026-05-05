@@ -34,7 +34,7 @@ var deleteCmd = &cobra.Command{
 					return fmt.Errorf("read confirmation: %w", err)
 				}
 				if strings.ToLower(strings.TrimSpace(answer)) != "y" {
-					if outputFormat == "text" {
+					if outputFormat == "text" { //nolint:goconst // output format literal
 						fmt.Fprintln(os.Stderr, "Canceled")
 					} else {
 						if err := PrintResult(map[string]any{"deleted": false, "path": path, "canceled": true}); err != nil {
