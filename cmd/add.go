@@ -12,6 +12,8 @@ import (
 
 	cryptopkg "github.com/danieljustus/OpenPass/internal/crypto"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
+	"github.com/danieljustus/OpenPass/internal/ui/cliout"
+	"github.com/danieljustus/OpenPass/internal/ui/forms"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -85,28 +87,67 @@ Interactive mode prompts for username, password, and URL.`,
 			data["password"] = password
 		} else {
 			// Interactive mode
-			reader = bufio.NewReader(os.Stdin)
+			fdRaw := os.Stdin.Fd()
+			if fdRaw > uintptr(^uint(0)>>1) {
+				return fmt.Errorf("file descriptor %d exceeds int range", fdRaw)
+			}
+			fd := int(fdRaw)
 
-			fmt.Fprint(os.Stderr, "Username (optional): ")
-			username, err := reader.ReadString('\n')
-			if err != nil && username == "" {
-				return fmt.Errorf("read username: %w", err)
-			}
-			username = strings.TrimSpace(username)
-			if username != "" {
-				data["username"] = username
-			}
+			if isTerminalFunc(fd) {
+				defaults := map[string]any{}
+				if addUsername != "" {
+					defaults["username"] = addUsername
+				}
+				if addURL != "" {
+					defaults["url"] = addURL
+				}
+				if addNotes != "" {
+					defaults["notes"] = addNotes
+				}
+				if addTOTPSecret != "" {
+					totpDefaults := map[string]any{
+						"secret": addTOTPSecret,
+					}
+					if addTOTPIssuer != "" {
+						totpDefaults["issuer"] = addTOTPIssuer
+					}
+					if addTOTPAccount != "" {
+						totpDefaults["account_name"] = addTOTPAccount
+					}
+					defaults["totp"] = totpDefaults
+				}
 
-			password, err := readHiddenInput("Password: ", reader)
-			if err != nil && len(password) == 0 {
-				return fmt.Errorf("read password: %w", err)
-			}
-			defer cryptopkg.Wipe(password)
-			if len(password) > 0 {
-				data["password"] = string(password)
-				if !addForce {
-					if err := cryptopkg.ValidatePasswordStrength(string(password)); err != nil {
-						return err
+				formData, err := forms.RunAddEntryForm(addForce, defaults)
+				if err != nil {
+					return err
+				}
+				for k, v := range formData {
+					data[k] = v
+				}
+			} else {
+				reader = bufio.NewReader(os.Stdin)
+
+				fmt.Fprint(os.Stderr, "Username (optional): ")
+				username, err := reader.ReadString('\n')
+				if err != nil && username == "" {
+					return fmt.Errorf("read username: %w", err)
+				}
+				username = strings.TrimSpace(username)
+				if username != "" {
+					data["username"] = username
+				}
+
+				password, err := readHiddenInput("Password: ", reader)
+				if err != nil && len(password) == 0 {
+					return fmt.Errorf("read password: %w", err)
+				}
+				defer cryptopkg.Wipe(password)
+				if len(password) > 0 {
+					data["password"] = string(password)
+					if !addForce {
+						if err := cryptopkg.ValidatePasswordStrength(string(password)); err != nil {
+							return err
+						}
 					}
 				}
 			}
@@ -114,8 +155,7 @@ Interactive mode prompts for username, password, and URL.`,
 
 		if addURL != "" {
 			data["url"] = addURL
-		} else if !addGenerate && addValue == "" {
-			// Only prompt for URL in interactive mode when not using --value or --generate
+		} else if reader != nil {
 			fmt.Fprint(os.Stderr, "URL (optional): ")
 			url, err := reader.ReadString('\n')
 			if err != nil && url == "" {
@@ -129,8 +169,7 @@ Interactive mode prompts for username, password, and URL.`,
 
 		if addNotes != "" {
 			data["notes"] = addNotes
-		} else if !addGenerate && addValue == "" {
-			// Only prompt for notes in interactive mode when not using --value or --generate
+		} else if reader != nil {
 			fmt.Fprint(os.Stderr, "Notes (optional, end with empty line):\n")
 			var notes []string
 			for {
@@ -149,7 +188,6 @@ Interactive mode prompts for username, password, and URL.`,
 			}
 		}
 
-		// Handle TOTP
 		if addTOTPSecret != "" {
 			totpData := map[string]any{
 				"secret": addTOTPSecret,
@@ -161,8 +199,7 @@ Interactive mode prompts for username, password, and URL.`,
 				totpData["account_name"] = addTOTPAccount
 			}
 			data["totp"] = totpData
-		} else if !addGenerate && addValue == "" {
-			// Only prompt for TOTP in interactive mode when not using --value or --generate
+		} else if reader != nil {
 			fmt.Fprint(os.Stderr, "TOTP Secret (optional): ")
 			totpSecret, err := reader.ReadString('\n')
 			if err != nil {
@@ -213,7 +250,7 @@ Interactive mode prompts for username, password, and URL.`,
 		}
 
 		if err := v.AutoCommit(fmt.Sprintf("Add %s", name)); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: auto-commit failed: %v\n", err)
+			cliout.Warnf("Warning: auto-commit failed: %v", err)
 		}
 		printQuietAware("Entry created: %s\n", name)
 		return nil
