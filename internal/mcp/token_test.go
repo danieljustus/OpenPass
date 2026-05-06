@@ -1038,3 +1038,115 @@ func TestScopedToken_NilToEntry(t *testing.T) {
 		t.Error("nil ScopedToken toEntry should return empty TokenRegistryEntry")
 	}
 }
+
+func TestLoadTokenSystem_MigrationDeletesLegacyFile(t *testing.T) {
+	dir := t.TempDir()
+
+	legacyPath := TokenFilePath(dir)
+	regPath := TokenRegistryFilePath(dir)
+
+	if err := os.WriteFile(legacyPath, []byte("migration-legacy-token-1234567890abc\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	reg, legacyToken, err := LoadTokenSystem(dir)
+	if err != nil {
+		t.Fatalf("LoadTokenSystem() error = %v", err)
+	}
+	if legacyToken != "migration-legacy-token-1234567890abc" {
+		t.Errorf("legacyToken = %q, want %q", legacyToken, "migration-legacy-token-1234567890abc")
+	}
+
+	if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
+		t.Error("legacy mcp-token file should be deleted after successful migration")
+	}
+
+	if _, err := os.Stat(regPath); err != nil {
+		t.Fatalf("registry file not created: %v", err)
+	}
+
+	hash := sha256Hex("migration-legacy-token-1234567890abc")
+	tok, ok := reg.Get(hash)
+	if !ok {
+		t.Fatal("migrated token not found in registry")
+	}
+	if tok.Label != "legacy" {
+		t.Errorf("label = %q, want legacy", tok.Label)
+	}
+	if !tok.IsToolAllowed("*") {
+		t.Error("migrated token should have wildcard access")
+	}
+}
+
+func TestLoadTokenSystem_MigrationIdempotent(t *testing.T) {
+	dir := t.TempDir()
+
+	legacyPath := TokenFilePath(dir)
+
+	if err := os.WriteFile(legacyPath, []byte("idempotent-token-abcdef0123456789\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	reg1, token1, err := LoadTokenSystem(dir)
+	if err != nil {
+		t.Fatalf("first LoadTokenSystem() error = %v", err)
+	}
+	if token1 != "idempotent-token-abcdef0123456789" {
+		t.Errorf("first legacyToken = %q, want %q", token1, "idempotent-token-abcdef0123456789")
+	}
+
+	reg2, token2, err := LoadTokenSystem(dir)
+	if err != nil {
+		t.Fatalf("second LoadTokenSystem() error = %v", err)
+	}
+	if token2 != "" {
+		t.Errorf("second legacyToken = %q, want empty (registry already populated)", token2)
+	}
+
+	hash := sha256Hex("idempotent-token-abcdef0123456789")
+	tok1, ok1 := reg1.Get(hash)
+	tok2, ok2 := reg2.Get(hash)
+	if !ok1 || !ok2 {
+		t.Fatal("token should be found in both registries")
+	}
+	if tok1.ID != tok2.ID {
+		t.Error("token IDs should match across idempotent loads")
+	}
+}
+
+func TestLoadTokenSystem_LegacyAuthStillWorks(t *testing.T) {
+	dir := t.TempDir()
+
+	legacyPath := TokenFilePath(dir)
+	if err := os.WriteFile(legacyPath, []byte("auth-test-token-zyxwvutsrqponmlkji\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	reg, legacyToken, err := LoadTokenSystem(dir)
+	if err != nil {
+		t.Fatalf("LoadTokenSystem() error = %v", err)
+	}
+
+	hash := sha256Hex(legacyToken)
+	tok, ok := reg.Get(hash)
+	if !ok {
+		t.Fatal("legacy token should authenticate after migration")
+	}
+
+	if !tok.IsToolAllowed("get_entry") {
+		t.Error("migrated token should allow get_entry")
+	}
+	if !tok.IsToolAllowed("delete_entry") {
+		t.Error("migrated token should allow delete_entry (wildcard)")
+	}
+	if !tok.IsToolAllowed("*") {
+		t.Error("migrated token should have wildcard access")
+	}
+
+	if !reg.Revoke(tok.ID) {
+		t.Fatal("Revoke() should work on migrated token")
+	}
+	if _, ok := reg.Get(hash); ok {
+		t.Error("revoked token should not be found via Get()")
+	}
+}
