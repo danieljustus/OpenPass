@@ -446,7 +446,7 @@ func (c *Config) SaveTo(path string) error {
 	if err != nil {
 		return err
 	}
-	return fileutil.SafeWriteFile(path, data, 0o600)
+	return fileutil.AtomicWriteFile(path, data, 0o600)
 }
 
 func defaultConfigPath() (string, error) {

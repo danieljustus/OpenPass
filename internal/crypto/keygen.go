@@ -66,6 +66,7 @@ func SaveIdentity(id *age.X25519Identity, path string, passphrase []byte) error 
 	}
 
 	recipient, err := age.NewScryptRecipient(string(passphrase))
+	Wipe(passphrase)
 	if err != nil {
 		return fmt.Errorf("create scrypt recipient: %w", err)
 	}
@@ -85,7 +86,7 @@ func SaveIdentity(id *age.X25519Identity, path string, passphrase []byte) error 
 		return fmt.Errorf("close encryptor: %w", err)
 	}
 
-	if err := fileutil.SafeWriteFile(path, buf.Bytes(), 0o600); err != nil {
+	if err := fileutil.AtomicWriteFile(path, buf.Bytes(), 0o600); err != nil {
 		return fmt.Errorf("write file: %w", err)
 	}
 
@@ -109,6 +110,7 @@ func LoadIdentity(path string, passphrase []byte) (*age.X25519Identity, error) {
 	}
 
 	identity, err := age.NewScryptIdentity(string(passphrase))
+	Wipe(passphrase)
 	if err != nil {
 		return nil, fmt.Errorf("create scrypt identity: %w", err)
 	}

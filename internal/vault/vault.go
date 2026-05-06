@@ -11,6 +11,7 @@ import (
 
 	vaultconfig "github.com/danieljustus/OpenPass/internal/config"
 	vaultcrypto "github.com/danieljustus/OpenPass/internal/crypto"
+	"github.com/danieljustus/OpenPass/internal/fileutil"
 	"github.com/danieljustus/OpenPass/internal/git"
 	"github.com/danieljustus/OpenPass/internal/pathutil"
 )
@@ -65,7 +66,7 @@ func Init(vaultDir string, identity *age.X25519Identity, cfg *vaultconfig.Config
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
-	if writeErr := os.WriteFile(cfgPath, configData, 0o600); writeErr != nil {
+	if writeErr := fileutil.AtomicWriteFile(cfgPath, configData, 0o600); writeErr != nil {
 		return fmt.Errorf("write config: %w", writeErr)
 	}
 
@@ -74,7 +75,7 @@ func Init(vaultDir string, identity *age.X25519Identity, cfg *vaultconfig.Config
 	if err != nil {
 		return fmt.Errorf("encrypt identity: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(vaultDir, "identity.age"), ciphertext, 0o600); err != nil {
+	if err := fileutil.AtomicWriteFile(filepath.Join(vaultDir, "identity.age"), ciphertext, 0o600); err != nil {
 		return fmt.Errorf("write identity: %w", err)
 	}
 
@@ -180,7 +181,7 @@ func InitWithPassphrase(vaultDir string, passphrase []byte, cfg *vaultconfig.Con
 	if err != nil {
 		return nil, fmt.Errorf("marshal config: %w", err)
 	}
-	if err := os.WriteFile(cfgPath, configData, 0o600); err != nil {
+	if err := fileutil.AtomicWriteFile(cfgPath, configData, 0o600); err != nil {
 		return nil, fmt.Errorf("write config: %w", err)
 	}
 

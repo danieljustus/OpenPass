@@ -4,8 +4,41 @@ package fileutil
 
 import (
 	"os"
+	"path/filepath"
 	"syscall"
 )
+
+// AtomicWriteFile writes data to a unique temporary file in the same directory,
+// fsyncs it, closes it, and then atomically renames it to path. This prevents
+// partial writes or crashes from leaving the target file in an inconsistent
+// state and avoids temp file name collisions under concurrency.
+func AtomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	if err := f.Chmod(perm); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, path)
+}
 
 func SafeWriteFile(path string, data []byte, perm os.FileMode) error {
 	flags := syscall.O_NOFOLLOW | os.O_CREATE | os.O_TRUNC | os.O_WRONLY

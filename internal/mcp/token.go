@@ -206,7 +206,7 @@ func (r *TokenRegistry) Save() error {
 		return fmt.Errorf("marshal token registry: %w", err)
 	}
 
-	if err := fileutil.SafeWriteFile(r.path, append(data, '\n'), 0o600); err != nil {
+	if err := fileutil.AtomicWriteFile(r.path, append(data, '\n'), 0o600); err != nil {
 		return fmt.Errorf("write token registry: %w", err)
 	}
 	return nil
@@ -451,9 +451,14 @@ func LoadTokenSystem(vaultDir string, customLegacyPath ...string) (*TokenRegistr
 			reg.entries[hash] = entry
 			reg.mu.Unlock()
 
-			// Best-effort persist — if it fails the in-memory state is still
-			// correct for this process lifetime.
-			_ = reg.Save()
+			// Save-then-delete: never destroy the old credential before the
+			// new one is committed. On save failure the legacy file is kept
+			// so the next restart can retry.
+			if saveErr := reg.Save(); saveErr == nil {
+				if rmErr := fileutil.SafeRemove(legacyPath); rmErr != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to remove legacy token file %s after migration: %v\n", legacyPath, rmErr)
+				}
+			}
 		}
 	}
 	return reg, legacyToken, nil
@@ -484,7 +489,7 @@ func LoadOrCreateToken(path string) (string, error) {
 	}
 	token := hex.EncodeToString(buf)
 
-	if err := fileutil.SafeWriteFile(path, []byte(token+"\n"), 0o600); err != nil {
+	if err := fileutil.AtomicWriteFile(path, []byte(token+"\n"), 0o600); err != nil {
 		return "", fmt.Errorf("write token file: %w", err)
 	}
 
@@ -501,7 +506,7 @@ func RotateToken(path string) (string, error) {
 	}
 	token := hex.EncodeToString(buf)
 
-	if err := fileutil.SafeWriteFile(path, []byte(token+"\n"), 0o600); err != nil {
+	if err := fileutil.AtomicWriteFile(path, []byte(token+"\n"), 0o600); err != nil {
 		return "", fmt.Errorf("write token file: %w", err)
 	}
 
