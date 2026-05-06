@@ -10,6 +10,7 @@ import (
 
 	"filippo.io/age"
 
+	"github.com/danieljustus/OpenPass/internal/fileutil"
 	"github.com/danieljustus/OpenPass/internal/pathutil"
 )
 
@@ -84,7 +85,7 @@ func SaveIdentity(id *age.X25519Identity, path string, passphrase []byte) error 
 		return fmt.Errorf("close encryptor: %w", err)
 	}
 
-	if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
+	if err := fileutil.SafeWriteFile(path, buf.Bytes(), 0o600); err != nil {
 		return fmt.Errorf("write file: %w", err)
 	}
 

@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/danieljustus/OpenPass/internal/vault"
+	"github.com/danieljustus/OpenPass/internal/fileutil"
 )
 
 // randReader is the rand.Reader used for token generation, swappable for tests.
@@ -206,7 +206,7 @@ func (r *TokenRegistry) Save() error {
 		return fmt.Errorf("marshal token registry: %w", err)
 	}
 
-	if err := vault.SafeWriteFile(r.path, append(data, '\n'), 0o600); err != nil {
+	if err := fileutil.SafeWriteFile(r.path, append(data, '\n'), 0o600); err != nil {
 		return fmt.Errorf("write token registry: %w", err)
 	}
 	return nil
@@ -484,7 +484,7 @@ func LoadOrCreateToken(path string) (string, error) {
 	}
 	token := hex.EncodeToString(buf)
 
-	if err := vault.SafeWriteFile(path, []byte(token+"\n"), 0o600); err != nil {
+	if err := fileutil.SafeWriteFile(path, []byte(token+"\n"), 0o600); err != nil {
 		return "", fmt.Errorf("write token file: %w", err)
 	}
 
@@ -501,7 +501,7 @@ func RotateToken(path string) (string, error) {
 	}
 	token := hex.EncodeToString(buf)
 
-	if err := vault.SafeWriteFile(path, []byte(token+"\n"), 0o600); err != nil {
+	if err := fileutil.SafeWriteFile(path, []byte(token+"\n"), 0o600); err != nil {
 		return "", fmt.Errorf("write token file: %w", err)
 	}
 

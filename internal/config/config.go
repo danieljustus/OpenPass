@@ -11,6 +11,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/danieljustus/OpenPass/internal/fileutil"
 	"github.com/danieljustus/OpenPass/internal/pathutil"
 )
 
@@ -445,7 +446,7 @@ func (c *Config) SaveTo(path string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o600)
+	return fileutil.SafeWriteFile(path, data, 0o600)
 }
 
 func defaultConfigPath() (string, error) {
