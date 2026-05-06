@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // AtomicWriteFile writes data to a unique temporary file in the same directory,
@@ -39,7 +40,21 @@ func AtomicWriteFile(path string, data []byte, perm os.FileMode) error {
 		os.Remove(tmp)
 		return err
 	}
-	return os.Rename(tmp, path)
+	// On Windows, renaming over an existing file can fail transiently if the
+	// file is still held by the OS, antivirus, or search indexing. Retry with
+	// a short backoff to absorb these races.
+	var renameErr error
+	for i := 0; i < 10; i++ {
+		renameErr = os.Rename(tmp, path)
+		if renameErr == nil {
+			return nil
+		}
+		if i < 9 {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	os.Remove(tmp)
+	return renameErr
 }
 
 var errUnsafePath = errors.New("path is not a regular file")
