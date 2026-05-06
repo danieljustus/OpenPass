@@ -183,13 +183,13 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
-          echo "Running fuzz tests with 30s per target..."
-          go test -fuzz=FuzzCSVImporterParse -fuzztime=30s ./internal/importer/
-          go test -fuzz=FuzzBitwardenImporterParse -fuzztime=30s ./internal/importer/
-          go test -fuzz=FuzzOnePUXImporterParse -fuzztime=30s ./internal/importer/
-          go test -fuzz=FuzzParsePassEntry -fuzztime=30s ./internal/importer/
-          go test -fuzz=FuzzNormalizePath -fuzztime=30s ./internal/importer/
-          go test -fuzz=FuzzParseMapping -fuzztime=30s ./internal/importer/
+          echo "Running fuzz tests with 60s per target..."
+          go test -fuzz=FuzzCSVImporterParse -fuzztime=60s -timeout=120s ./internal/importer/
+          go test -fuzz=FuzzBitwardenImporterParse -fuzztime=60s -timeout=120s ./internal/importer/
+          go test -fuzz=FuzzOnePUXImporterParse -fuzztime=60s -timeout=120s ./internal/importer/
+          go test -fuzz=FuzzParsePassEntry -fuzztime=60s -timeout=120s ./internal/importer/
+          go test -fuzz=FuzzNormalizePath -fuzztime=60s -timeout=120s ./internal/importer/
+          go test -fuzz=FuzzParseMapping -fuzztime=60s -timeout=120s ./internal/importer/
           echo "All fuzz tests passed without crashes"
 
       - name: Generate coverage report
