@@ -121,6 +121,7 @@ func EncryptWithPassphrase(plaintext []byte, passphrase []byte) ([]byte, error) 
 	}
 
 	recipient, err := age.NewScryptRecipient(string(passphrase))
+	Wipe(passphrase)
 	if err != nil {
 		return nil, fmt.Errorf("create scrypt recipient: %w", err)
 	}
@@ -154,6 +155,7 @@ func DecryptWithPassphrase(ciphertext []byte, passphrase []byte) ([]byte, error)
 	}
 
 	identity, err := age.NewScryptIdentity(string(passphrase))
+	Wipe(passphrase)
 	if err != nil {
 		return nil, fmt.Errorf("create scrypt identity: %w", err)
 	}

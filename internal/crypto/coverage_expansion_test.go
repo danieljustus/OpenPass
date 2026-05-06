@@ -133,6 +133,7 @@ func TestEncryptWithPassphrase_Success(t *testing.T) {
 		t.Fatal("ciphertext is empty")
 	}
 
+	passphrase = []byte("my secret passphrase")
 	decrypted, err := DecryptWithPassphrase(ciphertext, passphrase)
 	if err != nil {
 		t.Fatalf("DecryptWithPassphrase() error = %v", err)

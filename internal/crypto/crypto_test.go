@@ -237,6 +237,7 @@ func TestSaveLoadIdentityWithPassphrase(t *testing.T) {
 		t.Fatal("saved file contains secret key material in plaintext")
 	}
 
+	passphrase = []byte("correct horse battery staple")
 	loaded, err := LoadIdentity(path, passphrase)
 	if err != nil {
 		t.Fatalf("load identity: %v", err)
@@ -321,6 +322,7 @@ func TestEncryptDecryptWithPassphrase(t *testing.T) {
 		t.Fatal("ciphertext should differ from plaintext")
 	}
 
+	passphrase = []byte("my super secret passphrase")
 	decrypted, err := DecryptWithPassphrase(ciphertext, passphrase)
 	if err != nil {
 		t.Fatalf("decrypt with passphrase: %v", err)

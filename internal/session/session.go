@@ -64,6 +64,7 @@ import (
 
 	"crypto/sha256"
 
+	"github.com/danieljustus/OpenPass/internal/crypto"
 	"github.com/danieljustus/OpenPass/internal/metrics"
 )
 
@@ -412,17 +413,19 @@ func LoadIdentity(vaultDir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("decrypt identity: %w", err)
 	}
+	identityStr := string(identityBytes)
+	crypto.Wipe(identityBytes)
 
 	ident.LastAccess = time.Now().UTC()
 	payload, marshalErr := json.Marshal(ident)
 	if marshalErr != nil {
-		return string(identityBytes), nil
+		return identityStr, nil
 	}
 	if updateErr := keyringSet(serviceName(vaultDir), identityAccount, string(payload)); updateErr != nil {
-		return string(identityBytes), nil
+		return identityStr, nil
 	}
 
-	return string(identityBytes), nil
+	return identityStr, nil
 }
 
 // ClearIdentity removes the cached identity from the OS keyring.

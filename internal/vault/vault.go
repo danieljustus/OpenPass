@@ -132,7 +132,7 @@ func OpenWithPassphrase(vaultDir string, passphrase []byte) (*Vault, error) {
 	}
 
 	identityPath := filepath.Join(vaultDir, "identity.age")
-	identity, err := vaultcrypto.LoadIdentity(identityPath, passphrase)
+	identity, err := vaultcrypto.LoadIdentity(identityPath, cloneBytes(passphrase))
 	if err != nil {
 		return nil, fmt.Errorf("load identity: %w", err)
 	}
@@ -186,7 +186,7 @@ func InitWithPassphrase(vaultDir string, passphrase []byte, cfg *vaultconfig.Con
 	}
 
 	identityPath := filepath.Join(vaultDir, "identity.age")
-	if err := vaultcrypto.SaveIdentity(identity, identityPath, passphrase); err != nil {
+	if err := vaultcrypto.SaveIdentity(identity, identityPath, cloneBytes(passphrase)); err != nil {
 		return nil, fmt.Errorf("save identity: %w", err)
 	}
 
@@ -344,4 +344,12 @@ func hasLegacyTopLevelAgeFiles(vaultDir string) (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// cloneBytes returns a copy of b so that the caller's buffer is not
+// affected by downstream zeroization.
+func cloneBytes(b []byte) []byte {
+	clone := make([]byte, len(b))
+	copy(clone, b)
+	return clone
 }
