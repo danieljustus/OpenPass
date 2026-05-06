@@ -253,7 +253,8 @@ jobs:
     steps:
       - name: Get release tag
         id: tag
-        run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$env:GITHUB_OUTPUT"
+        shell: bash
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
 
       - name: Download Windows archive
         shell: pwsh
