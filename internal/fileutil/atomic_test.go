@@ -1,3 +1,4 @@
+// Package fileutil provides atomic and safe file operations.
 package fileutil
 
 import (

@@ -25,6 +25,12 @@ import (
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
+// testTokens stores pre-created MCP tokens for test vaults, keyed by vault
+// directory. LoadTokenSystem migrates legacy mcp-token files to the registry
+// and deletes the original file, so tests need a way to retrieve the token
+// after the server has started.
+var testTokens sync.Map // map[string]string
+
 func newTestHTTPClient() *http.Client {
 	return &http.Client{
 		Timeout: 5 * time.Second,
@@ -54,6 +60,14 @@ func newTestVault(t *testing.T) *vaultpkg.Vault {
 	_, err := vaultpkg.InitWithPassphrase(tmpDir, []byte("test-passphrase"), config.Default())
 	if err != nil {
 		t.Fatalf("init vault: %v", err)
+	}
+
+	// Pre-create a legacy token so LoadTokenSystem can migrate it. The token
+	// is stored in testTokens because the file is deleted during migration.
+	token := "test-token-" + tmpDir[len(tmpDir)-8:]
+	testTokens.Store(tmpDir, token)
+	if err := os.WriteFile(filepath.Join(tmpDir, "mcp-token"), []byte(token), 0o600); err != nil {
+		t.Fatalf("write test token: %v", err)
 	}
 
 	v, err := vaultpkg.OpenWithPassphrase(tmpDir, []byte("test-passphrase"))
@@ -89,11 +103,17 @@ func runHTTPServerAsync(ctx context.Context, t *testing.T, port int, v *vaultpkg
 func testMCPToken(t *testing.T) string {
 	t.Helper()
 	vaultDir, _ := vaultPath()
+	// Try the legacy token file first; if it was migrated and deleted,
+	// fall back to the token stored in testTokens.
 	tokenBytes, err := os.ReadFile(filepath.Join(vaultDir, "mcp-token"))
-	if err != nil {
-		t.Fatalf("read token: %v", err)
+	if err == nil {
+		return strings.TrimSpace(string(tokenBytes))
 	}
-	return strings.TrimSpace(string(tokenBytes))
+	if token, ok := testTokens.Load(vaultDir); ok {
+		return token.(string)
+	}
+	t.Fatalf("read token: %v", err)
+	return ""
 }
 
 func setValidMCPHeaders(req *http.Request, token string) {
@@ -225,12 +245,7 @@ func TestRunHTTPServer_MCPEndpoint_Auth(t *testing.T) {
 
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 
-	vaultDir, _ := vaultPath()
-	tokenBytes, err := os.ReadFile(filepath.Join(vaultDir, "mcp-token"))
-	if err != nil {
-		t.Fatalf("read token: %v", err)
-	}
-	token := strings.TrimSpace(string(tokenBytes))
+	token := testMCPToken(t)
 
 	resp, err := newTestHTTPClient().Post(baseURL+"/mcp", "application/json", strings.NewReader("{}"))
 	if err != nil {
@@ -264,12 +279,7 @@ func TestRunHTTPServer_MCPEndpoint_WithAgent(t *testing.T) {
 		waitForServer()
 	}()
 
-	vaultDir, _ := vaultPath()
-	tokenBytes, err := os.ReadFile(filepath.Join(vaultDir, "mcp-token"))
-	if err != nil {
-		t.Fatalf("read token: %v", err)
-	}
-	token := strings.TrimSpace(string(tokenBytes))
+	token := testMCPToken(t)
 
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 
@@ -314,12 +324,7 @@ func TestRunHTTPServer_MethodNotAllowed(t *testing.T) {
 		waitForServer()
 	}()
 
-	vaultDir, _ := vaultPath()
-	tokenBytes, err := os.ReadFile(filepath.Join(vaultDir, "mcp-token"))
-	if err != nil {
-		t.Fatalf("read token: %v", err)
-	}
-	token := strings.TrimSpace(string(tokenBytes))
+	token := testMCPToken(t)
 
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 
@@ -349,12 +354,7 @@ func TestRunHTTPServer_InvalidJSON(t *testing.T) {
 		waitForServer()
 	}()
 
-	vaultDir, _ := vaultPath()
-	tokenBytes, err := os.ReadFile(filepath.Join(vaultDir, "mcp-token"))
-	if err != nil {
-		t.Fatalf("read token: %v", err)
-	}
-	token := strings.TrimSpace(string(tokenBytes))
+	token := testMCPToken(t)
 
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 
@@ -533,12 +533,7 @@ func TestRunHTTPServer_HandlerCreationError(t *testing.T) {
 		waitForServer()
 	}()
 
-	vaultDir, _ := vaultPath()
-	tokenBytes, err := os.ReadFile(filepath.Join(vaultDir, "mcp-token"))
-	if err != nil {
-		t.Fatalf("read token: %v", err)
-	}
-	token := strings.TrimSpace(string(tokenBytes))
+	token := testMCPToken(t)
 
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 
@@ -598,12 +593,7 @@ func TestRunHTTPServer_HandlerCacheHit(t *testing.T) {
 		waitForServer()
 	}()
 
-	vaultDir, _ := vaultPath()
-	tokenBytes, err := os.ReadFile(filepath.Join(vaultDir, "mcp-token"))
-	if err != nil {
-		t.Fatalf("read token: %v", err)
-	}
-	token := strings.TrimSpace(string(tokenBytes))
+	token := testMCPToken(t)
 
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 
@@ -715,12 +705,7 @@ func TestRunHTTPServer_HandleMessageError(t *testing.T) {
 		waitForServer()
 	}()
 
-	vaultDir, _ := vaultPath()
-	tokenBytes, err := os.ReadFile(filepath.Join(vaultDir, "mcp-token"))
-	if err != nil {
-		t.Fatalf("read token: %v", err)
-	}
-	token := strings.TrimSpace(string(tokenBytes))
+	token := testMCPToken(t)
 
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 

@@ -13,6 +13,8 @@ import (
 	cryptopkg "github.com/danieljustus/OpenPass/internal/crypto"
 )
 
+const placeholderOptional = "optional"
+
 const (
 	fieldUsername = iota
 	fieldPassword
@@ -28,7 +30,6 @@ var (
 	titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
 	labelStyle   = lipgloss.NewStyle().Width(14).Align(lipgloss.Right)
 	focusedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Bold(true)
-	mutedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
 	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("82"))
 	helpStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
@@ -47,7 +48,7 @@ type AddEntryForm struct {
 	focused     int
 	force       bool
 	submitted   bool
-	cancelled   bool
+	canceled    bool
 	passwordErr error
 	width       int
 }
@@ -59,7 +60,7 @@ func NewAddEntryForm(force bool) *AddEntryForm {
 	}
 
 	f.username = textinput.New()
-	f.username.Placeholder = "optional"
+	f.username.Placeholder = placeholderOptional
 	f.username.CharLimit = 256
 
 	f.password = textinput.New()
@@ -68,26 +69,26 @@ func NewAddEntryForm(force bool) *AddEntryForm {
 	f.password.CharLimit = 1024
 
 	f.url = textinput.New()
-	f.url.Placeholder = "optional"
+	f.url.Placeholder = placeholderOptional
 	f.url.CharLimit = 2048
 
 	f.notes = textarea.New()
-	f.notes.Placeholder = "optional"
+	f.notes.Placeholder = placeholderOptional
 	f.notes.ShowLineNumbers = false
 	f.notes.SetHeight(3)
 	f.notes.SetWidth(40)
 	f.notes.CharLimit = 4096
 
 	f.totpSecret = textinput.New()
-	f.totpSecret.Placeholder = "optional"
+	f.totpSecret.Placeholder = placeholderOptional
 	f.totpSecret.CharLimit = 256
 
 	f.totpIssuer = textinput.New()
-	f.totpIssuer.Placeholder = "optional"
+	f.totpIssuer.Placeholder = placeholderOptional
 	f.totpIssuer.CharLimit = 256
 
 	f.totpAccount = textinput.New()
-	f.totpAccount.Placeholder = "optional"
+	f.totpAccount.Placeholder = placeholderOptional
 	f.totpAccount.CharLimit = 256
 
 	f.focusField(0)
@@ -202,7 +203,7 @@ func (f *AddEntryForm) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
-			f.cancelled = true
+			f.canceled = true
 			return f, tea.Quit
 		case "tab":
 			f.nextField()
@@ -387,8 +388,8 @@ func RunAddEntryForm(force bool, defaults map[string]any) (map[string]any, error
 		return nil, fmt.Errorf("unexpected model type")
 	}
 
-	if f.cancelled {
-		return nil, fmt.Errorf("cancelled")
+	if f.canceled {
+		return nil, fmt.Errorf("canceled")
 	}
 
 	password := f.password.Value()

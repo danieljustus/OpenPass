@@ -147,7 +147,7 @@ func Run(svc vaultsvc.Service) error {
 		if err != nil {
 			return fmt.Errorf("open TUI log: %w", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 	}
 	_, err := tea.NewProgram(NewTUIModel(svc), opts...).Run()
 	return err

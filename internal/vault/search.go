@@ -278,7 +278,7 @@ func listEntriesFast(root, base, prefix string, seen map[string]struct{}, legacy
 			}
 			return nil
 		}
-		if filepath.Ext(path) != ".age" {
+		if filepath.Ext(path) != ".age" { //nolint:goconst // file extension literal
 			return nil
 		}
 
@@ -286,10 +286,10 @@ func listEntriesFast(root, base, prefix string, seen map[string]struct{}, legacy
 		if err != nil {
 			return err
 		}
-		if legacy && filepath.ToSlash(rel) == "identity.age" {
+		if legacy && filepath.ToSlash(rel) == "identity.age" { //nolint:goconst // filename literal
 			return nil
 		}
-		rel = strings.TrimSuffix(filepath.ToSlash(rel), ".age")
+		rel = strings.TrimSuffix(filepath.ToSlash(rel), ".age") //nolint:goconst // file extension literal
 		if prefix != "" && !strings.HasPrefix(rel, prefix) {
 			return nil
 		}

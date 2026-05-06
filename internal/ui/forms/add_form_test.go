@@ -70,8 +70,8 @@ func TestAddEntryFormCtrlCCancels(t *testing.T) {
 	m, _ := f.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	frm := m.(*AddEntryForm)
 
-	if !frm.cancelled {
-		t.Error("expected form to be cancelled on ctrl+c")
+	if !frm.canceled {
+		t.Error("expected form to be canceled on ctrl+c")
 	}
 }
 

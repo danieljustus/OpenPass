@@ -21,6 +21,12 @@ import (
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
+// testTokens stores pre-created MCP tokens for test vaults, keyed by vault
+// directory. LoadTokenSystem migrates legacy mcp-token files to the registry
+// and deletes the original file, so tests need a way to retrieve the token
+// after the server has started.
+var testTokens sync.Map // map[string]string
+
 func findFreePort(t *testing.T) int {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -35,6 +41,13 @@ func findFreePort(t *testing.T) int {
 func newTestVault(t *testing.T) *vaultpkg.Vault {
 	t.Helper()
 	tmpDir := t.TempDir()
+	// Pre-create a legacy token so LoadTokenSystem can migrate it. The token
+	// is stored in testTokens because the file is deleted during migration.
+	token := "test-token-" + tmpDir[len(tmpDir)-8:]
+	testTokens.Store(tmpDir, token)
+	if err := os.WriteFile(filepath.Join(tmpDir, "mcp-token"), []byte(token), 0o600); err != nil {
+		t.Fatalf("write test token: %v", err)
+	}
 	return &vaultpkg.Vault{
 		Dir:    tmpDir,
 		Config: config.Default(),
@@ -67,11 +80,17 @@ func runHTTPServerAsync(ctx context.Context, t *testing.T, bind string, port int
 
 func testMCPToken(t *testing.T, vaultDir string) string {
 	t.Helper()
+	// Try the legacy token file first; if it was migrated and deleted,
+	// fall back to the token stored in testTokens.
 	tokenBytes, err := os.ReadFile(filepath.Join(vaultDir, "mcp-token"))
-	if err != nil {
-		t.Fatalf("read token: %v", err)
+	if err == nil {
+		return strings.TrimSpace(string(tokenBytes))
 	}
-	return strings.TrimSpace(string(tokenBytes))
+	if token, ok := testTokens.Load(vaultDir); ok {
+		return token.(string)
+	}
+	t.Fatalf("read token: %v", err)
+	return ""
 }
 
 func setValidMCPHeaders(req *http.Request, token string) {
