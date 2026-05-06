@@ -74,7 +74,7 @@ type clipboardClearedMsg struct {
 
 // TUIModel is the Bubble Tea model for the OpenPass two-pane terminal UI.
 type TUIModel struct {
-	svc *vaultsvc.Service
+	svc vaultsvc.Service
 
 	entries  []string
 	filtered []string
@@ -117,7 +117,7 @@ var (
 )
 
 // NewTUIModel creates a Bubble Tea model backed by the provided vault service.
-func NewTUIModel(svc *vaultsvc.Service) TUIModel {
+func NewTUIModel(svc vaultsvc.Service) TUIModel {
 	input := textinput.New()
 	input.Placeholder = "filter entries"
 	input.Prompt = "/ "
@@ -132,7 +132,7 @@ func NewTUIModel(svc *vaultsvc.Service) TUIModel {
 }
 
 // Run starts the TUI. Command wiring is intentionally left to cmd/ui.go.
-func Run(svc *vaultsvc.Service) error {
+func Run(svc vaultsvc.Service) error {
 	if svc == nil {
 		return fmt.Errorf("nil vault service")
 	}
@@ -492,7 +492,7 @@ func (m TUIModel) confirmView() string {
 	return errorStyle.Render(fmt.Sprintf("Confirm %s %s?", verb, m.selectedPath())) + "  " + mutedStyle.Render("y/N")
 }
 
-func loadEntriesCmd(svc *vaultsvc.Service) tea.Cmd {
+func loadEntriesCmd(svc vaultsvc.Service) tea.Cmd {
 	return func() tea.Msg {
 		defer func() {
 			if r := recover(); r != nil {
@@ -510,7 +510,7 @@ func loadEntriesCmd(svc *vaultsvc.Service) tea.Cmd {
 	}
 }
 
-func loadEntryCmd(svc *vaultsvc.Service, path string) tea.Cmd {
+func loadEntryCmd(svc vaultsvc.Service, path string) tea.Cmd {
 	return func() tea.Msg {
 		defer func() {
 			if r := recover(); r != nil {
@@ -555,14 +555,14 @@ func generatePasswordCmd() tea.Cmd {
 	}
 }
 
-func deleteEntryCmd(svc *vaultsvc.Service, path string) tea.Cmd {
+func deleteEntryCmd(svc vaultsvc.Service, path string) tea.Cmd {
 	return func() tea.Msg {
 		err := svc.Delete(path)
 		return entryDeletedMsg{path: path, err: err}
 	}
 }
 
-func editEntryCmd(svc *vaultsvc.Service, path string) tea.Cmd {
+func editEntryCmd(svc vaultsvc.Service, path string) tea.Cmd {
 	return func() tea.Msg {
 		entry, err := svc.GetEntry(path)
 		if err != nil {

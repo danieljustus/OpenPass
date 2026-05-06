@@ -319,7 +319,7 @@ func resolveUnlockPassphrase(vaultDir string, interactive bool) ([]byte, bool, b
 	return passphrase, passphraseFromEnv, passphraseFromBiometric, nil
 }
 
-func withVault(fn func(*vaultsvc.Service) error) error {
+func withVault(fn func(vaultsvc.Service) error) error {
 	vaultDir, err := vaultPath()
 	if err != nil {
 		return err

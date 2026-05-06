@@ -25,6 +25,17 @@ const (
 	ExitPermissionDenied ExitCode = 5
 )
 
+// ErrorKind categorizes vault service errors for consistent mapping to CLI errors.
+type ErrorKind int
+
+const (
+	ErrKindNone ErrorKind = iota
+	ErrNotFound
+	ErrFieldNotFound
+	ErrReadFailed
+	ErrWriteFailed
+)
+
 var (
 	// ErrEntryNotFound is returned when a requested entry does not exist.
 	ErrEntryNotFound = errors.New("entry not found")
@@ -36,9 +47,28 @@ var (
 	ErrPermissionDenied = errors.New("permission denied")
 )
 
+// IsNotFound returns true if the error or any wrapped error is a not-found error.
+func IsNotFound(err error) bool {
+	var cliErr *CLIError
+	if errors.As(err, &cliErr) {
+		return cliErr.Kind == ErrNotFound || cliErr.Kind == ErrFieldNotFound
+	}
+	return false
+}
+
+// IsWriteError returns true if the error is a write failure.
+func IsWriteError(err error) bool {
+	var cliErr *CLIError
+	if errors.As(err, &cliErr) {
+		return cliErr.Kind == ErrWriteFailed
+	}
+	return false
+}
+
 // CLIError is a structured error with an exit code and user-friendly message.
 type CLIError struct {
 	Code    ExitCode
+	Kind    ErrorKind
 	Message string
 	Cause   error
 }

@@ -65,7 +65,7 @@ var importCmd = &cobra.Command{
 			return errorspkg.NewCLIError(errorspkg.ExitGeneralError, "parse import source", err)
 		}
 
-		return withVault(func(svc *vaultsvc.Service) error {
+		return withVault(func(svc vaultsvc.Service) error {
 			imported, skipped := 0, 0
 			for _, entry := range entries {
 				entryPath := importEntryPath(options.Prefix, entry.Path)
@@ -77,7 +77,7 @@ var importCmd = &cobra.Command{
 
 				exists, err := importEntryExists(svc, entryPath)
 				if err != nil {
-					return mapVaultSvcError(err, "cannot check entry")
+					return fmt.Errorf("cannot check entry: %w", err)
 				}
 
 				if exists && options.SkipExisting {
@@ -94,12 +94,12 @@ var importCmd = &cobra.Command{
 
 				if exists && options.Overwrite {
 					if err := svc.Delete(entryPath); err != nil {
-						return mapVaultSvcError(err, "cannot overwrite entry")
+						return fmt.Errorf("cannot overwrite entry: %w", err)
 					}
 				}
 
 				if err := svc.SetFields(entryPath, entry.Data); err != nil {
-					return mapVaultSvcError(err, "cannot write entry")
+					return fmt.Errorf("cannot write entry: %w", err)
 				}
 				printQuietAware("Imported: %s\n", entryPath)
 				imported++
@@ -147,14 +147,14 @@ func importEntryPath(prefix, entryPath string) string {
 	return path.Join(prefix, entryPath)
 }
 
-func importEntryExists(svc *vaultsvc.Service, entryPath string) (bool, error) {
+func importEntryExists(svc vaultsvc.Service, entryPath string) (bool, error) {
 	_, err := svc.GetEntry(entryPath)
 	if err == nil {
 		return true, nil
 	}
 
-	var vaultErr *vaultsvc.Error
-	if errors.As(err, &vaultErr) && vaultErr.Kind == vaultsvc.ErrNotFound {
+	var cliErr *errorspkg.CLIError
+	if errors.As(err, &cliErr) && cliErr.Code == errorspkg.ExitNotFound {
 		return false, nil
 	}
 	return false, err

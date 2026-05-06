@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	vaultsvc "github.com/danieljustus/OpenPass/internal/vaultsvc"
@@ -20,7 +22,7 @@ var listCmd = &cobra.Command{
   openpass list --output json`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return withVault(func(svc *vaultsvc.Service) error {
+		return withVault(func(svc vaultsvc.Service) error {
 			prefix := ""
 			if len(args) > 0 {
 				prefix = args[0]
@@ -28,7 +30,7 @@ var listCmd = &cobra.Command{
 
 			entries, err := svc.List(prefix)
 			if err != nil {
-				return mapVaultSvcError(err, "cannot list entries")
+				return fmt.Errorf("cannot list entries: %w", err)
 			}
 
 			if outputFormat != "text" { //nolint:goconst // output format literal

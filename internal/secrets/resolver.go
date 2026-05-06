@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultsvc "github.com/danieljustus/OpenPass/internal/vaultsvc"
 )
 
@@ -15,7 +16,7 @@ import (
 // entry data, or a path.field reference (e.g. "work/aws.password") which
 // returns a specific field value. The path.field syntax is only used if the
 // candidate path and field actually exist in the vault.
-func ResolveSecretRef(svc *vaultsvc.Service, ref string) (string, error) {
+func ResolveSecretRef(svc vaultsvc.Service, ref string) (string, error) {
 	path := ref
 	field := ""
 
@@ -31,12 +32,12 @@ func ResolveSecretRef(svc *vaultsvc.Service, ref string) (string, error) {
 
 	value, err := svc.GetField(path, field)
 	if err != nil {
-		var svcErr *vaultsvc.Error
-		if errors.As(err, &svcErr) {
-			if svcErr.Kind == vaultsvc.ErrNotFound {
+		var cliErr *errorspkg.CLIError
+		if errors.As(err, &cliErr) {
+			if cliErr.Kind == errorspkg.ErrNotFound {
 				return "", fmt.Errorf("secret ref not found: %s", path)
 			}
-			if svcErr.Kind == vaultsvc.ErrFieldNotFound {
+			if cliErr.Kind == errorspkg.ErrFieldNotFound {
 				return "", fmt.Errorf("field not found in secret ref %s.%s", path, field)
 			}
 		}

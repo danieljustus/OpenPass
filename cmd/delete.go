@@ -26,7 +26,7 @@ var deleteCmd = &cobra.Command{
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := args[0]
-		return withVault(func(svc *vaultsvc.Service) error {
+		return withVault(func(svc vaultsvc.Service) error {
 			if !deleteYes {
 				fmt.Fprintf(os.Stderr, "Delete %s? (y/N): ", path)
 				answer, err := bufio.NewReader(os.Stdin).ReadString('\n')
@@ -46,7 +46,7 @@ var deleteCmd = &cobra.Command{
 			}
 
 			if err := svc.Delete(path); err != nil {
-				return mapVaultSvcError(err, "cannot delete entry")
+				return fmt.Errorf("cannot delete entry: %w", err)
 			}
 			if outputFormat == "text" {
 				printQuietAware("Deleted: %s\n", path)

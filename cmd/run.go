@@ -25,7 +25,7 @@ var runCmd = &cobra.Command{
 	Long:  "Executes a command with vault secrets injected as environment variables. Use --env NAME=path.field to map secrets.",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return withVault(func(svc *vaultsvc.Service) error {
+		return withVault(func(svc vaultsvc.Service) error {
 			// Parse --env flags: each is "ENV_NAME=path.field"
 			envMap := make(map[string]string)
 			for _, envFlag := range runEnvFlags {

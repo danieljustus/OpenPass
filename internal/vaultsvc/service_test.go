@@ -11,13 +11,14 @@ import (
 	"time"
 
 	"github.com/danieljustus/OpenPass/internal/config"
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	gitpkg "github.com/danieljustus/OpenPass/internal/git"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
 var testPassphrase = []byte("test-passphrase")
 
-func newTestService(t *testing.T, withGit bool) *Service {
+func newTestService(t *testing.T, withGit bool) Service {
 	t.Helper()
 
 	vaultDir := t.TempDir()
@@ -40,14 +41,14 @@ func newTestService(t *testing.T, withGit bool) *Service {
 	return New(v)
 }
 
-func writeTestEntry(t *testing.T, svc *Service, path string, data map[string]any) {
+func writeTestEntry(t *testing.T, svc Service, path string, data map[string]any) {
 	t.Helper()
 	if err := svc.WriteEntry(path, &vaultpkg.Entry{Data: data}); err != nil {
 		t.Fatalf("write entry %q: %v", path, err)
 	}
 }
 
-func latestCommitMessage(t *testing.T, svc *Service) string {
+func latestCommitMessage(t *testing.T, svc Service) string {
 	t.Helper()
 	commits, err := gitpkg.Log(svc.GetDir(), "", 1)
 	if err != nil {
@@ -86,11 +87,11 @@ func TestGetField(t *testing.T) {
 		path     string
 		field    string
 		want     any
-		wantKind ErrorKind
+		wantKind errorspkg.ErrorKind
 	}{
 		{name: "existing field", path: "work/aws", field: "password", want: "secret"},
-		{name: "non-existent entry", path: "missing", field: "password", wantKind: ErrNotFound},
-		{name: "non-existent field", path: "work/aws", field: "missing", wantKind: ErrFieldNotFound},
+		{name: "non-existent entry", path: "missing", field: "password", wantKind: errorspkg.ErrNotFound},
+		{name: "non-existent field", path: "work/aws", field: "missing", wantKind: errorspkg.ErrFieldNotFound},
 		{name: "empty field returns data", path: "work/aws", field: "", want: data},
 		{name: "nested entry path", path: "work/aws", field: "username", want: "alice"},
 	}
@@ -170,7 +171,7 @@ func TestDelete(t *testing.T) {
 			t.Fatalf("Delete: %v", err)
 		}
 		_, err := svc.GetEntry("github")
-		assertServiceErrorKind(t, err, ErrNotFound)
+		assertServiceErrorKind(t, err, errorspkg.ErrNotFound)
 		if msg := latestCommitMessage(t, svc); !strings.Contains(msg, "Delete github") {
 			t.Fatalf("latest commit message = %q, want Delete github", msg)
 		}
@@ -179,7 +180,7 @@ func TestDelete(t *testing.T) {
 	t.Run("delete missing entry", func(t *testing.T) {
 		svc := newTestService(t, false)
 		err := svc.Delete("missing")
-		assertServiceErrorKind(t, err, ErrNotFound)
+		assertServiceErrorKind(t, err, errorspkg.ErrNotFound)
 	})
 }
 
@@ -271,7 +272,7 @@ func TestGetEntry(t *testing.T) {
 	}
 
 	_, err = svc.GetEntry("missing")
-	assertServiceErrorKind(t, err, ErrNotFound)
+	assertServiceErrorKind(t, err, errorspkg.ErrNotFound)
 }
 
 func TestWriteEntry(t *testing.T) {
@@ -312,11 +313,19 @@ func TestErrorTypes(t *testing.T) {
 
 	tests := []struct {
 		name string
-		err  *Error
+		err  *errorspkg.CLIError
 		want string
 	}{
-		{name: "without cause", err: NewError(ErrNotFound, "missing entry", nil), want: "missing entry"},
-		{name: "with cause", err: NewError(ErrWriteFailed, "write failed", cause), want: "write failed: disk full"},
+		{
+			name: "without cause",
+			err:  &errorspkg.CLIError{Code: errorspkg.ExitNotFound, Kind: errorspkg.ErrNotFound, Message: "missing entry"},
+			want: "missing entry",
+		},
+		{
+			name: "with cause",
+			err:  &errorspkg.CLIError{Code: errorspkg.ExitGeneralError, Kind: errorspkg.ErrWriteFailed, Message: "write failed", Cause: cause},
+			want: "write failed: disk full",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -326,36 +335,36 @@ func TestErrorTypes(t *testing.T) {
 		})
 	}
 
-	wrappedNotFound := fmt.Errorf("outer: %w", NewError(ErrNotFound, "missing", nil))
-	wrappedFieldNotFound := fmt.Errorf("outer: %w", NewError(ErrFieldNotFound, "field missing", nil))
-	wrappedWrite := fmt.Errorf("outer: %w", NewError(ErrWriteFailed, "write failed", cause))
+	wrappedNotFound := fmt.Errorf("outer: %w", &errorspkg.CLIError{Code: errorspkg.ExitNotFound, Kind: errorspkg.ErrNotFound, Message: "missing"})
+	wrappedFieldNotFound := fmt.Errorf("outer: %w", &errorspkg.CLIError{Code: errorspkg.ExitNotFound, Kind: errorspkg.ErrFieldNotFound, Message: "field missing"})
+	wrappedWrite := fmt.Errorf("outer: %w", &errorspkg.CLIError{Code: errorspkg.ExitGeneralError, Kind: errorspkg.ErrWriteFailed, Message: "write failed", Cause: cause})
 
 	for _, err := range []error{wrappedNotFound, wrappedFieldNotFound} {
-		if !IsNotFound(err) {
+		if !errorspkg.IsNotFound(err) {
 			t.Fatalf("IsNotFound(%v) = false, want true", err)
 		}
 	}
-	for _, err := range []error{nil, cause, wrappedWrite, NewError(ErrReadFailed, "read", nil)} {
-		if IsNotFound(err) {
+	for _, err := range []error{nil, cause, wrappedWrite, &errorspkg.CLIError{Code: errorspkg.ExitGeneralError, Kind: errorspkg.ErrReadFailed, Message: "read"}} {
+		if errorspkg.IsNotFound(err) {
 			t.Fatalf("IsNotFound(%v) = true, want false", err)
 		}
 	}
 
-	if !IsWriteError(wrappedWrite) {
+	if !errorspkg.IsWriteError(wrappedWrite) {
 		t.Fatal("IsWriteError(wrapped write) = false, want true")
 	}
-	for _, err := range []error{nil, cause, wrappedNotFound, NewError(ErrReadFailed, "read", nil)} {
-		if IsWriteError(err) {
+	for _, err := range []error{nil, cause, wrappedNotFound, &errorspkg.CLIError{Code: errorspkg.ExitGeneralError, Kind: errorspkg.ErrReadFailed, Message: "read"}} {
+		if errorspkg.IsWriteError(err) {
 			t.Fatalf("IsWriteError(%v) = true, want false", err)
 		}
 	}
 
-	var svcErr *Error
-	if !errors.As(wrappedWrite, &svcErr) {
-		t.Fatal("errors.As did not extract *Error")
+	var cliErr *errorspkg.CLIError
+	if !errors.As(wrappedWrite, &cliErr) {
+		t.Fatal("errors.As did not extract *CLIError")
 	}
-	if svcErr.Kind != ErrWriteFailed || !errors.Is(wrappedWrite, cause) {
-		t.Fatalf("errors.As/Unwrap mismatch: svcErr=%#v", svcErr)
+	if cliErr.Kind != errorspkg.ErrWriteFailed || !errors.Is(wrappedWrite, cause) {
+		t.Fatalf("errors.As/Unwrap mismatch: cliErr=%#v", cliErr)
 	}
 }
 
@@ -379,41 +388,113 @@ func TestServiceErrorPaths(t *testing.T) {
 	svc := newTestService(t, false)
 
 	_, err := svc.GetField("../bad", "password")
-	assertServiceErrorKind(t, err, ErrReadFailed)
+	assertServiceErrorKind(t, err, errorspkg.ErrReadFailed)
 
 	err = svc.SetField("../bad", "password", "secret")
-	assertServiceErrorKind(t, err, ErrReadFailed)
+	assertServiceErrorKind(t, err, errorspkg.ErrReadFailed)
 
 	err = svc.Delete("../bad")
-	assertServiceErrorKind(t, err, ErrWriteFailed)
+	assertServiceErrorKind(t, err, errorspkg.ErrWriteFailed)
 
 	_, err = svc.GetEntry("../bad")
-	assertServiceErrorKind(t, err, ErrReadFailed)
+	assertServiceErrorKind(t, err, errorspkg.ErrReadFailed)
 
 	err = svc.WriteEntry("github", nil)
-	assertServiceErrorKind(t, err, ErrWriteFailed)
+	assertServiceErrorKind(t, err, errorspkg.ErrWriteFailed)
 
 	err = svc.WriteEntry("../bad", &vaultpkg.Entry{Data: map[string]any{"password": "secret"}})
-	assertServiceErrorKind(t, err, ErrWriteFailed)
+	assertServiceErrorKind(t, err, errorspkg.ErrWriteFailed)
 
 	missingVault := New(&vaultpkg.Vault{Dir: filepath.Join(t.TempDir(), "missing"), Identity: svc.GetIdentity()})
 	_, err = missingVault.List("")
-	assertServiceErrorKind(t, err, ErrReadFailed)
+	assertServiceErrorKind(t, err, errorspkg.ErrReadFailed)
 
 	_, err = missingVault.Find("anything", vaultpkg.FindOptions{})
-	assertServiceErrorKind(t, err, ErrReadFailed)
+	assertServiceErrorKind(t, err, errorspkg.ErrReadFailed)
 }
 
-func assertServiceErrorKind(t *testing.T, err error, kind ErrorKind) {
+func assertServiceErrorKind(t *testing.T, err error, kind errorspkg.ErrorKind) {
 	t.Helper()
 	if err == nil {
-		t.Fatalf("expected service error kind %v, got nil", kind)
+		t.Fatalf("expected CLIError kind %v, got nil", kind)
 	}
-	var svcErr *Error
-	if !errors.As(err, &svcErr) {
-		t.Fatalf("error %T is not *Error: %v", err, err)
+	var cliErr *errorspkg.CLIError
+	if !errors.As(err, &cliErr) {
+		t.Fatalf("error %T is not *errorspkg.CLIError: %v", err, err)
 	}
-	if svcErr.Kind != kind {
-		t.Fatalf("error kind = %v, want %v", svcErr.Kind, kind)
+	if cliErr.Kind != kind {
+		t.Fatalf("error kind = %v, want %v", cliErr.Kind, kind)
+	}
+}
+
+func TestMockServiceImplementsService(t *testing.T) {
+	var _ Service = NewMockService()
+}
+
+func TestMockServiceDefaults(t *testing.T) {
+	mock := NewMockService()
+
+	// All methods should return zero values without panicking
+	if mock.Vault() == nil {
+		t.Error("Vault returned nil")
+	}
+	if _, err := mock.GetField("path", "field"); err != nil {
+		t.Errorf("GetField error: %v", err)
+	}
+	if err := mock.SetField("path", "field", "value"); err != nil {
+		t.Errorf("SetField error: %v", err)
+	}
+	if err := mock.SetFields("path", map[string]any{"k": "v"}); err != nil {
+		t.Errorf("SetFields error: %v", err)
+	}
+	if err := mock.Delete("path"); err != nil {
+		t.Errorf("Delete error: %v", err)
+	}
+	if entries, err := mock.List("prefix"); err != nil {
+		t.Errorf("List error: %v", err)
+	} else if entries != nil {
+		t.Error("List should return nil by default")
+	}
+	if matches, err := mock.Find("query", vaultpkg.FindOptions{}); err != nil {
+		t.Errorf("Find error: %v", err)
+	} else if matches != nil {
+		t.Error("Find should return nil by default")
+	}
+	if entry, err := mock.GetEntry("path"); err != nil {
+		t.Errorf("GetEntry error: %v", err)
+	} else if entry == nil {
+		t.Error("GetEntry returned nil")
+	}
+	if err := mock.WriteEntry("path", &vaultpkg.Entry{}); err != nil {
+		t.Errorf("WriteEntry error: %v", err)
+	}
+	if mock.GetIdentity() != nil {
+		t.Error("GetIdentity should return nil by default")
+	}
+	if mock.GetDir() != "/mock/dir" {
+		t.Errorf("GetDir = %q, want %q", mock.GetDir(), "/mock/dir")
+	}
+}
+
+func TestMockServiceCustomBehavior(t *testing.T) {
+	mock := NewMockService()
+
+	mock.GetFieldFunc = func(path, field string) (any, error) {
+		return "custom-value", nil
+	}
+
+	value, err := mock.GetField("any", "field")
+	if err != nil {
+		t.Fatalf("GetField error: %v", err)
+	}
+	if value != "custom-value" {
+		t.Errorf("GetField = %#v, want %q", value, "custom-value")
+	}
+
+	mock.SetFieldFunc = func(path, field string, value any) error {
+		return nil
+	}
+	if err := mock.SetField("path", "field", "value"); err != nil {
+		t.Errorf("SetField error: %v", err)
 	}
 }

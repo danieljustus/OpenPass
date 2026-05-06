@@ -56,7 +56,7 @@ var getCmd = &cobra.Command{
   openpass get github.password --profile work`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return withVault(func(svc *vaultsvc.Service) error {
+		return withVault(func(svc vaultsvc.Service) error {
 			query := args[0]
 			path := query
 			field := ""
@@ -73,12 +73,12 @@ var getCmd = &cobra.Command{
 
 			value, err := svc.GetField(path, field)
 			if err != nil {
-				var vaultErr *vaultsvc.Error
-				if !errors.As(err, &vaultErr) || vaultErr.Kind != vaultsvc.ErrNotFound {
-					if errors.As(err, &vaultErr) {
-						switch vaultErr.Kind {
-						case vaultsvc.ErrFieldNotFound:
-							return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
+				var cliErr *errorspkg.CLIError
+				if !errors.As(err, &cliErr) || cliErr.Code != errorspkg.ExitNotFound {
+					if errors.As(err, &cliErr) {
+						switch cliErr.Kind {
+						case errorspkg.ErrFieldNotFound:
+							return errorspkg.NewCLIError(errorspkg.ExitNotFound, cliErr.Message, errorspkg.ErrEntryNotFound)
 						default:
 						}
 					}
@@ -92,16 +92,16 @@ var getCmd = &cobra.Command{
 
 				switch len(matches) {
 				case 0:
-					return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
+					return errorspkg.NewCLIError(errorspkg.ExitNotFound, cliErr.Message, errorspkg.ErrEntryNotFound)
 				case 1:
 					path = matches[0].Path
 					value, err = svc.GetField(path, field)
 					if err != nil {
-						var vaultErr *vaultsvc.Error
-						if errors.As(err, &vaultErr) {
-							switch vaultErr.Kind {
-							case vaultsvc.ErrNotFound, vaultsvc.ErrFieldNotFound:
-								return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
+						var cliErr2 *errorspkg.CLIError
+						if errors.As(err, &cliErr2) {
+							switch cliErr2.Kind {
+							case errorspkg.ErrNotFound, errorspkg.ErrFieldNotFound:
+								return errorspkg.NewCLIError(errorspkg.ExitNotFound, cliErr2.Message, errorspkg.ErrEntryNotFound)
 							default:
 							}
 						}
@@ -175,11 +175,11 @@ var getCmd = &cobra.Command{
 
 			entry, err := svc.GetEntry(path)
 			if err != nil {
-				var vaultErr *vaultsvc.Error
-				if errors.As(err, &vaultErr) {
-					switch vaultErr.Kind {
-					case vaultsvc.ErrNotFound, vaultsvc.ErrFieldNotFound:
-						return errorspkg.NewCLIError(errorspkg.ExitNotFound, vaultErr.Message, errorspkg.ErrEntryNotFound)
+				var cliErr3 *errorspkg.CLIError
+				if errors.As(err, &cliErr3) {
+					switch cliErr3.Kind {
+					case errorspkg.ErrNotFound, errorspkg.ErrFieldNotFound:
+						return errorspkg.NewCLIError(errorspkg.ExitNotFound, cliErr3.Message, errorspkg.ErrEntryNotFound)
 					default:
 					}
 				}

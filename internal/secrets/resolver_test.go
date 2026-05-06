@@ -5,13 +5,14 @@ import (
 	"testing"
 
 	"github.com/danieljustus/OpenPass/internal/config"
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 	vaultsvc "github.com/danieljustus/OpenPass/internal/vaultsvc"
 )
 
 var testPassphrase = []byte("test-passphrase")
 
-func newTestService(t *testing.T) *vaultsvc.Service {
+func newTestService(t *testing.T) vaultsvc.Service {
 	t.Helper()
 
 	vaultDir := t.TempDir()
@@ -28,7 +29,7 @@ func newTestService(t *testing.T) *vaultsvc.Service {
 	return vaultsvc.New(v)
 }
 
-func writeTestEntry(t *testing.T, svc *vaultsvc.Service, path string, data map[string]any) {
+func writeTestEntry(t *testing.T, svc vaultsvc.Service, path string, data map[string]any) {
 	t.Helper()
 	if err := svc.WriteEntry(path, &vaultpkg.Entry{Data: data}); err != nil {
 		t.Fatalf("write entry %q: %v", path, err)
@@ -138,8 +139,8 @@ func TestResolveSecretRef_ErrorKind(t *testing.T) {
 		t.Fatal("expected error for missing field, got nil")
 	}
 
-	var svcErr *vaultsvc.Error
-	if !errors.As(err, &svcErr) {
-		t.Logf("error is not *vaultsvc.Error: %v", err)
+	var cliErr *errorspkg.CLIError
+	if !errors.As(err, &cliErr) {
+		t.Logf("error is not *errorspkg.CLIError: %v", err)
 	}
 }

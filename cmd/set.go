@@ -121,9 +121,9 @@ var setCmd = &cobra.Command{
 			return err
 		}
 
-		return withVault(func(svc *vaultsvc.Service) error {
+		return withVault(func(svc vaultsvc.Service) error {
 			if err := svc.SetFields(path, data); err != nil {
-				return mapVaultSvcError(err, "cannot write entry")
+				return fmt.Errorf("cannot write entry: %w", err)
 			}
 			printQuietAware("Entry saved: %s\n", path)
 			return nil

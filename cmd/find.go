@@ -24,7 +24,7 @@ var findCmd = &cobra.Command{
   openpass find bank --output json`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return withVault(func(svc *vaultsvc.Service) error {
+		return withVault(func(svc vaultsvc.Service) error {
 			workers := runtime.GOMAXPROCS(0)
 			if workers > 4 {
 				workers = 4
@@ -32,7 +32,7 @@ var findCmd = &cobra.Command{
 
 			matches, err := svc.Find(args[0], vaultpkg.FindOptions{MaxWorkers: workers})
 			if err != nil {
-				return mapVaultSvcError(err, "search failed")
+				return fmt.Errorf("search failed: %w", err)
 			}
 
 			if len(matches) == 0 {

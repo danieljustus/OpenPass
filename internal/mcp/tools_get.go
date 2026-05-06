@@ -7,15 +7,16 @@ import (
 	"fmt"
 	"time"
 
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/metrics"
 	"github.com/danieljustus/OpenPass/internal/vaultsvc"
 )
 
 func vaultServiceErrorResult(err error) (*CallToolResult, error) {
-	var vaultErr *vaultsvc.Error
-	if errors.As(err, &vaultErr) {
-		if vaultErr.Kind == vaultsvc.ErrNotFound || vaultErr.Kind == vaultsvc.ErrFieldNotFound {
-			return NewToolResultError(vaultErr.Message), nil
+	var cliErr *errorspkg.CLIError
+	if errors.As(err, &cliErr) {
+		if cliErr.Kind == errorspkg.ErrNotFound || cliErr.Kind == errorspkg.ErrFieldNotFound {
+			return NewToolResultError(cliErr.Message), nil
 		}
 		return nil, fmt.Errorf("vault operation failed: %w", err)
 	}

@@ -150,7 +150,7 @@ func csvImportFixture(t *testing.T) string {
 	return filepath.Join(filepath.Dir(file), "..", "testdata", "importer", "csv", "sample.csv")
 }
 
-func importTestVaultService(t *testing.T, vaultDir, passphrase string) *vaultsvc.Service {
+func importTestVaultService(t *testing.T, vaultDir, passphrase string) vaultsvc.Service {
 	t.Helper()
 	v, err := vaultpkg.OpenWithPassphrase(vaultDir, []byte(passphrase))
 	if err != nil {
@@ -159,7 +159,7 @@ func importTestVaultService(t *testing.T, vaultDir, passphrase string) *vaultsvc
 	return vaultsvc.New(v)
 }
 
-func assertCSVImportedEntries(t *testing.T, svc *vaultsvc.Service, prefix string) {
+func assertCSVImportedEntries(t *testing.T, svc vaultsvc.Service, prefix string) {
 	t.Helper()
 	entryAssertions := map[string]map[string]any{
 		"GitHub,-Personal": {
@@ -195,7 +195,7 @@ func assertCSVImportedEntries(t *testing.T, svc *vaultsvc.Service, prefix string
 	}
 }
 
-func snapshotImportEntries(t *testing.T, svc *vaultsvc.Service, paths []string) map[string]*vaultpkg.Entry {
+func snapshotImportEntries(t *testing.T, svc vaultsvc.Service, paths []string) map[string]*vaultpkg.Entry {
 	t.Helper()
 	snapshot := make(map[string]*vaultpkg.Entry, len(paths))
 	for _, path := range paths {

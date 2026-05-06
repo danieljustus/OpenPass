@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"github.com/danieljustus/OpenPass/internal/ui"
@@ -13,9 +15,9 @@ var uiCmd = &cobra.Command{
 	Long:  "Launches the interactive terminal UI for browsing and managing the vault.",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return withVault(func(svc *vaultsvc.Service) error {
+		return withVault(func(svc vaultsvc.Service) error {
 			if err := ui.Run(svc); err != nil {
-				return mapVaultSvcError(err, "ui failed")
+				return fmt.Errorf("ui failed: %w", err)
 			}
 
 			return nil
