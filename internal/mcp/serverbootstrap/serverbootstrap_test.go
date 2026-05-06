@@ -74,7 +74,18 @@ func runHTTPServerAsync(ctx context.Context, t *testing.T, bind string, port int
 			t.Errorf("RunHTTPServer error: %v", err)
 		}
 	}()
-	time.Sleep(200 * time.Millisecond)
+
+	addr := fmt.Sprintf("%s:%d", bind, port)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		conn, err := net.Dial("tcp", addr)
+		if err == nil {
+			_ = conn.Close()
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
 	return wg.Wait
 }
 

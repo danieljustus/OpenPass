@@ -452,8 +452,8 @@ func TestTokenRegistry_Get_LazyExpiry(t *testing.T) {
 
 	reg := NewTokenRegistry(path)
 
-	// Create token that expires in 100ms.
-	st, raw, err := reg.Create("short-lived", []string{"*"}, "", 100*time.Millisecond)
+	// Create token that expires in 500ms (generous margin for slow CI runners).
+	st, raw, err := reg.Create("short-lived", []string{"*"}, "", 500*time.Millisecond)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -466,7 +466,7 @@ func TestTokenRegistry_Get_LazyExpiry(t *testing.T) {
 	}
 
 	// Wait for expiry.
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(600 * time.Millisecond)
 
 	// Should NOT be found after expiry — lazy check.
 	if _, ok := reg.Get(hash); ok {
