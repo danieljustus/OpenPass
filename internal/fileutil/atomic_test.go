@@ -4,6 +4,7 @@ package fileutil
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -71,6 +72,9 @@ func TestAtomicWriteFile_NoTempFileLeftBehind(t *testing.T) {
 func TestAtomicWriteFile_OldFileIntactOnFailure(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("running as root; permissions test meaningless")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: chmod behavior differs")
 	}
 
 	tmpDir := t.TempDir()

@@ -124,6 +124,7 @@ func Wipe(buf []byte) {
 	}
 	// Force compiler to keep the buffer alive and emit stores.
 	// unsafe.Pointer prevents the compiler from optimizing away the zeroing.
+	// #nosec G103 — intentional use of unsafe for secure memory wiping; audited.
 	ptr := unsafe.Pointer(&buf[0])
 	for i := range buf {
 		*(*byte)(unsafe.Add(ptr, i)) = 0
