@@ -494,10 +494,17 @@ func (m TUIModel) confirmView() string {
 
 func loadEntriesCmd(svc *vaultsvc.Service) tea.Cmd {
 	return func() tea.Msg {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Fprintf(os.Stderr, "panic loading entries: %v\n", r)
+			}
+		}()
 		entries, err := svc.List("")
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "error loading entries: %v\n", err)
 			return entriesLoadedMsg{err: err}
 		}
+		fmt.Fprintf(os.Stderr, "loaded %d entries\n", len(entries))
 		sort.Strings(entries)
 		return entriesLoadedMsg{entries: entries}
 	}
@@ -505,6 +512,11 @@ func loadEntriesCmd(svc *vaultsvc.Service) tea.Cmd {
 
 func loadEntryCmd(svc *vaultsvc.Service, path string) tea.Cmd {
 	return func() tea.Msg {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Fprintf(os.Stderr, "panic loading entry %s: %v\n", path, r)
+			}
+		}()
 		entry, err := svc.GetEntry(path)
 		return entryLoadedMsg{path: path, entry: entry, err: err}
 	}
@@ -613,13 +625,14 @@ func fuzzyMatch(query, value string) bool {
 	if strings.Contains(value, query) {
 		return true
 	}
+	queryRunes := []rune(query)
 	idx := 0
 	for _, r := range value {
-		if idx < len(query) && r == rune(query[idx]) {
+		if idx < len(queryRunes) && r == queryRunes[idx] {
 			idx++
 		}
 	}
-	return idx == len(query)
+	return idx == len(queryRunes)
 }
 
 func isSensitiveField(field string) bool {

@@ -107,6 +107,26 @@ int touch_id_load_passphrase(char *service_c, char *account_c, char *reason_c, c
 	}
 	*passphrase_out = NULL;
 
+	CFMutableDictionaryRef checkQuery = openpass_biometric_query(service_c, account_c);
+	if (checkQuery == NULL) {
+		return errSecParam;
+	}
+	CFDictionarySetValue(checkQuery, kSecReturnData, kCFBooleanFalse);
+	CFDictionarySetValue(checkQuery, kSecMatchLimit, kSecMatchLimitOne);
+
+	CFTypeRef checkResult = NULL;
+	OSStatus checkStatus = SecItemCopyMatching(checkQuery, &checkResult);
+	CFRelease(checkQuery);
+	if (checkResult != NULL) {
+		CFRelease(checkResult);
+	}
+	if (checkStatus == errSecItemNotFound) {
+		return errSecItemNotFound;
+	}
+	if (checkStatus != errSecSuccess) {
+		return (int)checkStatus;
+	}
+
 	LAContext *laCtx = [[LAContext alloc] init];
 	if (laCtx == nil) {
 		return errSecAuthFailed;
