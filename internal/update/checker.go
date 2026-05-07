@@ -160,7 +160,7 @@ func (c *Checker) fetchLatestRelease(ctx context.Context, currentVersion string)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", fmt.Sprintf("openpass/%s", strings.TrimSpace(currentVersion)))
 
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) // #nosec G107 — URL is validated and points to GitHub API
 	if err != nil {
 		if isTLSCertificateError(err) {
 			return nil, fmt.Errorf("update check failed: TLS certificate verification error - %w", err)

@@ -261,7 +261,7 @@ func RunHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault
 		_ = server.Shutdown(shutdownCtx)
 	}()
 
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed { // #nosec G114 — bind address is user-configurable, defaults to loopback
 		return err
 	}
 	return nil

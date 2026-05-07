@@ -223,7 +223,7 @@ func checkRuntimePortHealth(bind string, port int) error {
 	}
 	url := fmt.Sprintf("http://%s:%d/health", strings.Trim(host, "[]"), port)
 	client := http.Client{Timeout: 500 * time.Millisecond}
-	resp, err := client.Get(url) //nolint:gosec // local health check for configured MCP server
+	resp, err := client.Get(url) //nolint:gosec // #nosec G107 — local health check for configured MCP server
 	if err != nil {
 		return err
 	}

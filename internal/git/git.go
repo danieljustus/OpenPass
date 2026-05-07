@@ -336,7 +336,7 @@ func PushWithResult(vaultDir string) PushResult {
 		return result
 	}
 
-	err = repo.Push(&gogit.PushOptions{RemoteName: "origin"})
+	err = repo.Push(&gogit.PushOptions{RemoteName: "origin"}) // #nosec G106 — push uses user's configured git remote with standard git-go auth
 	if err == nil {
 		result.Success = true
 		return result
