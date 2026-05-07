@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -156,7 +157,7 @@ func importTestVaultService(t *testing.T, vaultDir, passphrase string) vaultsvc.
 	if err != nil {
 		t.Fatalf("open vault: %v", err)
 	}
-	return vaultsvc.New(v)
+	return vaultsvc.New(slog.Default(), v)
 }
 
 func assertCSVImportedEntries(t *testing.T, svc vaultsvc.Service, prefix string) {

@@ -18,6 +18,7 @@ func TestCommandRegistration(t *testing.T) {
 	commands := []string{
 		"add",
 		"delete",
+		"device",
 		"edit",
 		"find",
 		"generate",
@@ -27,9 +28,12 @@ func TestCommandRegistration(t *testing.T) {
 		"list",
 		"lock",
 		"mcp-config",
+		"migrate",
 		"recipients",
+		"remote",
 		"serve",
 		"set",
+		"sync",
 		"unlock",
 		"update",
 		"version",
@@ -88,8 +92,63 @@ func TestSubcommandRegistration(t *testing.T) {
 	if !found {
 		t.Errorf("command %q not registered in rootCmd", "git")
 	}
-}
 
+	remoteSubcommands := []string{"init", "status"}
+	for _, sub := range remoteSubcommands {
+		found := false
+		for _, c := range remoteCmd.Commands() {
+			if c.Name() == sub {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("remote subcommand %q not registered", sub)
+		}
+	}
+
+	deviceSubcommands := []string{"pair", "join", "accept", "list", "revoke"}
+	for _, sub := range deviceSubcommands {
+		found := false
+		for _, c := range deviceCmd.Commands() {
+			if c.Name() == sub {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("device subcommand %q not registered", sub)
+		}
+	}
+
+	serveSubcommands := []string{"install", "uninstall", "status"}
+	for _, sub := range serveSubcommands {
+		found := false
+		for _, c := range serveCmd.Commands() {
+			if c.Name() == sub {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("serve subcommand %q not registered", sub)
+		}
+	}
+
+	migrateSubcommands := []string{"pseudonymize"}
+	for _, sub := range migrateSubcommands {
+		found := false
+		for _, c := range migrateCmd.Commands() {
+			if c.Name() == sub {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("migrate subcommand %q not registered", sub)
+		}
+	}
+}
 func TestGeneratePasswordCoverage(t *testing.T) {
 	tests := []struct {
 		name       string

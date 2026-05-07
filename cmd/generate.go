@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/danieljustus/OpenPass/internal/crypto"
-	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -38,55 +37,43 @@ var generateCmd = &cobra.Command{
 		}
 
 		if genStore != "" {
-			vaultDir, err := vaultPath()
-			if err != nil {
-				return err
-			}
+			return withVaultRaw(func(v *vaultpkg.Vault) error {
+				entryPath := vaultpkg.EntryPath(v, genStore)
+				if _, err := vaultpkg.ReadEntry(v.Dir, genStore, v.Identity); err == nil {
+					if _, err := vaultpkg.MergeEntryWithRecipients(v.Dir, genStore, map[string]any{"password": password}, v.Identity); err != nil {
+						return fmt.Errorf("cannot store password: %w", err)
+					}
+				} else {
+					entry := &vaultpkg.Entry{Data: map[string]any{"password": password}, Metadata: vaultpkg.EntryMetadata{Created: time.Now().UTC(), Updated: time.Now().UTC(), Version: 0}}
+					if err := vaultpkg.WriteEntryWithRecipients(v.Dir, genStore, entry, v.Identity); err != nil {
+						return fmt.Errorf("cannot store password: %w", err)
+					}
+				}
 
-			if !vaultpkg.IsInitialized(vaultDir) {
-				return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
-			}
+				if err := v.AutoCommit(fmt.Sprintf("Generate password for %s", genStore)); err != nil {
+					return fmt.Errorf("auto-commit failed: %w", err)
+				}
 
-			v, err := unlockVault(vaultDir, true)
-			if err != nil {
-				return err
-			}
-
-			entryPath := vaultpkg.EntryPath(v, genStore)
-			if _, err := vaultpkg.ReadEntry(v.Dir, genStore, v.Identity); err == nil {
-				if _, err := vaultpkg.MergeEntryWithRecipients(v.Dir, genStore, map[string]any{"password": password}, v.Identity); err != nil {
-					return fmt.Errorf("cannot store password: %w", err)
+				if outputFormat == "text" {
+					if genQuiet {
+						return nil
+					}
+					printQuietAware("Password stored at: %s\n", entryPath)
+				} else {
+					result := map[string]any{
+						"stored": true,
+						"path":   genStore,
+						"file":   entryPath,
+					}
+					if genReveal {
+						result["password"] = password
+					}
+					if err := PrintResult(result); err != nil {
+						return err
+					}
 				}
-			} else {
-				entry := &vaultpkg.Entry{Data: map[string]any{"password": password}, Metadata: vaultpkg.EntryMetadata{Created: time.Now().UTC(), Updated: time.Now().UTC(), Version: 0}}
-				if err := vaultpkg.WriteEntryWithRecipients(v.Dir, genStore, entry, v.Identity); err != nil {
-					return fmt.Errorf("cannot store password: %w", err)
-				}
-			}
-
-			if err := v.AutoCommit(fmt.Sprintf("Generate password for %s", genStore)); err != nil {
-				return fmt.Errorf("auto-commit failed: %w", err)
-			}
-
-			if outputFormat == "text" {
-				if genQuiet {
-					return nil
-				}
-				printQuietAware("Password stored at: %s\n", entryPath)
-			} else {
-				result := map[string]any{
-					"stored": true,
-					"path":   genStore,
-					"file":   entryPath,
-				}
-				if genReveal {
-					result["password"] = password
-				}
-				if err := PrintResult(result); err != nil {
-					return err
-				}
-			}
-			return nil
+				return nil
+			})
 		}
 
 		if outputFormat == "text" {

@@ -31,94 +31,82 @@ The editor is determined by the --editor flag or EDITOR environment variable (de
   EDITOR=nano openpass edit personal/bank`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultDir, err := vaultPath()
-		if err != nil {
-			return err
-		}
+		return withVaultRaw(func(v *vaultpkg.Vault) error {
+			name := args[0]
 
-		if !vaultpkg.IsInitialized(vaultDir) {
-			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
-		}
+			entry, err := vaultpkg.ReadEntry(v.Dir, name, v.Identity)
+			if err != nil {
+				return errorspkg.NewCLIError(errorspkg.ExitNotFound, fmt.Sprintf("entry not found: %s", name), errorspkg.ErrEntryNotFound)
+			}
 
-		v, err := unlockVault(vaultDir, true)
-		if err != nil {
-			return err
-		}
+			editor := editorFlag
+			if editor == "" {
+				editor = os.Getenv("EDITOR")
+			}
+			if editor == "" {
+				editor = "vi"
+			}
 
-		name := args[0]
+			// Validate editor exists in PATH before executing (G204 mitigation)
+			if _, lookErr := exec.LookPath(editor); lookErr != nil {
+				return fmt.Errorf("editor %q not found in PATH: %w", editor, lookErr)
+			}
 
-		entry, err := vaultpkg.ReadEntry(v.Dir, name, v.Identity)
-		if err != nil {
-			return errorspkg.NewCLIError(errorspkg.ExitNotFound, fmt.Sprintf("entry not found: %s", name), errorspkg.ErrEntryNotFound)
-		}
+			tmpFile, err := os.CreateTemp("", "openpass-edit-*.json")
+			if err != nil {
+				return fmt.Errorf("cannot create temp file: %w", err)
+			}
+			defer func() { _ = os.Remove(tmpFile.Name()) }()
 
-		editor := editorFlag
-		if editor == "" {
-			editor = os.Getenv("EDITOR")
-		}
-		if editor == "" {
-			editor = "vi"
-		}
+			encoder := json.NewEncoder(tmpFile)
+			encoder.SetIndent("", "  ")
+			if encErr := encoder.Encode(entry); encErr != nil {
+				_ = tmpFile.Close()
+				return fmt.Errorf("cannot encode entry: %w", encErr)
+			}
+			if closeErr := tmpFile.Close(); closeErr != nil {
+				return fmt.Errorf("cannot close temp file: %w", closeErr)
+			}
 
-		// Validate editor exists in PATH before executing (G204 mitigation)
-		if _, lookErr := exec.LookPath(editor); lookErr != nil {
-			return fmt.Errorf("editor %q not found in PATH: %w", editor, lookErr)
-		}
+			//#nosec G204 -- editor path validated via exec.LookPath above
+			editorCmd := exec.Command(editor, tmpFile.Name())
+			editorCmd.Stdin = os.Stdin
+			editorCmd.Stdout = os.Stdout
+			editorCmd.Stderr = os.Stderr
 
-		tmpFile, err := os.CreateTemp("", "openpass-edit-*.json")
-		if err != nil {
-			return fmt.Errorf("cannot create temp file: %w", err)
-		}
-		defer func() { _ = os.Remove(tmpFile.Name()) }()
+			if runErr := editorCmd.Run(); runErr != nil {
+				return fmt.Errorf("editor failed: %w", runErr)
+			}
 
-		encoder := json.NewEncoder(tmpFile)
-		encoder.SetIndent("", "  ")
-		if encErr := encoder.Encode(entry); encErr != nil {
-			_ = tmpFile.Close()
-			return fmt.Errorf("cannot encode entry: %w", encErr)
-		}
-		if closeErr := tmpFile.Close(); closeErr != nil {
-			return fmt.Errorf("cannot close temp file: %w", closeErr)
-		}
+			content, err := os.ReadFile(tmpFile.Name())
+			if err != nil {
+				return fmt.Errorf("cannot read edited file: %w", err)
+			}
 
-		//#nosec G204 -- editor path validated via exec.LookPath above
-		editorCmd := exec.Command(editor, tmpFile.Name())
-		editorCmd.Stdin = os.Stdin
-		editorCmd.Stdout = os.Stdout
-		editorCmd.Stderr = os.Stderr
+			content = bytes.TrimSpace(content)
+			if len(content) == 0 {
+				return fmt.Errorf("empty file, changes discarded")
+			}
 
-		if runErr := editorCmd.Run(); runErr != nil {
-			return fmt.Errorf("editor failed: %w", runErr)
-		}
+			var updatedEntry vaultpkg.Entry
+			if err := json.Unmarshal(content, &updatedEntry); err != nil {
+				return fmt.Errorf("invalid JSON: %w", err)
+			}
 
-		content, err := os.ReadFile(tmpFile.Name())
-		if err != nil {
-			return fmt.Errorf("cannot read edited file: %w", err)
-		}
+			if updatedEntry.Data == nil {
+				updatedEntry.Data = map[string]any{}
+			}
 
-		content = bytes.TrimSpace(content)
-		if len(content) == 0 {
-			return fmt.Errorf("empty file, changes discarded")
-		}
+			if err := vaultpkg.WriteEntryWithRecipients(v.Dir, name, &updatedEntry, v.Identity); err != nil {
+				return fmt.Errorf("cannot save entry: %w", err)
+			}
 
-		var updatedEntry vaultpkg.Entry
-		if err := json.Unmarshal(content, &updatedEntry); err != nil {
-			return fmt.Errorf("invalid JSON: %w", err)
-		}
-
-		if updatedEntry.Data == nil {
-			updatedEntry.Data = map[string]any{}
-		}
-
-		if err := vaultpkg.WriteEntryWithRecipients(v.Dir, name, &updatedEntry, v.Identity); err != nil {
-			return fmt.Errorf("cannot save entry: %w", err)
-		}
-
-		if err := v.AutoCommit(fmt.Sprintf("Edit %s", name)); err != nil {
-			cliout.Warnf("Warning: auto-commit failed: %v", err)
-		}
-		printQuietAware("Entry updated: %s\n", name)
-		return nil
+			if err := v.AutoCommit(fmt.Sprintf("Edit %s", name)); err != nil {
+				cliout.Warnf("Warning: auto-commit failed: %v", err)
+			}
+			printQuietAware("Entry updated: %s\n", name)
+			return nil
+		})
 	},
 }
 

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -254,8 +255,11 @@ func unlockVaultWithTTL(vaultDir string, interactive bool, ttlOverride time.Dura
 		metrics.RecordIdentityCacheEvent("miss")
 	}
 
+	// Load vault config once before the passphrase flow
+	cfg := loadVaultConfigForUnlock(vaultDir)
+
 	// 2. Fall back to passphrase-based flow
-	passphrase, passphraseFromEnv, passphraseFromBiometric, err := resolveUnlockPassphrase(vaultDir, interactive)
+	passphrase, passphraseFromEnv, passphraseFromBiometric, err := resolveUnlockPassphrase(vaultDir, interactive, cfg)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -269,7 +273,6 @@ func unlockVaultWithTTL(vaultDir string, interactive bool, ttlOverride time.Dura
 	}
 
 	ttl := configuredSessionTTL(v, ttlOverride)
-	cfg := loadVaultConfigForUnlock(vaultDir)
 
 	// Normal commands avoid persisting env-provided secrets; the unlock command opts in.
 	if !passphraseFromEnv || cacheEnvPassphrase {
@@ -289,11 +292,10 @@ func unlockVaultWithTTL(vaultDir string, interactive bool, ttlOverride time.Dura
 	return v, ttl, nil
 }
 
-func resolveUnlockPassphrase(vaultDir string, interactive bool) ([]byte, bool, bool, error) {
+func resolveUnlockPassphrase(vaultDir string, interactive bool, cfg *configpkg.Config) ([]byte, bool, bool, error) {
 	passphrase, err := sessionLoadPassphrase(vaultDir)
 	passphraseFromEnv := false
 	passphraseFromBiometric := false
-	cfg := loadVaultConfigForUnlock(vaultDir)
 	if err != nil || len(passphrase) == 0 {
 		if cfg.EffectiveAuthMethod() == configpkg.AuthMethodTouchID {
 			if biometricPassphrase, biometricErr := sessionLoadBiometric(context.Background(), vaultDir); biometricErr == nil && len(biometricPassphrase) > 0 {
@@ -336,7 +338,24 @@ func withVault(fn func(vaultsvc.Service) error) error {
 	if err != nil {
 		return err
 	}
-	return fn(vaultsvc.New(v))
+	return fn(vaultsvc.New(slog.Default(), v))
+}
+
+func withVaultRaw(fn func(*vaultpkg.Vault) error) error {
+	vaultDir, err := vaultPath()
+	if err != nil {
+		return err
+	}
+	if !vaultpkg.IsInitialized(vaultDir) {
+		return errorspkg.NewCLIError(errorspkg.ExitNotInitialized,
+			"vault not initialized. Run 'openpass init' first",
+			errorspkg.ErrVaultNotInitialized)
+	}
+	v, err := unlockVault(vaultDir, true)
+	if err != nil {
+		return err
+	}
+	return fn(v)
 }
 
 func loadVaultConfigForUnlock(vaultDir string) *configpkg.Config {

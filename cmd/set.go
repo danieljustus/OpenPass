@@ -61,45 +61,19 @@ var setCmd = &cobra.Command{
 				}
 				data[field] = strings.TrimSpace(value)
 			} else {
-				fmt.Fprint(os.Stderr, "Username (optional): ")
-				username, err := reader.ReadString('\n')
-				if err != nil && username == "" {
-					return fmt.Errorf("read username: %w", err)
+				collected, err := collectEntryData(reader, entryFlags{
+					totpSecret:      setTOTPSecret,
+					totpIssuer:      setTOTPIssuer,
+					totpAccount:     setTOTPAccount,
+					force:           setForce,
+					skipNotes:       true,
+					skipTOTPDetails: true,
+				})
+				if err != nil {
+					return err
 				}
-				username = strings.TrimSpace(username)
-				if username != "" {
-					data["username"] = username
-				}
-
-				password, err := readHiddenInput("Password: ", reader)
-				if err != nil && len(password) == 0 {
-					return fmt.Errorf("read password: %w", err)
-				}
-				defer cryptopkg.Wipe(password)
-				data["password"] = string(password)
-				if !setForce {
-					if validateErr := cryptopkg.ValidatePasswordStrength(string(password)); validateErr != nil {
-						return validateErr
-					}
-				}
-
-				fmt.Fprint(os.Stderr, "URL (optional): ")
-				url, err := reader.ReadString('\n')
-				if err != nil && url == "" {
-					return fmt.Errorf("read url: %w", err)
-				}
-				url = strings.TrimSpace(url)
-				if url != "" {
-					data["url"] = url
-				}
-
-				if setTOTPSecret == "" {
-					fmt.Fprint(os.Stderr, "TOTP Secret (optional): ")
-					totpSecret, err := reader.ReadString('\n')
-					if err != nil {
-						return fmt.Errorf("read TOTP secret: %w", err)
-					}
-					setTOTPSecret = strings.TrimSpace(totpSecret)
+				for k, v := range collected {
+					data[k] = v
 				}
 			}
 		}

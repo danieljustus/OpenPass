@@ -103,7 +103,7 @@ func TestVaultEntryCRUD_Integration(t *testing.T) {
 		t.Errorf("MergeEntry() notes = %v, want merged note", mergedEntry.Data["notes"])
 	}
 
-	if delErr := vaultpkg.DeleteEntry(vaultDir, "github.com/user"); delErr != nil {
+	if delErr := vaultpkg.DeleteEntry(vaultDir, "github.com/user", identity); delErr != nil {
 		t.Fatalf("DeleteEntry() error = %v", delErr)
 	}
 

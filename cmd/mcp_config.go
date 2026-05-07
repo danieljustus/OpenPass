@@ -106,10 +106,10 @@ After rotating, run 'openpass mcp-config [agent] --http' to see the new token.`,
 			return fmt.Errorf("rotate token: %w", err)
 		}
 
-		fmt.Printf("Token rotated successfully. New token: %s\n", newToken)
-		fmt.Printf("Token stored at: %s\n", tokenPath)
-		fmt.Println("\nWarning: Any MCP clients using the old token will no longer work.")
-		fmt.Println("Update their configuration with the new token.")
+		printQuietAware("Token rotated successfully. New token: %s\n", newToken)
+		printQuietAware("Token stored at: %s\n", tokenPath)
+		printlnQuietAware("\nWarning: Any MCP clients using the old token will no longer work.")
+		printlnQuietAware("Update their configuration with the new token.")
 		return nil
 	},
 }

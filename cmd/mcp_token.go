@@ -67,23 +67,23 @@ retrieved later.`,
 			return fmt.Errorf("save token registry: %w", err)
 		}
 
-		fmt.Printf("Token created successfully.\n")
-		fmt.Printf("  ID:    %s\n", token.ID)
-		fmt.Printf("  Label: %s\n", token.Label)
+		printlnQuietAware("Token created successfully.")
+		printQuietAware("  ID:    %s\n", token.ID)
+		printQuietAware("  Label: %s\n", token.Label)
 		if token.AgentName != "" {
-			fmt.Printf("  Agent: %s\n", token.AgentName)
+			printQuietAware("  Agent: %s\n", token.AgentName)
 		}
-		fmt.Printf("  Tools: %s\n", strings.Join(token.AllowedTools, ", "))
+		printQuietAware("  Tools: %s\n", strings.Join(token.AllowedTools, ", "))
 		if token.ExpiresAt != nil {
-			fmt.Printf("  Expires: %s\n", token.ExpiresAt.Format(time.RFC3339))
+			printQuietAware("  Expires: %s\n", token.ExpiresAt.Format(time.RFC3339))
 		} else {
-			fmt.Printf("  Expires: never\n")
+			printQuietAware("  Expires: never\n")
 		}
-		fmt.Println()
-		fmt.Printf("Raw token (copy now — shown once): %s\n", rawToken)
-		fmt.Println()
-		fmt.Println("Warning: This is the only time the raw token is displayed.")
-		fmt.Println("         Store it securely — it cannot be retrieved later.")
+		printlnQuietAware()
+		printQuietAware("Raw token (copy now — shown once): %s\n", rawToken)
+		printlnQuietAware()
+		printlnQuietAware("Warning: This is the only time the raw token is displayed.")
+		printlnQuietAware("         Store it securely — it cannot be retrieved later.")
 
 		return nil
 	},
@@ -107,11 +107,11 @@ var tokenListCmd = &cobra.Command{
 
 		tokens := reg.List()
 		if len(tokens) == 0 {
-			fmt.Println("No tokens found.")
+			printlnQuietAware("No tokens found.")
 			return nil
 		}
 
-		fmt.Printf("%-22s %-16s %-14s %-28s %-20s %s\n", "ID", "LABEL", "AGENT", "TOOLS", "EXPIRES AT", "STATUS")
+		printQuietAware("%-22s %-16s %-14s %-28s %-20s %s\n", "ID", "LABEL", "AGENT", "TOOLS", "EXPIRES AT", "STATUS")
 		for i := range tokens {
 			status := "active"
 			if tokens[i].Revoked {
@@ -137,7 +137,7 @@ var tokenListCmd = &cobra.Command{
 				expires = tokens[i].ExpiresAt.Format("2006-01-02 15:04")
 			}
 
-			fmt.Printf("%-22s %-16s %-14s %-28s %-20s %s\n", tokens[i].ID, label, agent, tools, expires, status)
+			printQuietAware("%-22s %-16s %-14s %-28s %-20s %s\n", tokens[i].ID, label, agent, tools, expires, status)
 		}
 
 		return nil
@@ -171,7 +171,7 @@ var tokenRevokeCmd = &cobra.Command{
 			return fmt.Errorf("save token registry: %w", err)
 		}
 
-		fmt.Printf("Token %s revoked successfully.\n", tokenID)
+		printQuietAware("Token %s revoked successfully.\n", tokenID)
 		return nil
 	},
 }

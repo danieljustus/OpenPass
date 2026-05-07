@@ -99,35 +99,23 @@ Once added, all new entries will be encrypted for this recipient.`,
 	Example: `  openpass recipients add age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p`,
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultDir, err := vaultPath()
-		if err != nil {
-			return err
-		}
+		return withVaultRaw(func(v *vaultpkg.Vault) error {
+			recipient := args[0]
 
-		_, err = unlockVault(vaultDir, true)
-		if err != nil {
-			return err
-		}
-
-		recipient := args[0]
-
-		if !vaultpkg.IsInitialized(vaultDir) {
-			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
-		}
-
-		rm := vaultpkg.NewRecipientsManager(vaultDir)
-		if err := rm.AddRecipient(recipient); err != nil {
-			if errors.Is(err, vaultpkg.ErrRecipientAlreadyExists) {
-				return fmt.Errorf("recipient already exists")
+			rm := vaultpkg.NewRecipientsManager(v.Dir)
+			if err := rm.AddRecipient(recipient); err != nil {
+				if errors.Is(err, vaultpkg.ErrRecipientAlreadyExists) {
+					return fmt.Errorf("recipient already exists")
+				}
+				if errors.Is(err, vaultpkg.ErrInvalidRecipient) {
+					return fmt.Errorf("invalid recipient: must be a valid age public key starting with 'age1'")
+				}
+				return fmt.Errorf("cannot add recipient: %w", err)
 			}
-			if errors.Is(err, vaultpkg.ErrInvalidRecipient) {
-				return fmt.Errorf("invalid recipient: must be a valid age public key starting with 'age1'")
-			}
-			return fmt.Errorf("cannot add recipient: %w", err)
-		}
 
-		printlnQuietAware("Recipient added successfully.")
-		return nil
+			printlnQuietAware("Recipient added successfully.")
+			return nil
+		})
 	},
 }
 
@@ -143,48 +131,36 @@ Use --yes to skip confirmation (useful for scripts).`,
 	Example: `  openpass recipients remove age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p`,
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vaultDir, err := vaultPath()
-		if err != nil {
-			return err
-		}
+		return withVaultRaw(func(v *vaultpkg.Vault) error {
+			recipient := args[0]
 
-		_, err = unlockVault(vaultDir, true)
-		if err != nil {
-			return err
-		}
-
-		recipient := args[0]
-
-		if !vaultpkg.IsInitialized(vaultDir) {
-			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
-		}
-
-		// Confirmation prompt unless --yes is passed or config disables it
-		if !confirmRemove {
-			fmt.Fprintf(os.Stderr, "Remove recipient %s? (y/N): ", recipient)
-			answer, err := bufio.NewReader(os.Stdin).ReadString('\n')
-			if err != nil && answer == "" {
-				return fmt.Errorf("read confirmation: %w", err)
+			// Confirmation prompt unless --yes is passed or config disables it
+			if !confirmRemove {
+				fmt.Fprintf(os.Stderr, "Remove recipient %s? (y/N): ", recipient)
+				answer, err := bufio.NewReader(os.Stdin).ReadString('\n')
+				if err != nil && answer == "" {
+					return fmt.Errorf("read confirmation: %w", err)
+				}
+				if strings.ToLower(strings.TrimSpace(answer)) != "y" {
+					fmt.Fprintln(os.Stderr, "Canceled")
+					return nil
+				}
 			}
-			if strings.ToLower(strings.TrimSpace(answer)) != "y" {
-				fmt.Fprintln(os.Stderr, "Canceled")
-				return nil
-			}
-		}
 
-		rm := vaultpkg.NewRecipientsManager(vaultDir)
-		if err := rm.RemoveRecipient(recipient); err != nil {
-			if errors.Is(err, vaultpkg.ErrRecipientNotFound) {
-				return fmt.Errorf("recipient not found")
+			rm := vaultpkg.NewRecipientsManager(v.Dir)
+			if err := rm.RemoveRecipient(recipient); err != nil {
+				if errors.Is(err, vaultpkg.ErrRecipientNotFound) {
+					return fmt.Errorf("recipient not found")
+				}
+				if errors.Is(err, vaultpkg.ErrInvalidRecipient) {
+					return fmt.Errorf("invalid recipient: must be a valid age public key starting with 'age1'")
+				}
+				return fmt.Errorf("cannot remove recipient: %w", err)
 			}
-			if errors.Is(err, vaultpkg.ErrInvalidRecipient) {
-				return fmt.Errorf("invalid recipient: must be a valid age public key starting with 'age1'")
-			}
-			return fmt.Errorf("cannot remove recipient: %w", err)
-		}
 
-		printlnQuietAware("Recipient removed successfully.")
-		return nil
+			printlnQuietAware("Recipient removed successfully.")
+			return nil
+		})
 	},
 }
 

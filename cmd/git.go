@@ -15,24 +15,32 @@ var gitCmd = &cobra.Command{
 	Short: "Git operations on vault",
 	Args:  cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		action := args[0]
+
+		if action == "log" {
+			return withVaultRaw(func(v *vaultpkg.Vault) error {
+				path := ""
+				if len(args) > 1 {
+					path = args[1]
+				}
+				history, err := git.Log(v.Dir, path, 0)
+				if err != nil {
+					return fmt.Errorf("cannot get log: %w", err)
+				}
+				for _, h := range history {
+					printQuietAware("%s  %s  %s\n", h.Hash[:7], h.Date.Format("2006-01-02"), h.Message)
+					printlnQuietAware("  Author: " + h.Author)
+				}
+				return nil
+			})
+		}
+
 		vaultDir, err := vaultPath()
 		if err != nil {
 			return err
 		}
-
 		if !vaultpkg.IsInitialized(vaultDir) {
 			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized, "vault not initialized. Run 'openpass init' first", errorspkg.ErrVaultNotInitialized)
-		}
-
-		action := args[0]
-
-		var v *vaultpkg.Vault
-		if action == "log" {
-			var err error
-			v, err = unlockVault(vaultDir, true)
-			if err != nil {
-				return err
-			}
 		}
 
 		switch action {
@@ -41,30 +49,11 @@ var gitCmd = &cobra.Command{
 				return fmt.Errorf("push failed: %w", err)
 			}
 			printlnQuietAware("Pushed to remote")
-
 		case "pull":
 			if err := git.Pull(vaultDir); err != nil {
 				return fmt.Errorf("pull failed: %w", err)
 			}
 			printlnQuietAware("Pulled from remote")
-
-		case "log":
-			path := ""
-			if len(args) > 1 {
-				path = args[1]
-			}
-
-			history, err := git.Log(vaultDir, path, 0)
-			if err != nil {
-				return fmt.Errorf("cannot get log: %w", err)
-			}
-
-			_ = v
-			for _, h := range history {
-				printQuietAware("%s  %s  %s\n", h.Hash[:7], h.Date.Format("2006-01-02"), h.Message)
-				printlnQuietAware("  Author: " + h.Author)
-			}
-
 		default:
 			return fmt.Errorf("unknown action: %s (use push, pull, or log)", action)
 		}

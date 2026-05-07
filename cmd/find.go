@@ -49,12 +49,9 @@ var findCmd = &cobra.Command{
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return withVault(func(svc vaultsvc.Service) error {
-			vaultDir, err := vaultPath()
-			if err != nil {
-				return err
-			}
-			cfg := loadVaultConfigForUnlock(vaultDir)
-			workers := searchWorkers(vaultDir, cfg)
+			_ = maybeAutoPull(svc.GetDir(), svc.Vault().Config)
+			cfg := svc.Vault().Config
+			workers := searchWorkers(svc.GetDir(), cfg)
 
 			matches, err := svc.Find(args[0], vaultpkg.FindOptions{MaxWorkers: workers})
 			if err != nil {

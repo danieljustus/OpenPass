@@ -1,0 +1,136 @@
+package cmd
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/spf13/cobra"
+
+	configpkg "github.com/danieljustus/OpenPass/internal/config"
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
+	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
+)
+
+var migrateCmd = &cobra.Command{
+	Use:   "migrate",
+	Short: "Vault migration commands",
+}
+
+var migratePseudonymizeCmd = &cobra.Command{
+	Use:   "pseudonymize",
+	Short: "Migrate vault entries to pseudonymized storage paths",
+	Long: `Migrate vault entries to pseudonymized storage paths.
+
+WARNING: This rewrites every entry in the vault. Make a backup first.
+Each entry is read, re-encrypted with its plaintext path stored inside
+the encrypted data, and written to an HMAC-SHA256 derived path under
+entries/. The old plaintext-named files are removed.
+
+After migration, enable pseudonymize_paths in your vault config.yaml
+to write new entries to pseudonymized paths.`,
+	Example: `  openpass migrate pseudonymize`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultDir, err := vaultPath()
+		if err != nil {
+			return err
+		}
+
+		if !vaultpkg.IsInitialized(vaultDir) {
+			return errorspkg.NewCLIError(errorspkg.ExitNotInitialized,
+				"vault not initialized. Run 'openpass init' first",
+				errorspkg.ErrVaultNotInitialized)
+		}
+
+		v, err := unlockVault(vaultDir, true)
+		if err != nil {
+			return err
+		}
+
+		return runPseudonymizeMigration(v)
+	},
+}
+
+func runPseudonymizeMigration(v *vaultpkg.Vault) error {
+	vaultDir := v.Dir
+
+	var ageFiles []string
+	err := filepath.WalkDir(filepath.Join(vaultDir, "entries"), func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) == ".age" {
+			ageFiles = append(ageFiles, path)
+		}
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("walk entries: %w", err)
+	}
+
+	if len(ageFiles) == 0 {
+		printlnQuietAware("No entries to migrate. Enabling pseudonymize_paths in config.")
+		return enablePseudonymizeConfig(vaultDir)
+	}
+
+	printlnQuietAware(fmt.Sprintf("Migrating %d entries to pseudonymized paths...", len(ageFiles)))
+
+	migrated := 0
+	for _, filePath := range ageFiles {
+		rel, relErr := filepath.Rel(filepath.Join(vaultDir, "entries"), filePath)
+		if relErr != nil {
+			return fmt.Errorf("compute relative path for %s: %w", filePath, relErr)
+		}
+		plainPath := strings.TrimSuffix(filepath.ToSlash(rel), ".age")
+
+		entry, readErr := vaultpkg.ReadEntry(vaultDir, plainPath, v.Identity)
+		if readErr != nil {
+			return fmt.Errorf("read entry %s: %w", plainPath, readErr)
+		}
+
+		if err := vaultpkg.WriteEntry(vaultDir, plainPath, entry, v.Identity); err != nil {
+			return fmt.Errorf("rewrite entry %s: %w", plainPath, err)
+		}
+
+		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove old entry %s: %w", filePath, err)
+		}
+
+		migrated++
+		fmt.Fprintf(os.Stderr, "\rMigrated %d/%d entries", migrated, len(ageFiles))
+	}
+	fmt.Fprintln(os.Stderr)
+
+	if err := enablePseudonymizeConfig(vaultDir); err != nil {
+		return err
+	}
+
+	printlnQuietAware("Migration complete. All entries now use pseudonymized paths.")
+	return nil
+}
+
+func enablePseudonymizeConfig(vaultDir string) error {
+	cfg, err := configpkg.Load(filepath.Join(vaultDir, "config.yaml"))
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	if cfg.Vault == nil {
+		cfg.Vault = &configpkg.VaultConfig{}
+	}
+	cfg.Vault.PseudonymizePaths = true
+
+	if err := cfg.SaveTo(filepath.Join(vaultDir, "config.yaml")); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
+	return nil
+}
+
+func init() {
+	migrateCmd.AddCommand(migratePseudonymizeCmd)
+	rootCmd.AddCommand(migrateCmd)
+}
