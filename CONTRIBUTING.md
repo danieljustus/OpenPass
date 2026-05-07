@@ -182,10 +182,13 @@ openpass get pass 2>/dev/null   # Hide errors
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run all tests with race detector (recommended for local validation)
 make test
 
-# Run tests with race detector (used in CI)
+# Run tests without race detector (faster, for quick iteration)
+make test-fast
+
+# Run tests with race detector and extended timeout (used in CI)
 make test-race
 
 # Run specific package tests

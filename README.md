@@ -262,7 +262,20 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and PR process.
 
 ### Testing
 
-Tests run with `go test ./...`. Some tests are skipped automatically:
+```bash
+# Run all tests with race detector (recommended for local validation)
+make test
+
+# Run tests without race detector (faster, for quick iteration)
+make test-fast
+
+# Run specific package tests
+go test ./internal/vault/... -v
+```
+
+Tests include the Go race detector by default via `make test` to catch concurrency issues early. Use `make test-fast` when iterating quickly and you want a faster feedback loop without the race detector penalty.
+
+Some tests are skipped automatically:
 
 - **Slow tests** (`-short` flag): Flow and binary e2e tests skip in short mode. Run without `-short` to execute them.
 - **Headless CI**: Tests requiring the OS keyring (session caching) skip when no keyring backend is available (e.g., containerized or headless CI). These are environment-dependent and not failures.
