@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"errors"
+	"log/slog"
 	"testing"
 
 	"github.com/danieljustus/OpenPass/internal/config"
@@ -26,7 +27,7 @@ func newTestService(t *testing.T) vaultsvc.Service {
 	if err != nil {
 		t.Fatalf("open vault: %v", err)
 	}
-	return vaultsvc.New(v)
+	return vaultsvc.New(slog.Default(), v)
 }
 
 func writeTestEntry(t *testing.T, svc vaultsvc.Service, path string, data map[string]any) {

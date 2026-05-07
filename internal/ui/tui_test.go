@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"log/slog"
 	"path/filepath"
 	"testing"
 
@@ -33,7 +34,7 @@ func TestTUIModelLoadsEntries(t *testing.T) {
 		Dir:      vaultDir,
 		Identity: id,
 	}
-	svc := vaultsvc.New(v)
+	svc := vaultsvc.New(slog.Default(), v)
 
 	m := NewTUIModel(svc)
 
@@ -71,7 +72,7 @@ func TestTUIModelHandlesListError(t *testing.T) {
 		Dir:      vaultDir,
 		Identity: id,
 	}
-	svc := vaultsvc.New(v)
+	svc := vaultsvc.New(slog.Default(), v)
 
 	m := NewTUIModel(svc)
 
@@ -102,7 +103,7 @@ func TestLoadEntriesCmdIntegration(t *testing.T) {
 		Dir:      vaultDir,
 		Identity: id,
 	}
-	svc := vaultsvc.New(v)
+	svc := vaultsvc.New(slog.Default(), v)
 
 	entries, err := svc.List("")
 	if err != nil {

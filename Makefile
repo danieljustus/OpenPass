@@ -1,4 +1,4 @@
-.PHONY: all build install test test-coverage test-verbose test-race test-ci clean lint lint-fix fmt fmt-check vet completions manpages help docs-check
+.PHONY: all build install test test-fast test-coverage test-verbose test-race test-ci clean lint lint-fix fmt fmt-check vet completions manpages help docs-check
 
 # Variables
 BINARY_NAME := openpass
@@ -28,8 +28,12 @@ LDFLAGS := -s -w \
 build:
 	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BINARY_NAME) .
 
-# Run all tests
+# Run all tests with race detector (default, for CI-like local testing)
 test:
+	$(GO) test ./... -race -v
+
+# Run all tests without race detector (faster, for quick iteration)
+test-fast:
 	$(GO) test ./... -v
 
 # Run tests with coverage
@@ -142,7 +146,8 @@ deps:
 help:
 	@echo "Available targets:"
 	@echo "  build              - Build the binary"
-	@echo "  test               - Run all tests"
+	@echo "  test               - Run all tests with race detector"
+	@echo "  test-fast          - Run all tests without race detector (quick iteration)"
 	@echo "  test-coverage      - Run tests with coverage report"
 	@echo "  test-coverage-html - Generate HTML coverage report"
 	@echo "  test-race          - Run tests with race detector"
