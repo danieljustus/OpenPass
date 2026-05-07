@@ -300,6 +300,7 @@ func listPseudonymized(vaultDir, prefix string) ([]string, error) {
 			return nil
 		}
 
+		// #nosec G304 -- filePath comes from filepath.WalkDir of the vault entries directory
 		raw, readErr := os.ReadFile(filePath)
 		if readErr != nil {
 			return nil

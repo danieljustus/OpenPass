@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -75,7 +76,7 @@ func runHTTPServerAsync(ctx context.Context, t *testing.T, bind string, port int
 		}
 	}()
 
-	addr := fmt.Sprintf("%s:%d", bind, port)
+	addr := net.JoinHostPort(bind, strconv.Itoa(port))
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		conn, err := net.Dial("tcp", addr)

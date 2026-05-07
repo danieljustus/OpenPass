@@ -42,6 +42,7 @@ func (dm *DeviceManager) LoadDevices() ([]Device, error) {
 		return []Device{}, nil
 	}
 
+	// #nosec G304 -- path is the devices.json file within the vault directory
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read devices file: %w", err)

@@ -132,6 +132,7 @@ to re-encrypt all entries for this new device.`,
 
 		pairingPath := filepath.Join(vaultDir, ".openpass", "pairing", token+".json")
 		var pf pairingFile
+		// #nosec G304 -- pairingPath is constructed within the vault directory
 		pfData, err := os.ReadFile(pairingPath)
 		if err != nil {
 			return fmt.Errorf("invalid or expired pairing token: could not read pairing file. Ensure the token is correct and the pairing device has pushed the token file: %w", err)
@@ -253,6 +254,7 @@ can decrypt them.`,
 
 		joinedPath := filepath.Join(vaultDir, ".openpass", "pairing", token+"-joined.json")
 		var jf joinedFile
+		// #nosec G304 -- joinedPath is constructed within the vault directory
 		jfData, err := os.ReadFile(joinedPath)
 		if err != nil {
 			return fmt.Errorf("no join request found for token %s. Ensure the joining device has completed 'openpass device join' and pushed: %w", token, err)

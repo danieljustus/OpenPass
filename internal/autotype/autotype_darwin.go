@@ -21,6 +21,7 @@ func (a *darwinAutotype) Type(text string) error {
 	escaped = strings.ReplaceAll(escaped, `"`, `\"`)
 
 	script := fmt.Sprintf(`tell application "System Events" to keystroke "%s"`, escaped)
+	// #nosec G204 -- script is constructed internally for AppleScript keystroke
 	cmd := exec.Command("osascript", "-e", script)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("autotype failed: %w", err)

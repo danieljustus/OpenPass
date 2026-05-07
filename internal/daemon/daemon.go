@@ -230,8 +230,10 @@ func (i *Installer) installDarwin() error {
 	}
 
 	// Unload any existing instance first (ignore errors)
+	// #nosec G204 -- plistPath is generated internally by darwinPlistPath()
 	_ = exec.Command("launchctl", "unload", plistPath).Run()
 
+	// #nosec G204 -- plistPath is generated internally by darwinPlistPath()
 	if out, err := exec.Command("launchctl", "load", plistPath).CombinedOutput(); err != nil {
 		return errorspkg.NewCLIError(errorspkg.ExitGeneralError,
 			fmt.Sprintf("failed to load launchd service: %s", strings.TrimSpace(string(out))),
@@ -248,6 +250,7 @@ func (i *Installer) uninstallDarwin() error {
 	}
 
 	// Try to unload (best-effort)
+	// #nosec G204 -- plistPath is generated internally by darwinPlistPath()
 	_ = exec.Command("launchctl", "unload", plistPath).Run()
 
 	if err := os.Remove(plistPath); err != nil && !os.IsNotExist(err) {
@@ -313,7 +316,7 @@ func (i *Installer) writePlist(path string) error {
 		return fmt.Errorf("render plist template: %w", err)
 	}
 
-	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
 		return fmt.Errorf("write plist: %w", err)
 	}
 
@@ -434,7 +437,7 @@ func (i *Installer) writeService(path string) error {
 		return fmt.Errorf("render service template: %w", err)
 	}
 
-	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
 		return fmt.Errorf("write service file: %w", err)
 	}
 

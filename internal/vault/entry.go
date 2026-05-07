@@ -133,6 +133,7 @@ func ReadEntry(vaultDir, path string, identity *age.X25519Identity) (*Entry, err
 
 	cfg := loadVaultConfig(vaultDir)
 	filePath := entryStoragePath(vaultDir, path, identity, cfg)
+	// #nosec G304 -- filePath is constructed by entryStoragePath from validated vaultDir and path
 	raw, err := os.ReadFile(filePath)
 	if os.IsNotExist(err) && canUseLegacyEntryPath(path) {
 		if legacyErr := validateLegacyEntryPath(vaultDir, path); legacyErr != nil {
