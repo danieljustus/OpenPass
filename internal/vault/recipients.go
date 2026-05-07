@@ -386,6 +386,7 @@ func WriteEntryWithRecipients(vaultDir, path string, entry *Entry, identity *age
 		return fmt.Errorf("get recipients: %w", err)
 	}
 
+	cfg := loadVaultConfig(vaultDir)
 	now := time.Now().UTC()
 	copyEntry := cloneEntry(entry)
 	if copyEntry.Metadata.Created.IsZero() {
@@ -395,6 +396,10 @@ func WriteEntryWithRecipients(vaultDir, path string, entry *Entry, identity *age
 	copyEntry.Metadata.Version++
 	if copyEntry.Data == nil {
 		copyEntry.Data = map[string]any{}
+	}
+
+	if isPseudonymizeEnabled(cfg) {
+		copyEntry.Path = path
 	}
 
 	plaintext, err := json.Marshal(copyEntry)
@@ -408,7 +413,7 @@ func WriteEntryWithRecipients(vaultDir, path string, entry *Entry, identity *age
 		return fmt.Errorf("encrypt: %w", err)
 	}
 
-	filePath := entryFilePath(vaultDir, path)
+	filePath := entryStoragePath(vaultDir, path, identity, cfg)
 	// Symlink-hardened mkdir: validates each component to prevent following symlinks
 	if err := SafeMkdirAll(filepath.Dir(filePath), 0o700); err != nil {
 		return err

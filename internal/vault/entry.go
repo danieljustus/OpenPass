@@ -1,6 +1,10 @@
 package vault
 
 import (
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,7 +14,10 @@ import (
 	"time"
 
 	"filippo.io/age"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 
+	vaultconfig "github.com/danieljustus/OpenPass/internal/config"
 	vaultcrypto "github.com/danieljustus/OpenPass/internal/crypto"
 	"github.com/danieljustus/OpenPass/internal/metrics"
 	"github.com/danieljustus/OpenPass/internal/pathutil"
@@ -18,6 +25,7 @@ import (
 
 // Entry represents a vault entry with flexible data storage using map[string]any.
 type Entry struct {
+	Path     string         `json:"path,omitempty"`
 	Data     map[string]any `json:"data"`
 	Metadata EntryMetadata  `json:"meta"`
 }
@@ -98,6 +106,14 @@ func validateLegacyEntryPath(vaultDir, path string) error {
 	return nil
 }
 
+func loadVaultConfig(vaultDir string) *vaultconfig.Config {
+	cfg, err := vaultconfig.Load(filepath.Join(vaultDir, "config.yaml"))
+	if err != nil {
+		return vaultconfig.Default()
+	}
+	return cfg
+}
+
 // ReadEntry reads and decrypts an entry from the vault
 func ReadEntry(vaultDir, path string, identity *age.X25519Identity) (*Entry, error) {
 	if identity == nil {
@@ -105,18 +121,28 @@ func ReadEntry(vaultDir, path string, identity *age.X25519Identity) (*Entry, err
 	}
 	rememberSearchIdentity(identity)
 
+	_, span := metrics.StartSpan(context.Background(), "vault.ReadEntry",
+		attribute.String("operation", "read"),
+		attribute.String("vault.entry.path", metrics.HashEntryPath(path)),
+	)
+	defer span.End()
+
 	if err := validateEntryPath(vaultDir, path); err != nil {
-		return nil, err
+		span.SetStatus(codes.Error, err.Error())
 	}
 
-	raw, err := os.ReadFile(entryFilePath(vaultDir, path))
+	cfg := loadVaultConfig(vaultDir)
+	filePath := entryStoragePath(vaultDir, path, identity, cfg)
+	raw, err := os.ReadFile(filePath)
 	if os.IsNotExist(err) && canUseLegacyEntryPath(path) {
 		if legacyErr := validateLegacyEntryPath(vaultDir, path); legacyErr != nil {
+			span.SetStatus(codes.Error, legacyErr.Error())
 			return nil, legacyErr
 		}
 		raw, err = os.ReadFile(legacyEntryFilePath(vaultDir, path))
 	}
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -124,12 +150,14 @@ func ReadEntry(vaultDir, path string, identity *age.X25519Identity) (*Entry, err
 	plaintext, err := vaultcrypto.Decrypt(raw, identity)
 	metrics.RecordVaultOperationDuration("decrypt", time.Since(start))
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	defer vaultcrypto.Wipe(plaintext)
 
 	var entry Entry
 	if err := json.Unmarshal(plaintext, &entry); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	if entry.Data == nil {
@@ -148,10 +176,18 @@ func WriteEntry(vaultDir, path string, entry *Entry, identity *age.X25519Identit
 	}
 	rememberSearchIdentity(identity)
 
+	_, span := metrics.StartSpan(context.Background(), "vault.WriteEntry",
+		attribute.String("operation", "write"),
+		attribute.String("vault.entry.path", metrics.HashEntryPath(path)),
+	)
+	defer span.End()
+
 	if err := validateEntryPath(vaultDir, path); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
+	cfg := loadVaultConfig(vaultDir)
 	now := time.Now().UTC()
 	copyEntry := cloneEntry(entry)
 	if copyEntry.Metadata.Created.IsZero() {
@@ -163,8 +199,13 @@ func WriteEntry(vaultDir, path string, entry *Entry, identity *age.X25519Identit
 		copyEntry.Data = map[string]any{}
 	}
 
+	if isPseudonymizeEnabled(cfg) {
+		copyEntry.Path = path
+	}
+
 	plaintext, err := json.Marshal(copyEntry)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
@@ -172,11 +213,13 @@ func WriteEntry(vaultDir, path string, entry *Entry, identity *age.X25519Identit
 	ciphertext, err := vaultcrypto.Encrypt(plaintext, identity.Recipient())
 	metrics.RecordVaultOperationDuration("encrypt", time.Since(start))
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
-	filePath := entryFilePath(vaultDir, path)
+	filePath := entryStoragePath(vaultDir, path, identity, cfg)
 	if err := SafeMkdirAll(filepath.Dir(filePath), 0o700); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 	// Symlink-hardened write: O_NOFOLLOW + fstat verification prevents writing through symlinks
@@ -184,21 +227,32 @@ func WriteEntry(vaultDir, path string, entry *Entry, identity *age.X25519Identit
 }
 
 // DeleteEntry removes an entry from the vault
-func DeleteEntry(vaultDir, path string) error {
+func DeleteEntry(vaultDir, path string, identity *age.X25519Identity) error {
+	_, span := metrics.StartSpan(context.Background(), "vault.DeleteEntry",
+		attribute.String("operation", "delete"),
+		attribute.String("vault.entry.path", metrics.HashEntryPath(path)),
+	)
+	defer span.End()
+
 	if err := validateEntryPath(vaultDir, path); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
-	filePath := entryFilePath(vaultDir, path)
+	cfg := loadVaultConfig(vaultDir)
+	filePath := entryStoragePath(vaultDir, path, identity, cfg)
 	// Symlink-hardened remove: O_NOFOLLOW + fstat verification prevents removing through symlinks
 	if err := SafeRemove(filePath); err != nil {
 		if !os.IsNotExist(err) || !canUseLegacyEntryPath(path) {
+			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 		if legacyErr := validateLegacyEntryPath(vaultDir, path); legacyErr != nil {
+			span.SetStatus(codes.Error, legacyErr.Error())
 			return legacyErr
 		}
 		if err := SafeRemove(legacyEntryFilePath(vaultDir, path)); err != nil {
+			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 		return nil
@@ -206,9 +260,11 @@ func DeleteEntry(vaultDir, path string) error {
 
 	if canUseLegacyEntryPath(path) {
 		if legacyErr := validateLegacyEntryPath(vaultDir, path); legacyErr != nil {
+			span.SetStatus(codes.Error, legacyErr.Error())
 			return legacyErr
 		}
 		if err := SafeRemove(legacyEntryFilePath(vaultDir, path)); err != nil && !os.IsNotExist(err) {
+			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 	}
@@ -279,8 +335,15 @@ func migrateLegacyEntries(vaultDir string) error {
 
 // MergeEntry merges partial data into an existing entry
 func MergeEntry(vaultDir, path string, partialData map[string]any, identity *age.X25519Identity) (*Entry, error) {
+	_, span := metrics.StartSpan(context.Background(), "vault.MergeEntry",
+		attribute.String("operation", "merge"),
+		attribute.String("vault.entry.path", metrics.HashEntryPath(path)),
+	)
+	defer span.End()
+
 	entry, err := ReadEntry(vaultDir, path, identity)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	if entry.Data == nil {
@@ -288,6 +351,7 @@ func MergeEntry(vaultDir, path string, partialData map[string]any, identity *age
 	}
 	mergeMaps(entry.Data, partialData)
 	if err := WriteEntry(vaultDir, path, entry, identity); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	return ReadEntry(vaultDir, path, identity)
@@ -296,6 +360,39 @@ func MergeEntry(vaultDir, path string, partialData map[string]any, identity *age
 // entryFilePath returns the filesystem path for an entry
 func entryFilePath(vaultDir, path string) string {
 	return filepath.Join(entriesDir(vaultDir), filepath.FromSlash(path)+".age")
+}
+
+// derivePseudonymizationKey derives a deterministic HMAC key from the vault identity.
+// Uses sha256 of the identity string so the same vault always produces the same hashes.
+func derivePseudonymizationKey(identity *age.X25519Identity) []byte {
+	h := sha256.Sum256([]byte(identity.String()))
+	return h[:]
+}
+
+// pseudonymizePath computes the HMAC-SHA256 hash of a path using the given key
+// and returns it as a hex-encoded string.
+func pseudonymizePath(path string, key []byte) string {
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(path))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// entryStoragePath returns the filesystem path for an entry, respecting pseudonymization.
+// When pseudonymization is enabled, entries are stored at entries/<hash[:2]>/<hash>.age.
+// Otherwise, falls back to the plaintext path under entries/.
+func entryStoragePath(vaultDir, path string, identity *age.X25519Identity, cfg *vaultconfig.Config) string {
+	if identity != nil && isPseudonymizeEnabled(cfg) {
+		key := derivePseudonymizationKey(identity)
+		hash := pseudonymizePath(path, key)
+		return filepath.Join(entriesDir(vaultDir), hash[:2], hash+".age")
+	}
+	return entryFilePath(vaultDir, path)
+}
+
+// isPseudonymizeEnabled returns whether path pseudonymization is enabled based on the given config.
+// Callers should pass the vault config to avoid redundant disk I/O.
+func isPseudonymizeEnabled(cfg *vaultconfig.Config) bool {
+	return cfg != nil && cfg.Vault != nil && cfg.Vault.PseudonymizePaths
 }
 
 // cloneEntry creates a deep copy of an entry
@@ -406,7 +503,8 @@ func GetEntryMetadata(vaultDir, path string, identity *age.X25519Identity) (*Ent
 		return nil, err
 	}
 
-	raw, err := os.ReadFile(entryFilePath(vaultDir, path))
+	cfg := loadVaultConfig(vaultDir)
+	raw, err := os.ReadFile(entryStoragePath(vaultDir, path, identity, cfg))
 	if os.IsNotExist(err) && canUseLegacyEntryPath(path) {
 		if legacyErr := validateLegacyEntryPath(vaultDir, path); legacyErr != nil {
 			return nil, legacyErr

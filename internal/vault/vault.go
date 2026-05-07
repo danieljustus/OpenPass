@@ -198,7 +198,7 @@ func EntryPath(v *Vault, path string) string {
 	if v == nil {
 		return filepath.Join(entriesDirName, filepath.FromSlash(path)+".age")
 	}
-	return entryFilePath(v.Dir, path)
+	return entryStoragePath(v.Dir, path, v.Identity, v.Config)
 }
 
 // EnsureDir ensures the directory for an entry exists

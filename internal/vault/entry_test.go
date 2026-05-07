@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	vaultconfig "github.com/danieljustus/OpenPass/internal/config"
 	"github.com/danieljustus/OpenPass/internal/testutil"
 )
 
@@ -82,7 +83,7 @@ func TestDeleteEntryRemovesFile(t *testing.T) {
 	if err := WriteEntry(vaultDir, "github.com/user", &Entry{Data: map[string]any{"x": 1}}, id); err != nil {
 		t.Fatalf("write entry: %v", err)
 	}
-	if err := DeleteEntry(vaultDir, "github.com/user"); err != nil {
+	if err := DeleteEntry(vaultDir, "github.com/user", id); err != nil {
 		t.Fatalf("delete entry: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(vaultDir, "entries", "github.com", "user.age")); !os.IsNotExist(err) {
@@ -186,7 +187,7 @@ func TestDeleteEntryRejectsTraversal(t *testing.T) {
 	vaultDir := t.TempDir()
 	id := testutil.TempIdentity(t)
 
-	err := DeleteEntry(vaultDir, "../etc/passwd")
+	err := DeleteEntry(vaultDir, "../etc/passwd", nil)
 	if err == nil {
 		t.Fatal("expected error for path traversal")
 	}
@@ -211,7 +212,7 @@ func TestLegacyFallbackDoesNotTouchIdentity(t *testing.T) {
 		t.Fatalf("ReadEntry(identity) error = %v, want IsNotExist", err)
 	}
 
-	if err := DeleteEntry(vaultDir, "identity"); !os.IsNotExist(err) {
+	if err := DeleteEntry(vaultDir, "identity", id); !os.IsNotExist(err) {
 		t.Fatalf("DeleteEntry(identity) error = %v, want IsNotExist", err)
 	}
 	if _, err := os.Stat(identityPath); err != nil {
@@ -648,5 +649,240 @@ func TestGetEntryMetadataRejectsPathTraversal(t *testing.T) {
 	err := validateEntryPath(vaultDir, "../etc/passwd")
 	if err == nil {
 		t.Fatal("expected error for path traversal")
+	}
+}
+
+func TestPseudonymizePathDeterminism(t *testing.T) {
+	id := testutil.TempIdentity(t)
+	key := derivePseudonymizationKey(id)
+
+	h1 := pseudonymizePath("github.com/user", key)
+	h2 := pseudonymizePath("github.com/user", key)
+	h3 := pseudonymizePath("github.com/other", key)
+
+	if h1 != h2 {
+		t.Fatalf("same path should produce same hash: %q vs %q", h1, h2)
+	}
+	if h1 == h3 {
+		t.Fatal("different paths should produce different hashes")
+	}
+	if len(h1) != 64 {
+		t.Fatalf("hash length should be 64 (SHA256 hex), got %d", len(h1))
+	}
+}
+
+func TestDerivePseudonymizationKeyDeterminism(t *testing.T) {
+	id := testutil.TempIdentity(t)
+	k1 := derivePseudonymizationKey(id)
+	k2 := derivePseudonymizationKey(id)
+
+	if string(k1) != string(k2) {
+		t.Fatal("same identity should produce same key")
+	}
+	if len(k1) != 32 {
+		t.Fatalf("key length should be 32 (SHA256), got %d", len(k1))
+	}
+}
+
+func TestWriteAndReadEntryWithPseudonymization(t *testing.T) {
+	vaultDir := t.TempDir()
+
+	writePseudonymizeConfig(t, vaultDir, true)
+
+	id := testutil.TempIdentity(t)
+	rememberSearchIdentity(id)
+
+	entry := &Entry{
+		Data: map[string]any{
+			"username": "alice",
+			"password": "s3cr3t",
+		},
+	}
+
+	if err := WriteEntry(vaultDir, "github.com/user", entry, id); err != nil {
+		t.Fatalf("write entry: %v", err)
+	}
+
+	key := derivePseudonymizationKey(id)
+	hash := pseudonymizePath("github.com/user", key)
+	wantPath := filepath.Join(vaultDir, "entries", hash[:2], hash+".age")
+	if _, err := os.Stat(wantPath); err != nil {
+		t.Fatalf("expected pseudonymized file at %s: %v", wantPath, err)
+	}
+
+	plainPath := filepath.Join(vaultDir, "entries", "github.com", "user.age")
+	if _, err := os.Stat(plainPath); !os.IsNotExist(err) {
+		t.Fatalf("plaintext path file should not exist: %v", err)
+	}
+
+	got, err := ReadEntry(vaultDir, "github.com/user", id)
+	if err != nil {
+		t.Fatalf("read entry: %v", err)
+	}
+
+	if got.Path != "github.com/user" {
+		t.Fatalf("entry.Path = %q, want %q", got.Path, "github.com/user")
+	}
+	if got.Data["username"] != "alice" {
+		t.Fatalf("username = %v, want alice", got.Data["username"])
+	}
+	if got.Data["password"] != "s3cr3t" {
+		t.Fatalf("password = %v, want s3cr3t", got.Data["password"])
+	}
+}
+
+func TestDeleteEntryWithPseudonymization(t *testing.T) {
+	vaultDir := t.TempDir()
+
+	writePseudonymizeConfig(t, vaultDir, true)
+
+	id := testutil.TempIdentity(t)
+	rememberSearchIdentity(id)
+
+	entry := &Entry{Data: map[string]any{"x": 1}}
+	if err := WriteEntry(vaultDir, "github.com/user", entry, id); err != nil {
+		t.Fatalf("write entry: %v", err)
+	}
+
+	key := derivePseudonymizationKey(id)
+	hash := pseudonymizePath("github.com/user", key)
+	pseudPath := filepath.Join(vaultDir, "entries", hash[:2], hash+".age")
+	if _, err := os.Stat(pseudPath); err != nil {
+		t.Fatalf("expected file at %s: %v", pseudPath, err)
+	}
+
+	if err := DeleteEntry(vaultDir, "github.com/user", id); err != nil {
+		t.Fatalf("delete entry: %v", err)
+	}
+
+	if _, err := os.Stat(pseudPath); !os.IsNotExist(err) {
+		t.Fatalf("expected file deleted, got err=%v", err)
+	}
+}
+
+func TestListWithPseudonymizedEntries(t *testing.T) {
+	vaultDir := t.TempDir()
+
+	writePseudonymizeConfig(t, vaultDir, true)
+
+	id := testutil.TempIdentity(t)
+	rememberSearchIdentity(id)
+
+	mustWriteEntry(t, vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
+	mustWriteEntry(t, vaultDir, id, "github.com/work", map[string]interface{}{"username": "bob"})
+	mustWriteEntry(t, vaultDir, id, "personal/email", map[string]interface{}{"username": "carol"})
+
+	got, err := List(vaultDir, "")
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	want := []string{"github.com/user", "github.com/work", "personal/email"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("List() = %#v, want %#v", got, want)
+	}
+}
+
+func TestListWithPseudonymizedEntriesAndPrefix(t *testing.T) {
+	vaultDir := t.TempDir()
+
+	writePseudonymizeConfig(t, vaultDir, true)
+
+	id := testutil.TempIdentity(t)
+	rememberSearchIdentity(id)
+
+	mustWriteEntry(t, vaultDir, id, "github.com/user", map[string]interface{}{"username": "alice"})
+	mustWriteEntry(t, vaultDir, id, "github.com/work", map[string]interface{}{"username": "bob"})
+	mustWriteEntry(t, vaultDir, id, "personal/email", map[string]interface{}{"username": "carol"})
+
+	got, err := List(vaultDir, "github.com")
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	want := []string{"github.com/user", "github.com/work"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("List() = %#v, want %#v", got, want)
+	}
+}
+
+func TestEntryStoragePathWithoutPseudonymization(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	got := entryStoragePath(vaultDir, "github.com/user", id, nil)
+	want := filepath.Join(vaultDir, "entries", "github.com", "user.age")
+	if got != want {
+		t.Fatalf("entryStoragePath = %q, want %q", got, want)
+	}
+}
+
+func TestEntryStoragePathWithNilIdentity(t *testing.T) {
+	vaultDir := t.TempDir()
+
+	got := entryStoragePath(vaultDir, "github.com/user", nil, nil)
+	want := filepath.Join(vaultDir, "entries", "github.com", "user.age")
+	if got != want {
+		t.Fatalf("entryStoragePath with nil identity = %q, want %q", got, want)
+	}
+}
+
+func TestGetEntryMetadataWithPseudonymization(t *testing.T) {
+	vaultDir := t.TempDir()
+
+	writePseudonymizeConfig(t, vaultDir, true)
+
+	id := testutil.TempIdentity(t)
+	rememberSearchIdentity(id)
+
+	entry := &Entry{
+		Data: map[string]any{"username": "alice", "password": "s3cr3t"},
+	}
+	if err := WriteEntry(vaultDir, "github.com/user", entry, id); err != nil {
+		t.Fatalf("write entry: %v", err)
+	}
+
+	meta, err := GetEntryMetadata(vaultDir, "github.com/user", id)
+	if err != nil {
+		t.Fatalf("get entry metadata: %v", err)
+	}
+
+	if meta.Version != 1 {
+		t.Fatalf("version = %d, want 1", meta.Version)
+	}
+}
+
+func TestIsPseudonymizeEnabledDefault(t *testing.T) {
+	vaultDir := t.TempDir()
+	if err := os.MkdirAll(vaultDir, 0o700); err != nil {
+		t.Fatalf("create vault dir: %v", err)
+	}
+
+	cfg := vaultconfig.Default()
+	cfg.VaultDir = vaultDir
+	if err := cfg.SaveTo(filepath.Join(vaultDir, "config.yaml")); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	loaded, err := vaultconfig.Load(filepath.Join(vaultDir, "config.yaml"))
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if isPseudonymizeEnabled(loaded) {
+		t.Fatal("pseudonymization should be disabled by default")
+	}
+
+	if isPseudonymizeEnabled(cfg) {
+		t.Fatal("pseudonymization should be disabled by default")
+	}
+}
+
+func writePseudonymizeConfig(t *testing.T, vaultDir string, enabled bool) {
+	t.Helper()
+	cfg := vaultconfig.Default()
+	cfg.VaultDir = vaultDir
+	cfg.Vault = &vaultconfig.VaultConfig{PseudonymizePaths: enabled}
+	if err := cfg.SaveTo(filepath.Join(vaultDir, "config.yaml")); err != nil {
+		t.Fatalf("save config: %v", err)
 	}
 }

@@ -336,6 +336,7 @@ func (c *Config) SaveTo(path string) error {
 		confirmRemove := c.Vault.ConfirmRemove
 		vaultAuthMethod := c.Vault.AuthMethod
 		searchWorkers := c.Vault.SearchWorkers
+		pseudonymizePaths := c.Vault.PseudonymizePaths
 		if vaultAuthMethod == "" && authMethod != "" {
 			vaultAuthMethod = authMethod
 		}
@@ -346,15 +347,20 @@ func (c *Config) SaveTo(path string) error {
 			AuthMethod:        &vaultAuthMethod,
 			LegacyMode:        c.Vault.LegacyMode,
 			SearchWorkers:     &searchWorkers,
+			PseudonymizePaths: &pseudonymizePaths,
 		}
 	}
 
 	if c.Git != nil {
 		autoPush := c.Git.AutoPush
+		autoPull := c.Git.AutoPull
+		autoPullInterval := c.Git.AutoPullInterval
 		commitTemplate := c.Git.CommitTemplate
 		raw.Git = &fileGitConfig{
-			AutoPush:       &autoPush,
-			CommitTemplate: &commitTemplate,
+			AutoPush:         &autoPush,
+			AutoPull:         &autoPull,
+			AutoPullInterval: &autoPullInterval,
+			CommitTemplate:   &commitTemplate,
 		}
 	}
 
@@ -375,6 +381,10 @@ func (c *Config) SaveTo(path string) error {
 			ShutdownTimeout:   &c.MCP.ShutdownTimeout,
 			ApprovalTimeout:   &c.MCP.ApprovalTimeout,
 			RateLimit:         &mcpRateLimit,
+		}
+		if c.MCP.OTLPEndpoint != "" {
+			endpoint := c.MCP.OTLPEndpoint
+			raw.MCP.OTLPEndpoint = &endpoint
 		}
 	}
 

@@ -42,6 +42,23 @@ type PushResult struct {
 	HasRemote bool
 }
 
+// PullResult represents the result of a pull operation
+type PullResult struct {
+	Error     error
+	RemoteURL string
+	Success   bool
+	Skipped   bool
+	HasRemote bool
+	Conflicts []string
+}
+
+// SyncResult represents the result of a sync (pull + push) operation
+type SyncResult struct {
+	PullResult
+	PushDone    bool
+	PushSuccess bool
+}
+
 // CommitOptions holds options for committing
 type CommitOptions struct {
 	Message  string
@@ -395,6 +412,111 @@ func Push(vaultDir string) error {
 }
 
 func Pull(vaultDir string) error {
+	result := PullWithResult(vaultDir)
+	if result.Error != nil && !result.Skipped {
+		return result.Error
+	}
+	return nil
+}
+
+// PullWithResult pulls from origin and returns detailed result.
+func PullWithResult(vaultDir string) PullResult {
+	result := PullResult{Success: false, Skipped: false}
+
+	repo, err := openRepo(vaultDir)
+	if err != nil {
+		result.Skipped = true
+		return result
+	}
+
+	w, err := repo.Worktree()
+	if err != nil {
+		result.Skipped = true
+		return result
+	}
+
+	// Check if remote exists
+	remotes, listErr := repo.Remotes()
+	if listErr != nil {
+		result.Error = &PushError{Message: "failed to list remotes", Cause: listErr}
+		return result
+	}
+
+	var originRemote *gogit.Remote
+	for _, r := range remotes {
+		if r.Config().Name == "origin" {
+			originRemote = r
+			result.HasRemote = true
+			if len(r.Config().URLs) > 0 {
+				result.RemoteURL = r.Config().URLs[0]
+			}
+			break
+		}
+	}
+
+	if originRemote == nil {
+		result.Skipped = true
+		return result
+	}
+
+	pullErr := w.Pull(&gogit.PullOptions{RemoteName: "origin"})
+	if pullErr == nil || errors.Is(pullErr, gogit.NoErrAlreadyUpToDate) {
+		result.Success = true
+		return result
+	}
+
+	if errors.Is(pullErr, gogit.ErrRemoteNotFound) || errors.Is(pullErr, gogit.ErrRepositoryNotExists) {
+		result.Skipped = true
+		return result
+	}
+
+	if isOfflineError(pullErr) {
+		result.Error = &PushError{
+			Message: "network error - please check your connection",
+			Cause:   pullErr,
+		}
+		return result
+	}
+
+	// Check for authentication errors
+	errStr := pullErr.Error()
+	if strings.Contains(errStr, "authentication") || strings.Contains(errStr, "credentials") ||
+		strings.Contains(errStr, "401") || strings.Contains(errStr, "403") {
+		result.Error = &PushError{
+			Message: "authentication failed - please check your credentials",
+			Cause:   pullErr,
+		}
+		return result
+	}
+
+	result.Error = &PushError{
+		Message: "pull failed",
+		Cause:   pullErr,
+	}
+	return result
+}
+
+// Sync performs a pull followed by an optional push.
+func Sync(vaultDir string, pushAfter bool) SyncResult {
+	result := SyncResult{
+		PullResult:  PullWithResult(vaultDir),
+		PushDone:    false,
+		PushSuccess: false,
+	}
+
+	if pushAfter && result.PullResult.Success && result.PullResult.HasRemote {
+		pushResult := PushWithResult(vaultDir)
+		result.PushDone = true
+		result.PushSuccess = pushResult.Success
+	}
+
+	return result
+}
+
+// ResolveConflicts handles conflicts after a pull by renaming local conflicting
+// files to .conflict-<hostname> variants. This implements Last-Write-Wins strategy
+// where remote changes are kept and local changes are preserved as conflict files.
+func ResolveConflicts(vaultDir string, hostname string) error {
 	repo, err := openRepo(vaultDir)
 	if err != nil {
 		return nil
@@ -402,17 +524,105 @@ func Pull(vaultDir string) error {
 
 	w, err := repo.Worktree()
 	if err != nil {
-		return nil
+		return err
 	}
 
-	err = w.Pull(&gogit.PullOptions{RemoteName: "origin"})
-	if err == nil || errors.Is(err, gogit.NoErrAlreadyUpToDate) {
-		return nil
+	status, err := w.Status()
+	if err != nil {
+		return err
 	}
-	if errors.Is(err, gogit.ErrRemoteNotFound) || errors.Is(err, gogit.ErrRepositoryNotExists) {
-		return nil
+
+	for path, fileStatus := range status {
+		if fileStatus.Staging != gogit.Unmodified || fileStatus.Worktree == gogit.Unmodified {
+			continue
+		}
+
+		// Only handle modified .age and config files
+		if !strings.HasSuffix(path, ".age") && path != "config.yaml" {
+			continue
+		}
+		// Skip conflict files themselves
+		if strings.Contains(path, ".conflict-") {
+			continue
+		}
+
+		fullPath := filepath.Join(vaultDir, path)
+
+		// Skip identity.age and runtime artifacts
+		if path == "identity.age" || isProtectedRuntimePath(path) {
+			continue
+		}
+
+		// Create conflict backup name
+		ext := filepath.Ext(path)
+		base := strings.TrimSuffix(path, ext)
+		conflictName := fmt.Sprintf("%s.conflict-%s%s", base, hostname, ext)
+		conflictPath := filepath.Join(vaultDir, conflictName)
+
+		if err := copyFile(fullPath, conflictPath); err != nil {
+			return fmt.Errorf("save conflict file %s: %w", conflictName, err)
+		}
 	}
-	return err
+
+	return nil
+}
+
+// LastSyncTime returns the time of the last sync operation.
+// It reads the timestamp from a marker file in the vault's .git directory.
+func LastSyncTime(vaultDir string) (time.Time, error) {
+	markerPath := filepath.Join(vaultDir, ".git", "openpass-last-sync")
+	data, err := os.ReadFile(markerPath) //#nosec G304 -- vaultDir is not user input
+	if err != nil {
+		if os.IsNotExist(err) {
+			return time.Time{}, nil
+		}
+		return time.Time{}, err
+	}
+
+	t, err := time.Parse(time.RFC3339, strings.TrimSpace(string(data)))
+	if err != nil {
+		return time.Time{}, nil
+	}
+	return t, nil
+}
+
+// SetLastSyncTime writes the current time as the last sync timestamp.
+func SetLastSyncTime(vaultDir string) error {
+	markerPath := filepath.Join(vaultDir, ".git", "openpass-last-sync")
+	if err := os.MkdirAll(filepath.Dir(markerPath), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(markerPath, []byte(time.Now().UTC().Format(time.RFC3339)), 0o600)
+}
+
+// ShouldAutoPull checks if an auto-pull should be performed based on the configured
+// interval. Returns true if the last pull was longer than interval ago or if no
+// pull has been recorded.
+func ShouldAutoPull(vaultDir string, interval time.Duration) bool {
+	t, err := LastSyncTime(vaultDir)
+	if err != nil || t.IsZero() {
+		return true
+	}
+	return time.Since(t) > interval
+}
+
+func isOfflineError(err error) bool {
+	errStr := err.Error()
+	return strings.Contains(errStr, "connection") ||
+		strings.Contains(errStr, "timeout") ||
+		strings.Contains(errStr, "refused") ||
+		strings.Contains(errStr, "no such host") ||
+		strings.Contains(errStr, "network") ||
+		strings.Contains(errStr, "TLS") ||
+		strings.Contains(errStr, "EOF")
+}
+
+func copyFile(src, dst string) error {
+	data, err := os.ReadFile(src) //#nosec G304 -- both paths are constructed internally
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0o600)
 }
 
 func Log(vaultDir string, path string, limit int) ([]Commit, error) {
@@ -477,6 +687,85 @@ func formatAuthor(sig object.Signature) string {
 		return sig.Email
 	}
 	return fmt.Sprintf("%s <%s>", sig.Name, sig.Email)
+}
+
+// AddRemote adds a new remote to the vault's git repository.
+// Returns an error if the repository cannot be opened or the remote cannot be created.
+func AddRemote(vaultDir, remoteName, remoteURL string) error {
+	if vaultDir == "" {
+		return fmt.Errorf("empty vault dir")
+	}
+
+	repo, err := openRepo(vaultDir)
+	if err != nil {
+		return fmt.Errorf("cannot open vault git repository: %w", err)
+	}
+
+	existing, err := repo.Remote(remoteName)
+	if err == nil && existing != nil {
+		return fmt.Errorf("remote %q already exists in vault git repository", remoteName)
+	}
+
+	_, err = repo.CreateRemote(&config.RemoteConfig{
+		Name: remoteName,
+		URLs: []string{remoteURL},
+	})
+	if err != nil {
+		return fmt.Errorf("cannot create remote %q: %w", remoteName, err)
+	}
+
+	return nil
+}
+
+// HasRemote checks whether a remote with the given name exists in the vault's git repository.
+// Returns false without error if the vault directory is empty or the repository doesn't exist.
+func HasRemote(vaultDir, remoteName string) (bool, error) {
+	if vaultDir == "" {
+		return false, nil
+	}
+
+	repo, err := openRepo(vaultDir)
+	if err != nil {
+		return false, nil
+	}
+
+	_, err = repo.Remote(remoteName)
+	if err != nil {
+		if errors.Is(err, gogit.ErrRemoteNotFound) {
+			return false, nil
+		}
+		return false, fmt.Errorf("cannot look up remote %q: %w", remoteName, err)
+	}
+
+	return true, nil
+}
+
+// GetRemoteURL returns the first URL of the named remote in the vault's git repository.
+// Returns an empty string without error if the remote doesn't exist or the vault isn't a git repo.
+func GetRemoteURL(vaultDir, remoteName string) (string, error) {
+	if vaultDir == "" {
+		return "", nil
+	}
+
+	repo, err := openRepo(vaultDir)
+	if err != nil {
+		return "", nil
+	}
+
+	remote, err := repo.Remote(remoteName)
+	if err != nil {
+		if errors.Is(err, gogit.ErrRemoteNotFound) {
+			return "", nil
+		}
+		return "", fmt.Errorf("cannot get remote %q: %w", remoteName, err)
+	}
+
+	urls := remote.Config().URLs
+	if len(urls) == 0 {
+		return "", nil
+	}
+
+	return urls[0], nil
 }
 
 var _ = config.RemoteConfig{}

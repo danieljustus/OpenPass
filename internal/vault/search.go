@@ -109,6 +109,7 @@
 package vault
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -121,6 +122,7 @@ import (
 	"filippo.io/age"
 	"golang.org/x/exp/slices"
 
+	vaultcrypto "github.com/danieljustus/OpenPass/internal/crypto"
 	"github.com/danieljustus/OpenPass/internal/metrics"
 )
 
@@ -233,7 +235,14 @@ func currentSearchIdentity() *age.X25519Identity {
 // It uses os.ReadDir for efficient directory traversal without stat calls.
 // Results are cached with a 30-second TTL to avoid repetitive walks during
 // MCP sessions. The cache invalidates automatically when directory mtimes change.
+// When pseudonymization is enabled, entries are decrypted to extract the plaintext
+// path from the entry data.
 func List(vaultDir string, prefix string) ([]string, error) {
+	cfg := loadVaultConfig(vaultDir)
+	if isPseudonymizeEnabled(cfg) {
+		return listPseudonymized(vaultDir, prefix)
+	}
+
 	// Check cache when listing the entire vault (prefix == "").
 	if prefix == "" {
 		if cached := cachedList(vaultDir); cached != nil {
@@ -264,6 +273,71 @@ func List(vaultDir string, prefix string) ([]string, error) {
 		storeListCache(vaultDir, paths)
 	}
 
+	return paths, nil
+}
+
+// listPseudonymized walks all .age files under entries/ and decrypts each to extract
+// the plaintext entry path from entry.Path. Falls back to the relative filepath
+// if entry.Path is empty (backward compatibility with non-pseudonymized entries
+// stored alongside pseudonymized ones).
+func listPseudonymized(vaultDir, prefix string) ([]string, error) {
+	identity := currentSearchIdentity()
+	if identity == nil {
+		return nil, fmt.Errorf("no search identity available for pseudonymized listing")
+	}
+
+	start := time.Now()
+	var paths []string
+
+	err := filepath.WalkDir(entriesDir(vaultDir), func(filePath string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if filepath.Ext(filePath) != ".age" {
+			return nil
+		}
+
+		raw, readErr := os.ReadFile(filePath)
+		if readErr != nil {
+			return nil
+		}
+
+		plaintext, decryptErr := vaultcrypto.Decrypt(raw, identity)
+		if decryptErr != nil {
+			return nil
+		}
+		defer vaultcrypto.Wipe(plaintext)
+
+		var entry Entry
+		if jsonErr := json.Unmarshal(plaintext, &entry); jsonErr != nil {
+			return nil
+		}
+
+		entryPath := entry.Path
+		if entryPath == "" {
+			rel, relErr := filepath.Rel(entriesDir(vaultDir), filePath)
+			if relErr != nil {
+				return nil
+			}
+			entryPath = strings.TrimSuffix(filepath.ToSlash(rel), ".age")
+		}
+
+		if prefix != "" && !strings.HasPrefix(entryPath, prefix) {
+			return nil
+		}
+		paths = append(paths, entryPath)
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+
+	sort.Strings(paths)
+	metrics.RecordVaultOperationDuration("list_pseudonymized", time.Since(start))
+	metrics.RecordVaultEntryCount(vaultDir, len(paths))
 	return paths, nil
 }
 

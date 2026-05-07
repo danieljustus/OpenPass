@@ -518,3 +518,59 @@ func TestInitWithReadOnlyDirectory(t *testing.T) {
 		t.Fatal("Init() on read-only parent = nil, want error")
 	}
 }
+
+// BenchmarkConfigLoadFromDisk measures the cost of loading vault config from disk.
+// This was previously done on every call to isPseudonymizeEnabled and other hot-path functions.
+func BenchmarkConfigLoadFromDisk(b *testing.B) {
+	vaultDir := b.TempDir()
+	identity := testutil.TempIdentity(b)
+	cfg := config.Default()
+	cfg.VaultDir = vaultDir
+	if err := Init(vaultDir, identity, cfg); err != nil {
+		b.Fatalf("Init() error = %v", err)
+	}
+
+	b.ResetTimer()
+	for b.Loop() {
+		_, _ = config.Load(filepath.Join(vaultDir, "config.yaml"))
+	}
+}
+
+// BenchmarkConfigLoadWithCache measures the cost of checking pseudonymization
+// when config is already loaded (passed as parameter, no disk I/O).
+func BenchmarkConfigLoadWithCache(b *testing.B) {
+	vaultDir := b.TempDir()
+	identity := testutil.TempIdentity(b)
+	cfg := config.Default()
+	cfg.VaultDir = vaultDir
+	if err := Init(vaultDir, identity, cfg); err != nil {
+		b.Fatalf("Init() error = %v", err)
+	}
+
+	// Load config once (simulating what vault.Open does)
+	cached, err := config.Load(filepath.Join(vaultDir, "config.yaml"))
+	if err != nil {
+		b.Fatalf("Load() error = %v", err)
+	}
+
+	b.ResetTimer()
+	for b.Loop() {
+		_ = isPseudonymizeEnabled(cached)
+	}
+}
+
+// BenchmarkEntryStoragePathOldVsNew compares the old (load-from-disk) vs new (cached config) paths.
+func BenchmarkEntryStoragePathOldStyle(b *testing.B) {
+	vaultDir := b.TempDir()
+	identity := testutil.TempIdentity(b)
+	cfg := config.Default()
+	cfg.VaultDir = vaultDir
+	if err := Init(vaultDir, identity, cfg); err != nil {
+		b.Fatalf("Init() error = %v", err)
+	}
+
+	b.ResetTimer()
+	for b.Loop() {
+		_ = entryStoragePath(vaultDir, "github.com/user", identity, nil)
+	}
+}

@@ -72,7 +72,7 @@ func TestUnmarshalJSONInvalid(t *testing.T) {
 // TestDeleteEntryNotFound covers os.Remove error when the file doesn't exist.
 func TestDeleteEntryNotFound(t *testing.T) {
 	vaultDir := t.TempDir()
-	err := DeleteEntry(vaultDir, "nonexistent/entry")
+	err := DeleteEntry(vaultDir, "nonexistent/entry", nil)
 	if err == nil {
 		t.Fatal("DeleteEntry() error = nil, want error for non-existent entry")
 	}
@@ -571,7 +571,7 @@ func TestDeleteEntryLegacyNotFound(t *testing.T) {
 	vaultDir := t.TempDir()
 	os.MkdirAll(filepath.Join(vaultDir, "entries"), 0o700)
 
-	err := DeleteEntry(vaultDir, "nonexistent")
+	err := DeleteEntry(vaultDir, "nonexistent", nil)
 	if err == nil {
 		t.Fatal("DeleteEntry() error = nil, want error")
 	}

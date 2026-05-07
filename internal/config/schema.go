@@ -25,18 +25,25 @@ type VaultConfig struct {
 	// operations. 0 (default) enables auto-scaling based on vault size and CPU count.
 	// Positive values set a fixed worker count.
 	SearchWorkers int `yaml:"search_workers,omitempty"`
+	// PseudonymizePaths, when true, stores entries at HMAC-SHA256-derived paths
+	// instead of plaintext paths. This prevents leaking entry names via git filenames.
+	// Default: false (opt-in). Requires migration via 'openpass migrate pseudonymize'.
+	PseudonymizePaths bool `yaml:"pseudonymize_paths,omitempty"`
 }
 
 // GitConfig holds git-related configuration for automatic commits and pushes.
 type GitConfig struct {
-	CommitTemplate string `yaml:"commit_template,omitempty"`
-	AutoPush       bool   `yaml:"auto_push,omitempty"`
+	CommitTemplate   string        `yaml:"commit_template,omitempty"`
+	AutoPush         bool          `yaml:"auto_push,omitempty"`
+	AutoPull         bool          `yaml:"auto_pull,omitempty"`
+	AutoPullInterval time.Duration `yaml:"auto_pull_interval,omitempty"`
 }
 
 // MCPConfig holds MCP server-related configuration for AI agent integration.
 type MCPConfig struct {
 	Bind                string        `yaml:"bind,omitempty"`
 	HTTPTokenFile       string        `yaml:"httpTokenFile,omitempty"`
+	OTLPEndpoint        string        `yaml:"otlp_endpoint,omitempty"`
 	Port                int           `yaml:"port,omitempty"`
 	Stdio               bool          `yaml:"stdio,omitempty"`
 	ApprovalRequired    bool          `yaml:"approval_required,omitempty"`
@@ -94,8 +101,10 @@ func defaultVaultConfig() VaultConfig {
 // defaultGitConfig returns the default git configuration.
 func defaultGitConfig() GitConfig {
 	return GitConfig{
-		AutoPush:       true,
-		CommitTemplate: "Update from OpenPass",
+		AutoPush:         true,
+		AutoPull:         true,
+		AutoPullInterval: 10 * time.Second,
+		CommitTemplate:   "Update from OpenPass",
 	}
 }
 
@@ -158,13 +167,16 @@ type fileVaultConfig struct {
 	Path              string   `yaml:"path,omitempty"`
 	DefaultRecipients []string `yaml:"default_recipients,omitempty"`
 	SearchWorkers     *int     `yaml:"search_workers,omitempty"`
+	PseudonymizePaths *bool    `yaml:"pseudonymize_paths,omitempty"`
 }
 
 // fileGitConfig is the file-based git configuration with pointer fields
 // for optional YAML unmarshaling.
 type fileGitConfig struct {
-	AutoPush       *bool   `yaml:"auto_push,omitempty"`
-	CommitTemplate *string `yaml:"commit_template,omitempty"`
+	AutoPush         *bool          `yaml:"auto_push,omitempty"`
+	AutoPull         *bool          `yaml:"auto_pull,omitempty"`
+	AutoPullInterval *time.Duration `yaml:"auto_pull_interval,omitempty"`
+	CommitTemplate   *string        `yaml:"commit_template,omitempty"`
 }
 
 // fileMCPConfig is the file-based MCP configuration with pointer fields
@@ -175,6 +187,7 @@ type fileMCPConfig struct {
 	Stdio               *bool          `yaml:"stdio,omitempty"`
 	ApprovalRequired    *bool          `yaml:"approval_required,omitempty"` // deprecated, parsed but ignored
 	HTTPTokenFile       *string        `yaml:"httpTokenFile,omitempty"`
+	OTLPEndpoint        *string        `yaml:"otlp_endpoint,omitempty"`
 	ReadHeaderTimeout   *time.Duration `yaml:"read_header_timeout,omitempty"`
 	ReadTimeout         *time.Duration `yaml:"read_timeout,omitempty"`
 	WriteTimeout        *time.Duration `yaml:"write_timeout,omitempty"`
@@ -234,6 +247,9 @@ func MergeFileVaultConfig(fileCfg *fileVaultConfig, defaults VaultConfig) VaultC
 	if fileCfg.SearchWorkers != nil {
 		result.SearchWorkers = *fileCfg.SearchWorkers
 	}
+	if fileCfg.PseudonymizePaths != nil {
+		result.PseudonymizePaths = *fileCfg.PseudonymizePaths
+	}
 	return result
 }
 
@@ -246,6 +262,12 @@ func MergeFileGitConfig(fileCfg *fileGitConfig, defaults GitConfig) GitConfig {
 	result := defaults
 	if fileCfg.AutoPush != nil {
 		result.AutoPush = *fileCfg.AutoPush
+	}
+	if fileCfg.AutoPull != nil {
+		result.AutoPull = *fileCfg.AutoPull
+	}
+	if fileCfg.AutoPullInterval != nil {
+		result.AutoPullInterval = *fileCfg.AutoPullInterval
 	}
 	if fileCfg.CommitTemplate != nil {
 		result.CommitTemplate = *fileCfg.CommitTemplate
@@ -295,6 +317,9 @@ func MergeFileMCPConfig(fileCfg *fileMCPConfig, defaults MCPConfig) MCPConfig {
 	}
 	if fileCfg.TrustedProxyIPs != nil {
 		result.TrustedProxyIPs = append([]string(nil), fileCfg.TrustedProxyIPs...)
+	}
+	if fileCfg.OTLPEndpoint != nil {
+		result.OTLPEndpoint = *fileCfg.OTLPEndpoint
 	}
 	if fileCfg.MetricsAuthRequired != nil {
 		result.MetricsAuthRequired = *fileCfg.MetricsAuthRequired
