@@ -22,7 +22,11 @@ import (
 //
 //nolint:gocyclo // Complex server initialization: auth, middleware, metrics, graceful shutdown
 func RunHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault, vaultDir string, version string, factory func(*vaultpkg.Vault, string, string) (*mcp.Server, error)) error {
-	shutdownTracing, err := metrics.InitTracing("", "")
+	otlpEndpoint := ""
+	if v != nil && v.Config != nil && v.Config.MCP != nil {
+		otlpEndpoint = v.Config.MCP.OTLPEndpoint
+	}
+	shutdownTracing, err := metrics.InitTracing(otlpEndpoint, "")
 	if err != nil {
 		return fmt.Errorf("init tracing: %w", err)
 	}

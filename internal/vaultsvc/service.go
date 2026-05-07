@@ -4,13 +4,13 @@ package vaultsvc
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
 	"filippo.io/age"
 
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
-	"github.com/danieljustus/OpenPass/internal/ui/cliout"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -32,12 +32,13 @@ type Service interface {
 
 // vaultService is the concrete implementation of Service.
 type vaultService struct {
-	vault *vaultpkg.Vault
+	vault  *vaultpkg.Vault
+	logger *slog.Logger
 }
 
 // New creates a new vault service for the given vault.
-func New(v *vaultpkg.Vault) Service {
-	return &vaultService{vault: v}
+func New(logger *slog.Logger, v *vaultpkg.Vault) Service {
+	return &vaultService{vault: v, logger: logger}
 }
 
 // Vault returns the underlying vault instance.
@@ -117,7 +118,7 @@ func (s *vaultService) setEntry(path string, data map[string]any) error {
 
 // Delete removes an entry from the vault.
 func (s *vaultService) Delete(path string) error {
-	if err := vaultpkg.DeleteEntry(s.vault.Dir, path); err != nil {
+	if err := vaultpkg.DeleteEntry(s.vault.Dir, path, s.vault.Identity); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return errorspkg.NotFound("entry not found: %s", path)
 		}
@@ -179,7 +180,7 @@ func (s *vaultService) WriteEntry(path string, entry *vaultpkg.Entry) error {
 
 // warnAutoCommit logs an auto-commit warning.
 func (s *vaultService) warnAutoCommit(err error) {
-	cliout.Warnf("Warning: auto-commit failed: %v", err)
+	s.logger.Warn("auto-commit failed", "error", err)
 }
 
 // GetIdentity returns the vault's identity for encryption/decryption operations.

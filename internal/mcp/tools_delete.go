@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/danieljustus/OpenPass/internal/metrics"
 	"github.com/danieljustus/OpenPass/internal/vaultsvc"
@@ -33,7 +34,7 @@ func (s *Server) handleDelete(ctx context.Context, req CallToolRequest) (*CallTo
 		return nil, fmt.Errorf("delete of %q denied: approval required but cannot be granted", path)
 	}
 
-	svc := vaultsvc.New(s.vault)
+	svc := vaultsvc.New(slog.Default(), s.vault)
 	_, span := metrics.StartSpan(ctx, "vault.Delete")
 	err = svc.Delete(path)
 	span.End()

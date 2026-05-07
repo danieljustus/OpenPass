@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/danieljustus/OpenPass/internal/clipboard"
 	"github.com/danieljustus/OpenPass/internal/metrics"
@@ -34,7 +35,7 @@ func (s *Server) handleCopyToClipboard(ctx context.Context, req CallToolRequest)
 		return nil, fmt.Errorf("copy_to_clipboard denied: approval required but cannot be granted")
 	}
 
-	svc := vaultsvc.New(s.vault)
+	svc := vaultsvc.New(slog.Default(), s.vault)
 	value, err := svc.GetField(path, "password")
 	if err != nil {
 		s.logAudit(ctx, "copy_to_clipboard", path, false)

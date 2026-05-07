@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/danieljustus/OpenPass/internal/crypto"
 	"github.com/danieljustus/OpenPass/internal/metrics"
@@ -85,7 +86,7 @@ func (s *Server) handleSet(ctx context.Context, req CallToolRequest) (*CallToolR
 }
 
 func (s *Server) upsertEntry(ctx context.Context, path string, partialData map[string]any, action string) error {
-	svc := vaultsvc.New(s.vault)
+	svc := vaultsvc.New(slog.Default(), s.vault)
 	_, span := metrics.StartSpan(ctx, "vault.SetEntry")
 	err := svc.SetFields(path, partialData)
 	span.End()

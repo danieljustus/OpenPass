@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 
 	"github.com/danieljustus/OpenPass/internal/metrics"
 	"github.com/danieljustus/OpenPass/internal/vault"
@@ -35,7 +36,7 @@ func (s *Server) handleFind(ctx context.Context, req CallToolRequest) (*CallTool
 // before decryption. Worker count is read from vault config (SearchWorkers) or
 // auto-scaled based on vault size and CPU cores.
 func (s *Server) findEntries(ctx context.Context, query string) ([]vault.Match, error) {
-	svc := vaultsvc.New(s.vault)
+	svc := vaultsvc.New(slog.Default(), s.vault)
 	_, span := metrics.StartSpan(ctx, "vault.Find")
 	defer span.End()
 

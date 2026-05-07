@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -54,7 +55,7 @@ func (s *Server) handleRunCommand(ctx context.Context, req CallToolRequest) (*Ca
 			return NewToolResultError("argument \"env\" must be an object"), nil
 		}
 
-		svc := vaultsvc.New(s.vault)
+		svc := vaultsvc.New(slog.Default(), s.vault)
 		for envName, refRaw := range envMap {
 			ref, ok := refRaw.(string)
 			if !ok {

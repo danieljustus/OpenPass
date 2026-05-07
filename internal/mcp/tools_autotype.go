@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/danieljustus/OpenPass/internal/autotype"
 	"github.com/danieljustus/OpenPass/internal/metrics"
@@ -36,7 +37,7 @@ func (s *Server) handleAutotype(ctx context.Context, req CallToolRequest) (*Call
 		return nil, fmt.Errorf("autotype denied: approval required but cannot be granted")
 	}
 
-	svc := vaultsvc.New(s.vault)
+	svc := vaultsvc.New(slog.Default(), s.vault)
 	value, err := svc.GetField(path, field)
 	if err != nil {
 		s.logAudit(ctx, "autotype", path, false)

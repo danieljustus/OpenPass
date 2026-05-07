@@ -3,6 +3,7 @@ package vaultsvc
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -38,7 +39,7 @@ func newTestService(t *testing.T, withGit bool) Service {
 	if err != nil {
 		t.Fatalf("open vault: %v", err)
 	}
-	return New(v)
+	return New(slog.Default(), v)
 }
 
 func writeTestEntry(t *testing.T, svc Service, path string, data map[string]any) {
@@ -405,7 +406,7 @@ func TestServiceErrorPaths(t *testing.T) {
 	err = svc.WriteEntry("../bad", &vaultpkg.Entry{Data: map[string]any{"password": "secret"}})
 	assertServiceErrorKind(t, err, errorspkg.ErrWriteFailed)
 
-	missingVault := New(&vaultpkg.Vault{Dir: filepath.Join(t.TempDir(), "missing"), Identity: svc.GetIdentity()})
+	missingVault := New(slog.Default(), &vaultpkg.Vault{Dir: filepath.Join(t.TempDir(), "missing"), Identity: svc.GetIdentity()})
 	_, err = missingVault.List("")
 	assertServiceErrorKind(t, err, errorspkg.ErrReadFailed)
 

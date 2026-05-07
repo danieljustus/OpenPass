@@ -22,7 +22,11 @@ func RunStdioServer(ctx context.Context, vault *vaultpkg.Vault, agentName string
 		defer func() { _ = mcpServer.Close() }()
 	}
 
-	shutdownTracing, err := metrics.InitTracing("", "")
+	otlpEndpoint := ""
+	if vault != nil && vault.Config != nil && vault.Config.MCP != nil {
+		otlpEndpoint = vault.Config.MCP.OTLPEndpoint
+	}
+	shutdownTracing, err := metrics.InitTracing(otlpEndpoint, "")
 	if err != nil {
 		return fmt.Errorf("init tracing: %w", err)
 	}

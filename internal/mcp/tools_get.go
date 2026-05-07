@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
@@ -36,7 +37,7 @@ func (s *Server) handleGet(ctx context.Context, req CallToolRequest) (*CallToolR
 		return nil, fmt.Errorf("access denied: path %q outside allowed scope", path)
 	}
 
-	svc := vaultsvc.New(s.vault)
+	svc := vaultsvc.New(slog.Default(), s.vault)
 	_, span := metrics.StartSpan(ctx, "vault.GetEntry")
 	entry, err := svc.GetEntry(path)
 	span.End()
@@ -88,7 +89,7 @@ func (s *Server) handleGetMetadata(ctx context.Context, req CallToolRequest) (*C
 		return nil, fmt.Errorf("access denied: path %q outside allowed scope", path)
 	}
 
-	svc := vaultsvc.New(s.vault)
+	svc := vaultsvc.New(slog.Default(), s.vault)
 	entry, err := svc.GetEntry(path)
 	if err != nil {
 		s.logAudit(ctx, "get_metadata", path, false)

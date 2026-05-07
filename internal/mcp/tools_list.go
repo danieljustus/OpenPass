@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/danieljustus/OpenPass/internal/metrics"
 	"github.com/danieljustus/OpenPass/internal/vaultsvc"
@@ -21,7 +22,7 @@ func (s *Server) handleList(ctx context.Context, req CallToolRequest) (*CallTool
 		return nil, fmt.Errorf("access denied: path %q outside allowed scope", prefix)
 	}
 
-	svc := vaultsvc.New(s.vault)
+	svc := vaultsvc.New(slog.Default(), s.vault)
 	_, span := metrics.StartSpan(ctx, "vault.List")
 	entries, err := svc.List(prefix)
 	span.End()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/danieljustus/OpenPass/internal/crypto"
 	"github.com/danieljustus/OpenPass/internal/vault"
@@ -22,7 +23,7 @@ func (s *Server) handleGenerateTOTP(ctx context.Context, req CallToolRequest) (*
 		return nil, fmt.Errorf("access denied: path %q outside allowed scope", path)
 	}
 
-	svc := vaultsvc.New(s.vault)
+	svc := vaultsvc.New(slog.Default(), s.vault)
 	entry, err := svc.GetEntry(path)
 	if err != nil {
 		s.logAudit(ctx, "totp", path, false)
