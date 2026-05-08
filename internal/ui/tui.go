@@ -609,7 +609,7 @@ func editEntryCmd(svc vaultsvc.Service, path string) tea.Cmd {
 		if editor == "" {
 			editor = "vi"
 		}
-		cmd := exec.Command(editor, tmpPath) //#nosec G204 -- EDITOR is explicitly user-controlled CLI behavior.
+		cmd := exec.Command(editor, tmpPath) //#nosec G204 G702 -- EDITOR is explicitly user-controlled CLI behavior.
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -639,7 +639,7 @@ func editEntryCmd(svc vaultsvc.Service, path string) tea.Cmd {
 // then removes it. If overwriting fails, removal is still attempted to
 // avoid leaving temporary files behind.
 func secureDeleteFile(path string) error {
-	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	f, err := os.OpenFile(path, os.O_WRONLY, 0) //#nosec G304 -- path comes from tmp.Name() in the same function
 	if err != nil {
 		// Cannot open, but still try to remove.
 		_ = os.Remove(path)

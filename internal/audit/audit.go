@@ -531,7 +531,7 @@ func (l *Logger) Close() error {
 }
 
 func loadOrCreateHMACKey(keyPath string) ([]byte, error) {
-	existing, err := os.ReadFile(keyPath)
+	existing, err := os.ReadFile(keyPath) //#nosec G304 -- keyPath is constructed internally from the audit directory
 	if err == nil && len(existing) == hmacKeySize {
 		return existing, nil
 	}
@@ -607,7 +607,7 @@ func canonicalJSON(entry LogEntry) []byte {
 }
 
 func VerifyLog(logFilePath, hmacKeyPath string) (*VerifyResult, error) {
-	key, err := os.ReadFile(hmacKeyPath)
+	key, err := os.ReadFile(hmacKeyPath) //#nosec G304 -- hmacKeyPath is constructed internally from the audit directory
 	if err != nil {
 		return nil, fmt.Errorf("read hmac key: %w", err)
 	}
@@ -615,7 +615,7 @@ func VerifyLog(logFilePath, hmacKeyPath string) (*VerifyResult, error) {
 		return nil, errors.New("hmac key is empty")
 	}
 
-	data, err := os.ReadFile(logFilePath)
+	data, err := os.ReadFile(logFilePath) //#nosec G304 -- logFilePath is provided by the caller and expected to be a trusted audit log path
 	if err != nil {
 		return nil, fmt.Errorf("read log file: %w", err)
 	}
