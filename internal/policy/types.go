@@ -111,6 +111,9 @@ func (tr *TimeRange) Contains(t time.Time) bool {
 	return (now.Equal(start) || now.After(start)) && now.Before(end)
 }
 
+// AuditLogFunc is a callback for logging policy-related events.
+type AuditLogFunc func(action Action, ruleName, reason string)
+
 // EvalContext provides runtime context for policy evaluation.
 type EvalContext struct {
 	AgentID    string
@@ -121,6 +124,15 @@ type EvalContext struct {
 	ActionType string // read, write, delete, run, etc.
 	ToolName   string
 	Now        time.Time
+
+	// RateLimiter is used for rate limit condition evaluation.
+	RateLimiter *AgentRateLimiter
+
+	// SecretsAccessed tracks how many secrets the agent has accessed in this session.
+	SecretsAccessed int
+
+	// AuditLogFunc is called when policy denies access.
+	AuditLogFunc AuditLogFunc
 }
 
 // Result represents the outcome of a policy evaluation.

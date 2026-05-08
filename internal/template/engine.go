@@ -57,18 +57,50 @@ func NewEngine(vault vaultsvc.Service) *Engine {
 // Render executes the named template with the given secret references.
 // In dry-run mode, all secret values are replaced with "***".
 func (e *Engine) Render(ctx context.Context, templateName string, name string, refs map[string]string, dryRun bool) (string, error) {
-	return "", errors.New("not implemented")
+	src, err := e.getTemplateSource(templateName)
+	if err != nil {
+		return "", err
+	}
+
+	values, err := e.resolveRefs(ctx, refs, dryRun)
+	if err != nil {
+		return "", err
+	}
+
+	tmpl, err := template.New(templateName).Funcs(e.funcs).Parse(src)
+	if err != nil {
+		return "", fmt.Errorf("parse template %q: %w", templateName, err)
+	}
+
+	data := RenderData{
+		Name:   name,
+		Refs:   refs,
+		Values: values,
+	}
+
+	var buf strings.Builder
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("execute template %q: %w", templateName, err)
+	}
+
+	return buf.String(), nil
 }
 
 // Validate checks that all secret references in refs can be resolved from the vault.
 func (e *Engine) Validate(ctx context.Context, templateName string, refs map[string]string) error {
-	return errors.New("not implemented")
+	_, err := e.resolveRefs(ctx, refs, false)
+	return err
 }
 
 // LoadCustomTemplates loads all .tmpl files from the given directory as custom templates.
 // The template name is the filename without the extension.
 func (e *Engine) LoadCustomTemplates(dir string) error {
-	return errors.New("not implemented")
+	templates, err := loadTemplatesFromDir(dir)
+	if err != nil {
+		return err
+	}
+	e.custom = templates
+	return nil
 }
 
 // ListBuiltins returns the names of all available built-in templates, sorted alphabetically.
@@ -96,7 +128,29 @@ func (e *Engine) getTemplateSource(name string) (string, error) {
 // resolveRefs resolves all secret references in refs.
 // In dry-run mode, returns masked values instead of actual secrets.
 func (e *Engine) resolveRefs(ctx context.Context, refs map[string]string, dryRun bool) (map[string]string, error) {
-	return nil, errors.New("not implemented")
+	values := make(map[string]string, len(refs))
+	if dryRun {
+		for alias := range refs {
+			values[alias] = "***"
+		}
+		return values, nil
+	}
+
+	aliases := make([]string, 0, len(refs))
+	for alias := range refs {
+		aliases = append(aliases, alias)
+	}
+	sort.Strings(aliases)
+
+	for _, alias := range aliases {
+		ref := refs[alias]
+		value, err := ResolveRef(ctx, e.vault, ref)
+		if err != nil {
+			return nil, fmt.Errorf("resolve ref %q: %w", alias, err)
+		}
+		values[alias] = value
+	}
+	return values, nil
 }
 
 // loadTemplatesFromDir reads all .tmpl files from a directory.

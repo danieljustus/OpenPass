@@ -55,6 +55,14 @@ func (rl *AgentRateLimiter) SetLimits(agentID string, hour, day int) {
 	}
 }
 
+// HasLimits returns whether rate limits have been configured for the given agent.
+func (rl *AgentRateLimiter) HasLimits(agentID string) bool {
+	rl.mu.RLock()
+	_, ok := rl.buckets[agentID]
+	rl.mu.RUnlock()
+	return ok
+}
+
 func (rl *AgentRateLimiter) Cleanup() {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()

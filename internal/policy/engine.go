@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,14 +59,21 @@ func (e *Engine) Evaluate(ctx EvalContext) Result {
 
 	for _, rule := range e.rules {
 		if e.matches(rule, ctx) {
-			return Result{
+			result := Result{
 				Action:   rule.Action,
 				RuleName: rule.Name,
 				Matched:  true,
 			}
+			if result.Action == ActionDeny && ctx.AuditLogFunc != nil {
+				ctx.AuditLogFunc(ActionDeny, rule.Name, "rule matched with deny action")
+			}
+			return result
 		}
 	}
 
+	if ctx.AuditLogFunc != nil {
+		ctx.AuditLogFunc(ActionDeny, "", "no matching rule found, default deny")
+	}
 	return DefaultResult()
 }
 
@@ -105,9 +113,27 @@ func (e *Engine) matches(rule compiledRule, ctx EvalContext) bool {
 	}
 
 	if c.RateLimit != nil {
+		if ctx.RateLimiter == nil {
+			return false
+		}
+		if !ctx.RateLimiter.HasLimits(ctx.AgentID) {
+			ctx.RateLimiter.SetLimits(ctx.AgentID, c.RateLimit.MaxReadsPerHour, c.RateLimit.MaxReadsPerDay)
+		}
+		if !ctx.RateLimiter.Allow(ctx.AgentID) {
+			if ctx.AuditLogFunc != nil {
+				ctx.AuditLogFunc(ActionDeny, rule.Name, "rate limit exceeded")
+			}
+			return false
+		}
 	}
 
 	if c.MaxSecrets > 0 {
+		if ctx.SecretsAccessed >= c.MaxSecrets {
+			if ctx.AuditLogFunc != nil {
+				ctx.AuditLogFunc(ActionDeny, rule.Name, fmt.Sprintf("max secrets exceeded: %d >= %d", ctx.SecretsAccessed, c.MaxSecrets))
+			}
+			return false
+		}
 	}
 
 	return true

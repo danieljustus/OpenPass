@@ -901,7 +901,41 @@ func TestEngineEvaluateAllowedToolsEmpty(t *testing.T) {
 	}
 }
 
-func TestEngineEvaluateRateLimitStub(t *testing.T) {
+func TestEngineEvaluateRateLimitWithinLimits(t *testing.T) {
+	rl := NewAgentRateLimiter()
+	defer rl.Cleanup()
+
+	policy := &Policy{
+		Version: "1.0",
+		Rules: []Rule{
+			{
+				Name:     "rate limited rule",
+				Priority: 100,
+				Conditions: Conditions{
+					AgentID: "agent1",
+					RateLimit: &RateLimitCondition{
+						MaxReadsPerHour: 10,
+						MaxReadsPerDay:  50,
+					},
+				},
+				Action: ActionAllow,
+			},
+		},
+	}
+
+	engine := NewEngine([]*Policy{policy})
+
+	ctx := EvalContext{AgentID: "agent1", Now: time.Now(), RateLimiter: rl}
+	got := engine.Evaluate(ctx)
+	if got.Action != ActionAllow {
+		t.Errorf("Evaluate() = %v, want %v (within rate limit)", got.Action, ActionAllow)
+	}
+}
+
+func TestEngineEvaluateRateLimitExceeded(t *testing.T) {
+	rl := NewAgentRateLimiter()
+	defer rl.Cleanup()
+
 	policy := &Policy{
 		Version: "1.0",
 		Rules: []Rule{
@@ -922,14 +956,97 @@ func TestEngineEvaluateRateLimitStub(t *testing.T) {
 
 	engine := NewEngine([]*Policy{policy})
 
-	ctx := EvalContext{AgentID: "agent1", Now: time.Now()}
-	got := engine.Evaluate(ctx)
-	if got.Action != ActionAllow {
-		t.Errorf("Evaluate() = %v, want %v (Wave 1 stub should allow)", got.Action, ActionAllow)
+	// First call should succeed (rate limit = 1 per hour)
+	ctx1 := EvalContext{AgentID: "agent1", Now: time.Now(), RateLimiter: rl}
+	got1 := engine.Evaluate(ctx1)
+	if got1.Action != ActionAllow {
+		t.Errorf("Evaluate() = %v, want %v (first call within limit)", got1.Action, ActionAllow)
+	}
+
+	// Second call should be denied (exceeded hourly limit)
+	ctx2 := EvalContext{AgentID: "agent1", Now: time.Now(), RateLimiter: rl}
+	got2 := engine.Evaluate(ctx2)
+	if got2.Action != ActionDeny {
+		t.Errorf("Evaluate() = %v, want %v (rate limit exceeded)", got2.Action, ActionDeny)
 	}
 }
 
-func TestEngineEvaluateMaxSecretsStub(t *testing.T) {
+func TestEngineEvaluateRateLimitNoLimiter(t *testing.T) {
+	policy := &Policy{
+		Version: "1.0",
+		Rules: []Rule{
+			{
+				Name:     "rate limited rule",
+				Priority: 100,
+				Conditions: Conditions{
+					AgentID: "agent1",
+					RateLimit: &RateLimitCondition{
+						MaxReadsPerHour: 10,
+					},
+				},
+				Action: ActionAllow,
+			},
+		},
+	}
+
+	engine := NewEngine([]*Policy{policy})
+
+	ctx := EvalContext{AgentID: "agent1", Now: time.Now()}
+	got := engine.Evaluate(ctx)
+	if got.Action != ActionDeny {
+		t.Errorf("Evaluate() = %v, want %v (no rate limiter should deny)", got.Action, ActionDeny)
+	}
+}
+
+func TestEngineEvaluateRateLimitDifferentAgents(t *testing.T) {
+	rl := NewAgentRateLimiter()
+	defer rl.Cleanup()
+
+	policy := &Policy{
+		Version: "1.0",
+		Rules: []Rule{
+			{
+				Name:     "rate limited rule",
+				Priority: 100,
+				Conditions: Conditions{
+					AgentID: "*",
+					RateLimit: &RateLimitCondition{
+						MaxReadsPerHour: 2,
+						MaxReadsPerDay:  10,
+					},
+				},
+				Action: ActionAllow,
+			},
+		},
+	}
+
+	engine := NewEngine([]*Policy{policy})
+
+	// Agent A uses 2 calls (hits limit)
+	for i := 0; i < 2; i++ {
+		ctx := EvalContext{AgentID: "agent-a", Now: time.Now(), RateLimiter: rl}
+		got := engine.Evaluate(ctx)
+		if got.Action != ActionAllow {
+			t.Errorf("agent-a call %d: Evaluate() = %v, want %v", i+1, got.Action, ActionAllow)
+		}
+	}
+
+	// Agent A's third call should be denied
+	ctxA := EvalContext{AgentID: "agent-a", Now: time.Now(), RateLimiter: rl}
+	gotA := engine.Evaluate(ctxA)
+	if gotA.Action != ActionDeny {
+		t.Errorf("agent-a exceeded: Evaluate() = %v, want %v", gotA.Action, ActionDeny)
+	}
+
+	// Agent B should still be allowed (separate bucket)
+	ctxB := EvalContext{AgentID: "agent-b", Now: time.Now(), RateLimiter: rl}
+	gotB := engine.Evaluate(ctxB)
+	if gotB.Action != ActionAllow {
+		t.Errorf("agent-b: Evaluate() = %v, want %v", gotB.Action, ActionAllow)
+	}
+}
+
+func TestEngineEvaluateMaxSecretsWithinLimit(t *testing.T) {
 	policy := &Policy{
 		Version: "1.0",
 		Rules: []Rule{
@@ -947,10 +1064,122 @@ func TestEngineEvaluateMaxSecretsStub(t *testing.T) {
 
 	engine := NewEngine([]*Policy{policy})
 
-	ctx := EvalContext{AgentID: "agent1", Now: time.Now()}
+	ctx := EvalContext{AgentID: "agent1", Now: time.Now(), SecretsAccessed: 0}
 	got := engine.Evaluate(ctx)
 	if got.Action != ActionAllow {
-		t.Errorf("Evaluate() = %v, want %v (Wave 1 stub should allow)", got.Action, ActionAllow)
+		t.Errorf("Evaluate() = %v, want %v (0 < 3, within limit)", got.Action, ActionAllow)
+	}
+
+	ctx2 := EvalContext{AgentID: "agent1", Now: time.Now(), SecretsAccessed: 2}
+	got2 := engine.Evaluate(ctx2)
+	if got2.Action != ActionAllow {
+		t.Errorf("Evaluate() = %v, want %v (2 < 3, within limit)", got2.Action, ActionAllow)
+	}
+}
+
+func TestEngineEvaluateMaxSecretsExceeded(t *testing.T) {
+	policy := &Policy{
+		Version: "1.0",
+		Rules: []Rule{
+			{
+				Name:     "max secrets rule",
+				Priority: 100,
+				Conditions: Conditions{
+					AgentID:    "agent1",
+					MaxSecrets: 3,
+				},
+				Action: ActionAllow,
+			},
+		},
+	}
+
+	engine := NewEngine([]*Policy{policy})
+
+	ctx := EvalContext{AgentID: "agent1", Now: time.Now(), SecretsAccessed: 3}
+	got := engine.Evaluate(ctx)
+	if got.Action != ActionDeny {
+		t.Errorf("Evaluate() = %v, want %v (3 >= 3, exceeded)", got.Action, ActionDeny)
+	}
+
+	ctx2 := EvalContext{AgentID: "agent1", Now: time.Now(), SecretsAccessed: 5}
+	got2 := engine.Evaluate(ctx2)
+	if got2.Action != ActionDeny {
+		t.Errorf("Evaluate() = %v, want %v (5 >= 3, exceeded)", got2.Action, ActionDeny)
+	}
+}
+
+func TestEngineEvaluateMaxSecretsZero(t *testing.T) {
+	// MaxSecrets = 0 means no limit
+	policy := &Policy{
+		Version: "1.0",
+		Rules: []Rule{
+			{
+				Name:     "no max secrets",
+				Priority: 100,
+				Conditions: Conditions{
+					AgentID:    "agent1",
+					MaxSecrets: 0,
+				},
+				Action: ActionAllow,
+			},
+		},
+	}
+
+	engine := NewEngine([]*Policy{policy})
+
+	ctx := EvalContext{AgentID: "agent1", Now: time.Now(), SecretsAccessed: 100}
+	got := engine.Evaluate(ctx)
+	if got.Action != ActionAllow {
+		t.Errorf("Evaluate() = %v, want %v (0 means unlimited)", got.Action, ActionAllow)
+	}
+}
+
+func TestEngineEvaluateMaxSecretsDefaultDeny(t *testing.T) {
+	// Default deny rule should still work when max secrets is set
+	policy := &Policy{
+		Version: "1.0",
+		Rules: []Rule{
+			{
+				Name:     "allow agent1 up to 5 secrets",
+				Priority: 100,
+				Conditions: Conditions{
+					AgentID:    "agent1",
+					MaxSecrets: 5,
+				},
+				Action: ActionAllow,
+			},
+			{
+				Name:     "default deny",
+				Priority: 0,
+				Conditions: Conditions{
+					AgentID: "*",
+				},
+				Action: ActionDeny,
+			},
+		},
+	}
+
+	engine := NewEngine([]*Policy{policy})
+
+	// agent1 within limit
+	ctx := EvalContext{AgentID: "agent1", Now: time.Now(), SecretsAccessed: 3}
+	got := engine.Evaluate(ctx)
+	if got.Action != ActionAllow {
+		t.Errorf("Evaluate() = %v, want %v", got.Action, ActionAllow)
+	}
+
+	// agent1 exceeded limit
+	ctx2 := EvalContext{AgentID: "agent1", Now: time.Now(), SecretsAccessed: 5}
+	got2 := engine.Evaluate(ctx2)
+	if got2.Action != ActionDeny {
+		t.Errorf("Evaluate() = %v, want %v (exceeded max secrets, fallthrough to default)", got2.Action, ActionDeny)
+	}
+
+	// other agent denied by default
+	ctx3 := EvalContext{AgentID: "agent2", Now: time.Now()}
+	got3 := engine.Evaluate(ctx3)
+	if got3.Action != ActionDeny {
+		t.Errorf("Evaluate() = %v, want %v (unknown agent)", got3.Action, ActionDeny)
 	}
 }
 
@@ -1057,5 +1286,244 @@ func TestEnginePerformance(t *testing.T) {
 	// Should be well under 1ms per evaluation
 	if avg > 1*time.Millisecond {
 		t.Errorf("Average evaluation time %v exceeds 1ms threshold", avg)
+	}
+}
+
+func TestEngineEvaluateAuditLogDenyRule(t *testing.T) {
+	var loggedAction Action
+	var loggedRule string
+
+	policy := &Policy{
+		Version: "1.0",
+		Rules: []Rule{
+			{
+				Name:     "deny all",
+				Priority: 100,
+				Conditions: Conditions{
+					AgentID: "*",
+				},
+				Action: ActionDeny,
+			},
+		},
+	}
+
+	engine := NewEngine([]*Policy{policy})
+	ctx := EvalContext{
+		AgentID: "agent1",
+		Now:     time.Now(),
+		AuditLogFunc: func(action Action, ruleName, reason string) {
+			loggedAction = action
+			loggedRule = ruleName
+		},
+	}
+	got := engine.Evaluate(ctx)
+
+	if got.Action != ActionDeny {
+		t.Errorf("Evaluate() = %v, want %v", got.Action, ActionDeny)
+	}
+	if loggedAction != ActionDeny {
+		t.Errorf("logged action = %v, want %v", loggedAction, ActionDeny)
+	}
+	if loggedRule != "deny all" {
+		t.Errorf("logged rule = %v, want %v", loggedRule, "deny all")
+	}
+}
+
+func TestEngineEvaluateAuditLogDefaultDeny(t *testing.T) {
+	var logged bool
+
+	policy := &Policy{
+		Version: "1.0",
+		Rules: []Rule{
+			{
+				Name:     "allow specific",
+				Priority: 100,
+				Conditions: Conditions{
+					AgentID: "specific-agent",
+				},
+				Action: ActionAllow,
+			},
+		},
+	}
+
+	engine := NewEngine([]*Policy{policy})
+	ctx := EvalContext{
+		AgentID: "unknown-agent",
+		Now:     time.Now(),
+		AuditLogFunc: func(action Action, ruleName, reason string) {
+			logged = true
+			if action != ActionDeny {
+				t.Errorf("logged action = %v, want %v", action, ActionDeny)
+			}
+			if reason != "no matching rule found, default deny" {
+				t.Errorf("logged reason = %q, want %q", reason, "no matching rule found, default deny")
+			}
+		},
+	}
+	got := engine.Evaluate(ctx)
+
+	if got.Action != ActionDeny {
+		t.Errorf("Evaluate() = %v, want %v", got.Action, ActionDeny)
+	}
+	if !logged {
+		t.Error("AuditLogFunc was not called for default deny")
+	}
+}
+
+func TestEngineEvaluateAuditLogRateLimit(t *testing.T) {
+	rl := NewAgentRateLimiter()
+	defer rl.Cleanup()
+
+	type auditCall struct {
+		action   Action
+		ruleName string
+		reason   string
+	}
+	var calls []auditCall
+
+	policy := &Policy{
+		Version: "1.0",
+		Rules: []Rule{
+			{
+				Name:     "rate limited",
+				Priority: 100,
+				Conditions: Conditions{
+					AgentID: "agent1",
+					RateLimit: &RateLimitCondition{
+						MaxReadsPerHour: 1,
+						MaxReadsPerDay:  5,
+					},
+				},
+				Action: ActionAllow,
+			},
+		},
+	}
+
+	engine := NewEngine([]*Policy{policy})
+
+	// First call should succeed (consume the only token)
+	ctx1 := EvalContext{AgentID: "agent1", Now: time.Now(), RateLimiter: rl}
+	got1 := engine.Evaluate(ctx1)
+	if got1.Action != ActionAllow {
+		t.Errorf("first call: Evaluate() = %v, want %v", got1.Action, ActionAllow)
+	}
+
+	// Second call should be rate limited and trigger audit log
+	ctx2 := EvalContext{
+		AgentID:      "agent1",
+		Now:          time.Now(),
+		RateLimiter:  rl,
+		AuditLogFunc: func(action Action, ruleName, reason string) {
+			calls = append(calls, auditCall{action, ruleName, reason})
+		},
+	}
+	got2 := engine.Evaluate(ctx2)
+	if got2.Action != ActionDeny {
+		t.Errorf("second call: Evaluate() = %v, want %v", got2.Action, ActionDeny)
+	}
+	if len(calls) == 0 {
+		t.Fatal("AuditLogFunc was not called for rate limit")
+	}
+	// First call should be the rate limit rejection from matches()
+	if calls[0].action != ActionDeny {
+		t.Errorf("first audit call action = %v, want %v", calls[0].action, ActionDeny)
+	}
+	if calls[0].reason != "rate limit exceeded" {
+		t.Errorf("first audit call reason = %q, want %q", calls[0].reason, "rate limit exceeded")
+	}
+	if calls[0].ruleName != "rate limited" {
+		t.Errorf("first audit call rule = %v, want %v", calls[0].ruleName, "rate limited")
+	}
+	// Second call should be the default deny from Evaluate()
+	if len(calls) > 1 {
+		if calls[1].reason != "no matching rule found, default deny" {
+			t.Errorf("second audit call reason = %q, want %q", calls[1].reason, "no matching rule found, default deny")
+		}
+	}
+}
+
+func TestEngineEvaluateAuditLogMaxSecrets(t *testing.T) {
+	type auditCall struct {
+		action   Action
+		ruleName string
+		reason   string
+	}
+	var calls []auditCall
+
+	policy := &Policy{
+		Version: "1.0",
+		Rules: []Rule{
+			{
+				Name:     "max secrets",
+				Priority: 100,
+				Conditions: Conditions{
+					AgentID:    "agent1",
+					MaxSecrets: 5,
+				},
+				Action: ActionAllow,
+			},
+		},
+	}
+
+	engine := NewEngine([]*Policy{policy})
+
+	ctx := EvalContext{
+		AgentID:         "agent1",
+		Now:             time.Now(),
+		SecretsAccessed: 5,
+		AuditLogFunc: func(action Action, ruleName, reason string) {
+			calls = append(calls, auditCall{action, ruleName, reason})
+		},
+	}
+	got := engine.Evaluate(ctx)
+	if got.Action != ActionDeny {
+		t.Errorf("Evaluate() = %v, want %v", got.Action, ActionDeny)
+	}
+	if len(calls) == 0 {
+		t.Fatal("AuditLogFunc was not called for max secrets")
+	}
+	// First call should be the max secrets rejection from matches()
+	if calls[0].action != ActionDeny {
+		t.Errorf("first audit call action = %v, want %v", calls[0].action, ActionDeny)
+	}
+	if calls[0].reason != "max secrets exceeded: 5 >= 5" {
+		t.Errorf("first audit call reason = %q, want %q", calls[0].reason, "max secrets exceeded: 5 >= 5")
+	}
+	if calls[0].ruleName != "max secrets" {
+		t.Errorf("first audit call rule = %v, want %v", calls[0].ruleName, "max secrets")
+	}
+}
+
+func TestEngineEvaluateAuditLogAllowNoLog(t *testing.T) {
+	var logged bool
+
+	policy := &Policy{
+		Version: "1.0",
+		Rules: []Rule{
+			{
+				Name:     "allow all",
+				Priority: 100,
+				Conditions: Conditions{
+					AgentID: "*",
+				},
+				Action: ActionAllow,
+			},
+		},
+	}
+
+	engine := NewEngine([]*Policy{policy})
+	ctx := EvalContext{
+		AgentID: "agent1",
+		Now:     time.Now(),
+		AuditLogFunc: func(action Action, ruleName, reason string) {
+			logged = true
+		},
+	}
+	got := engine.Evaluate(ctx)
+	if got.Action != ActionAllow {
+		t.Errorf("Evaluate() = %v, want %v", got.Action, ActionAllow)
+	}
+	if logged {
+		t.Error("AuditLogFunc should not be called for allow actions")
 	}
 }

@@ -19,6 +19,7 @@ func TestCommandRegistration(t *testing.T) {
 		"add",
 		"delete",
 		"device",
+		"dynamic",
 		"edit",
 		"find",
 		"generate",
@@ -29,11 +30,13 @@ func TestCommandRegistration(t *testing.T) {
 		"lock",
 		"mcp-config",
 		"migrate",
+		"policy",
 		"recipients",
 		"remote",
 		"serve",
 		"set",
 		"sync",
+		"template",
 		"unlock",
 		"update",
 		"version",
@@ -146,6 +149,48 @@ func TestSubcommandRegistration(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("migrate subcommand %q not registered", sub)
+		}
+	}
+
+	dynamicSubcommands := []string{"generate"}
+	for _, sub := range dynamicSubcommands {
+		found := false
+		for _, c := range dynamicCmd.Commands() {
+			if c.Name() == sub {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("dynamic subcommand %q not registered", sub)
+		}
+	}
+
+	templateSubcommands := []string{"generate"}
+	for _, sub := range templateSubcommands {
+		found := false
+		for _, c := range templateCmd.Commands() {
+			if c.Name() == sub {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("template subcommand %q not registered", sub)
+		}
+	}
+
+	policySubcommands := []string{"validate", "apply", "list", "remove"}
+	for _, sub := range policySubcommands {
+		found := false
+		for _, c := range policyCmd.Commands() {
+			if c.Name() == sub {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("policy subcommand %q not registered", sub)
 		}
 	}
 }
