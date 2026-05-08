@@ -22,6 +22,7 @@ var runHTTPServerFunc = func(ctx context.Context, bind string, port int, vault *
 	vaultDir, _ := vaultPath()
 	return serverbootstrap.RunHTTPServer(ctx, bind, port, vault, vaultDir, Version, mcp.New)
 }
+var findAvailablePortFunc = findAvailablePort
 var serveUnlockVault = unlockVault
 
 //nolint:gocyclo // Complex CLI orchestration: vault unlock + server bootstrap + signal handling
@@ -90,7 +91,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}()
 	}
 	if !stdioFlag {
-		actualPort, isPreferred, err := findAvailablePort(bind, port)
+		actualPort, isPreferred, err := findAvailablePortFunc(bind, port)
 		if err != nil {
 			return fmt.Errorf("port allocation failed: %w", err)
 		}

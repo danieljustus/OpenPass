@@ -1138,7 +1138,19 @@ func TestServe_RunE_HTTPWithAgent(t *testing.T) {
 	}
 	vaultFlagReset(t)
 
-	port := findFreePort(t)
+	const port = 18080
+
+	origFindAvailablePort := findAvailablePortFunc
+	findAvailablePortFunc = func(bind string, preferredPort int) (int, bool, error) {
+		if bind != "127.0.0.1" {
+			t.Errorf("port allocator bind = %q, want 127.0.0.1", bind)
+		}
+		if preferredPort != port {
+			t.Errorf("preferred port = %d, want %d", preferredPort, port)
+		}
+		return preferredPort, true, nil
+	}
+	t.Cleanup(func() { findAvailablePortFunc = origFindAvailablePort })
 
 	serveSignals := make(chan chan<- os.Signal, 1)
 	origNotify := serveSignalNotify
