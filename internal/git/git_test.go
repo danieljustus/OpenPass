@@ -1336,8 +1336,8 @@ func TestIsProtectedRuntimePathExactAndPrefix(t *testing.T) {
 	if !isProtectedRuntimePath(".runtime-port.old") {
 		t.Error(".runtime-port.old should be protected (prefix match)")
 	}
-	if isProtectedRuntimePath("mcp-tokens") {
-		t.Error("mcp-tokens should NOT be protected")
+	if !isProtectedRuntimePath("mcp-tokens.json") {
+		t.Error("mcp-tokens.json should be protected")
 	}
 	if isProtectedRuntimePath("other-file") {
 		t.Error("other-file should NOT be protected")

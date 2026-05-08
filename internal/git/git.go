@@ -77,6 +77,7 @@ identity.age
 *.pem
 # Ignore OpenPass runtime artifacts
 mcp-token
+mcp-tokens.json
 .runtime-port
 # Ignore OS files
 .DS_Store
@@ -91,6 +92,7 @@ Thumbs.db
 
 var protectedRuntimePaths = []string{
 	"mcp-token",
+	"mcp-tokens.json",
 	".runtime-port",
 }
 
