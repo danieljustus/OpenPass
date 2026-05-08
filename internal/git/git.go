@@ -356,32 +356,46 @@ func PushWithResult(vaultDir string) PushResult {
 		return result
 	}
 
-	// Handle authentication errors gracefully
+	result.Error = classifyPushError(err)
+
+	return result
+}
+
+func classifyPushError(err error) *PushError {
+	if err == nil {
+		return nil
+	}
+
 	errStr := err.Error()
 	switch {
+	case strings.Contains(errStr, "known_hosts"),
+		strings.Contains(errStr, "known hosts"),
+		strings.Contains(errStr, "SSH_KNOWN_HOSTS"):
+		return &PushError{
+			Message: "SSH configuration error - please check known_hosts or SSH_KNOWN_HOSTS",
+			Cause:   err,
+		}
 	case strings.Contains(errStr, "authentication"),
 		strings.Contains(errStr, "credentials"),
 		strings.Contains(errStr, "401"),
 		strings.Contains(errStr, "403"):
-		result.Error = &PushError{
+		return &PushError{
 			Message: "authentication failed - please check your credentials",
 			Cause:   err,
 		}
 	case strings.Contains(errStr, "connection"),
 		strings.Contains(errStr, "timeout"),
 		strings.Contains(errStr, "refused"):
-		result.Error = &PushError{
+		return &PushError{
 			Message: "network error - please check your connection",
 			Cause:   err,
 		}
 	default:
-		result.Error = &PushError{
+		return &PushError{
 			Message: "push failed",
 			Cause:   err,
 		}
 	}
-
-	return result
 }
 
 // AutoCommitAndPush performs auto-commit and optionally auto-push

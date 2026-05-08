@@ -3,6 +3,7 @@ package git
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -122,6 +123,21 @@ func TestPushErrorUnwrap(t *testing.T) {
 
 	if err.Unwrap() != cause { //nolint:errorlint // comparing exact unwrapped error in test
 		t.Errorf("Unwrap() = %v, want %v", err.Unwrap(), cause)
+	}
+}
+
+func TestClassifyPushErrorSSHKnownHosts(t *testing.T) {
+	cause := errors.New("cannot create known hosts callback: unable to find any valid known_hosts file, set SSH_KNOWN_HOSTS env variable")
+	err := classifyPushError(cause)
+
+	if err == nil {
+		t.Fatal("classifyPushError should return an error")
+	}
+	if !strings.Contains(err.Error(), "SSH configuration error") {
+		t.Fatalf("classified error = %q, want SSH configuration error", err.Error())
+	}
+	if !errors.Is(err, cause) {
+		t.Fatalf("classified error should wrap cause")
 	}
 }
 
@@ -1473,12 +1489,27 @@ func TestPushWithResultSSHAuthError(t *testing.T) {
 		t.Fatalf("Init(local): %v", err)
 	}
 
+	knownHosts := filepath.Join(t.TempDir(), "known_hosts")
+	if err := os.WriteFile(knownHosts, nil, 0o600); err != nil {
+		t.Fatalf("write known_hosts: %v", err)
+	}
+	t.Setenv("SSH_KNOWN_HOSTS", knownHosts)
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen on local port: %v", err)
+	}
+	remoteAddr := ln.Addr().String()
+	if err := ln.Close(); err != nil {
+		t.Fatalf("close local listener: %v", err)
+	}
+
 	repo, err := gogit.PlainOpen(local)
 	if err != nil {
 		t.Fatalf("open local: %v", err)
 	}
 
-	if _, err := repo.CreateRemote(&config.RemoteConfig{Name: "origin", URLs: []string{"ssh://git@127.0.0.1:1/repo.git"}}); err != nil {
+	if _, err := repo.CreateRemote(&config.RemoteConfig{Name: "origin", URLs: []string{"ssh://git@" + remoteAddr + "/repo.git"}}); err != nil {
 		t.Fatalf("CreateRemote(): %v", err)
 	}
 
