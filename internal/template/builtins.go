@@ -39,6 +39,7 @@ secrets:
 
 // k8sSecretTemplate generates a Kubernetes Secret manifest.
 // Values are base64-encoded as required by Kubernetes.
+// #nosec G101 -- this is a Go template string, not hardcoded credentials.
 const k8sSecretTemplate = `apiVersion: v1
 kind: Secret
 metadata:

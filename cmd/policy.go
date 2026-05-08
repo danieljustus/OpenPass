@@ -99,11 +99,12 @@ Example:
 		_ = os.MkdirAll(policiesDir, 0750)
 
 		destPath := filepath.Join(policiesDir, filepath.Base(sourcePath))
-		data, err := os.ReadFile(sourcePath)
+		data, err := os.ReadFile(sourcePath) //#nosec G304 -- sourcePath is validated by caller
 		if err != nil {
 			return fmt.Errorf("read policy file: %w", err)
 		}
 
+		// #nosec G306 -- 0640 is intentional for policy files within vault
 		if err := os.WriteFile(destPath, data, 0640); err != nil {
 			return fmt.Errorf("write policy file: %w", err)
 		}

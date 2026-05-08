@@ -167,7 +167,7 @@ func loadTemplatesFromDir(dir string) (map[string]string, error) {
 
 		name := strings.TrimSuffix(entry.Name(), ".tmpl")
 		path := filepath.Join(dir, entry.Name())
-		content, err := os.ReadFile(path)
+		content, err := os.ReadFile(path) //#nosec G304 -- path is constructed from dir (validated above) and .tmpl file entries
 		if err != nil {
 			return nil, fmt.Errorf("read template %s: %w", path, err)
 		}
