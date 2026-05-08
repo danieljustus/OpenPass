@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,9 +21,21 @@ import (
 )
 
 // RunHTTPServer starts the HTTP MCP server.
+func RunHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault, vaultDir string, version string, factory func(*vaultpkg.Vault, string, string) (*mcp.Server, error)) error {
+	addr := net.JoinHostPort(bind, strconv.Itoa(port))
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	return RunHTTPServerOnListener(ctx, listener, v, vaultDir, version, factory)
+}
+
+// RunHTTPServerOnListener starts the HTTP MCP server on an already-bound listener.
+// Tests and embedders can use this to bind :0 safely without a find-free-port race.
 //
 //nolint:gocyclo // Complex server initialization: auth, middleware, metrics, graceful shutdown
-func RunHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault, vaultDir string, version string, factory func(*vaultpkg.Vault, string, string) (*mcp.Server, error)) error {
+func RunHTTPServerOnListener(ctx context.Context, listener net.Listener, v *vaultpkg.Vault, vaultDir string, version string, factory func(*vaultpkg.Vault, string, string) (*mcp.Server, error)) error {
+	bind, port := listenerAddress(listener)
 	otlpEndpoint := ""
 	if v != nil && v.Config != nil && v.Config.MCP != nil {
 		otlpEndpoint = v.Config.MCP.OTLPEndpoint
@@ -36,7 +50,7 @@ func RunHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault
 		cancel()
 	}()
 
-	addr := fmt.Sprintf("%s:%d", bind, port)
+	addr := net.JoinHostPort(bind, strconv.Itoa(port))
 
 	// Load token system (registry + legacy fallback)
 	tokenPath := ""
@@ -261,8 +275,20 @@ func RunHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault
 		_ = server.Shutdown(shutdownCtx)
 	}()
 
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed { // #nosec G114 — bind address is user-configurable, defaults to loopback
+	if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
 		return err
 	}
 	return nil
+}
+
+func listenerAddress(listener net.Listener) (string, int) {
+	host, portText, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		return "127.0.0.1", 0
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil {
+		return host, 0
+	}
+	return host, port
 }

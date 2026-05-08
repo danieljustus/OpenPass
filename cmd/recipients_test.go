@@ -19,22 +19,14 @@ const (
 )
 
 func TestRecipientsListCmd_VaultNotInitialized(t *testing.T) {
+	resetVaultState(t)
 	vaultDir := t.TempDir()
-	_ = os.Setenv("OPENPASS_VAULT", vaultDir)
-	defer func() { _ = os.Unsetenv("OPENPASS_VAULT") }()
-
-	vault = vaultDir
-
-	cmd := recipientsListCmd
 	buf := &bytes.Buffer{}
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
+	rootCmd.SetOut(buf)
+	rootCmd.SetErr(buf)
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "recipients", "list"})
 
-	origArgs := os.Args
-	os.Args = []string{"openpass", "recipients", "list"}
-	defer func() { os.Args = origArgs }()
-
-	err := cmd.Execute()
+	err := rootCmd.Execute()
 	if err == nil {
 		t.Error("expected error for vault not initialized")
 	}
@@ -44,44 +36,28 @@ func TestRecipientsListCmd_VaultNotInitialized(t *testing.T) {
 }
 
 func TestRecipientsAddCmd_VaultNotInitialized(t *testing.T) {
+	resetVaultState(t)
 	vaultDir := t.TempDir()
-	_ = os.Setenv("OPENPASS_VAULT", vaultDir)
-	defer func() { _ = os.Unsetenv("OPENPASS_VAULT") }()
-
-	vault = vaultDir
-
-	cmd := recipientsAddCmd
 	buf := &bytes.Buffer{}
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
+	rootCmd.SetOut(buf)
+	rootCmd.SetErr(buf)
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "recipients", "add", testRecipient1})
 
-	origArgs := os.Args
-	os.Args = []string{"openpass", "recipients", "add", testRecipient1}
-	defer func() { os.Args = origArgs }()
-
-	err := cmd.Execute()
+	err := rootCmd.Execute()
 	if err == nil {
 		t.Error("expected error for vault not initialized")
 	}
 }
 
 func TestRecipientsRemoveCmd_VaultNotInitialized(t *testing.T) {
+	resetVaultState(t)
 	vaultDir := t.TempDir()
-	_ = os.Setenv("OPENPASS_VAULT", vaultDir)
-	defer func() { _ = os.Unsetenv("OPENPASS_VAULT") }()
-
-	vault = vaultDir
-
-	cmd := recipientsRemoveCmd
 	buf := &bytes.Buffer{}
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
+	rootCmd.SetOut(buf)
+	rootCmd.SetErr(buf)
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "recipients", "remove", testRecipient1})
 
-	origArgs := os.Args
-	os.Args = []string{"openpass", "recipients", "remove", testRecipient1}
-	defer func() { os.Args = origArgs }()
-
-	err := cmd.Execute()
+	err := rootCmd.Execute()
 	if err == nil {
 		t.Error("expected error for vault not initialized")
 	}
