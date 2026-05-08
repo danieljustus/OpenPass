@@ -88,7 +88,26 @@ func runHTTPServerAsyncWithFactory(ctx context.Context, t *testing.T, bind strin
 			t.Errorf("runHTTPServer error: %v", err)
 		}
 	}()
-	time.Sleep(200 * time.Millisecond)
+	addr := fmt.Sprintf("%s:%d", bind, port)
+	client := newTestHTTPClient()
+	for i := 0; i < 50; i++ {
+		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
+		if err == nil {
+			_ = conn.Close()
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	for i := 0; i < 20; i++ {
+		resp, err := client.Get(fmt.Sprintf("http://%s/health", addr))
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				break
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 	return wg.Wait
 }
 
