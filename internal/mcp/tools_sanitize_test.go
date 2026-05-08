@@ -42,6 +42,7 @@ func setupTestServer(t *testing.T) *Server {
 	if srv == nil {
 		t.Fatal("New() returned nil server")
 	}
+	t.Cleanup(func() { _ = srv.Close() })
 	return srv
 }
 

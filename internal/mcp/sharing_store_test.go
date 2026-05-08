@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -691,6 +692,9 @@ func TestShareStore_Close(t *testing.T) {
 }
 
 func TestShareStore_SaveFilePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: file permissions behave differently")
+	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mcp-shares.json")
 

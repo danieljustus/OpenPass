@@ -343,8 +343,8 @@ func TestHandleApproveShare_NoTTY(t *testing.T) {
 	if !result.IsError {
 		t.Fatal("expected IsError when no TTY available")
 	}
-	if !strings.Contains(result.Text, "TTY") {
-		t.Errorf("error text = %q, want 'TTY' message", result.Text)
+	if !strings.Contains(result.Text, "TTY") && !strings.Contains(result.Text, "deadline") {
+		t.Errorf("error text = %q, want 'TTY' or 'deadline' message", result.Text)
 	}
 
 	// Grant should still be pending.

@@ -156,7 +156,7 @@ func matchPath(pattern, path string) bool {
 		return true
 	}
 
-	cleanPath := filepath.Clean(path)
+	cleanPath := filepath.ToSlash(filepath.Clean(path))
 	if cleanPath == "." {
 		cleanPath = ""
 	}
@@ -166,7 +166,6 @@ func matchPath(pattern, path string) bool {
 		return true
 	}
 
-	// Glob match
 	matched, err := filepath.Match(pattern, cleanPath)
 	if err == nil && matched {
 		return true
@@ -175,24 +174,23 @@ func matchPath(pattern, path string) bool {
 	// Prefix match for directory patterns ending with "/" or "/**" (recursive)
 	if strings.HasSuffix(pattern, "/**") {
 		prefix := strings.TrimSuffix(pattern, "/**")
-		prefix = strings.TrimSuffix(prefix, string(filepath.Separator))
-		if prefix != "" && (cleanPath == prefix || strings.HasPrefix(cleanPath, prefix+string(filepath.Separator)) || strings.HasPrefix(cleanPath, prefix+"/")) {
+		prefix = strings.TrimSuffix(prefix, "/")
+		if prefix != "" && (cleanPath == prefix || strings.HasPrefix(cleanPath, prefix+"/")) {
 			return true
 		}
 	}
 
 	// Prefix match for plain directory patterns ending with "/"
-	if strings.HasSuffix(pattern, "/") || strings.HasSuffix(pattern, string(filepath.Separator)) {
+	if strings.HasSuffix(pattern, "/") {
 		prefix := strings.TrimSuffix(pattern, "/")
-		prefix = strings.TrimSuffix(prefix, string(filepath.Separator))
-		if prefix != "" && (cleanPath == prefix || strings.HasPrefix(cleanPath, prefix+string(filepath.Separator)) || strings.HasPrefix(cleanPath, prefix+"/")) {
+		if prefix != "" && (cleanPath == prefix || strings.HasPrefix(cleanPath, prefix+"/")) {
 			return true
 		}
 	}
 
 	// For plain paths without wildcards, also match as directory prefix
 	if !strings.Contains(pattern, "*") {
-		if cleanPath == pattern || strings.HasPrefix(cleanPath, pattern+string(filepath.Separator)) || strings.HasPrefix(cleanPath, pattern+"/") {
+		if cleanPath == pattern || strings.HasPrefix(cleanPath, pattern+"/") {
 			return true
 		}
 	}
@@ -201,7 +199,7 @@ func matchPath(pattern, path string) bool {
 	if strings.HasPrefix(pattern, "~/") {
 		home, err := os.UserHomeDir()
 		if err == nil && home != "" {
-			expandedPattern := filepath.Join(home, pattern[2:])
+			expandedPattern := filepath.ToSlash(filepath.Join(home, pattern[2:]))
 			return matchPath(expandedPattern, cleanPath)
 		}
 	}
@@ -252,7 +250,7 @@ func normalizePattern(pattern string) string {
 	if pattern == "" {
 		return ""
 	}
-	cleaned := filepath.Clean(strings.TrimSpace(pattern))
+	cleaned := strings.TrimSpace(pattern)
 	if cleaned == "." {
 		return ""
 	}
