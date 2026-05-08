@@ -11,12 +11,12 @@ import (
 )
 
 type listEntrySummary struct {
-	Path        string `json:"path"`
-	Type        string `json:"type,omitempty"`
-	UsageHint   string `json:"usage_hint,omitempty"`
-	AutoRotate  bool   `json:"auto_rotate,omitempty"`
-	HasValue    bool   `json:"has_value,omitempty"`
-	FieldCount  int    `json:"field_count,omitempty"`
+	Path       string `json:"path"`
+	Type       string `json:"type,omitempty"`
+	UsageHint  string `json:"usage_hint,omitempty"`
+	AutoRotate bool   `json:"auto_rotate,omitempty"`
+	HasValue   bool   `json:"has_value,omitempty"`
+	FieldCount int    `json:"field_count,omitempty"`
 }
 
 func (s *Server) handleList(ctx context.Context, req CallToolRequest) (*CallToolResult, error) {

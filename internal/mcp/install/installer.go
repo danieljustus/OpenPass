@@ -10,23 +10,23 @@ import (
 
 // Result holds the outcome of an install operation.
 type Result struct {
-	AgentType   AgentType
-	ConfigPath  string
-	WasCreated  bool
-	WasUpdated  bool
+	AgentType    AgentType
+	ConfigPath   string
+	WasCreated   bool
+	WasUpdated   bool
 	WasUnchanged bool
-	TokenID     string
+	TokenID      string
 }
 
 // InstallOptions configures the install operation.
 type InstallOptions struct {
-	AgentType   AgentType
-	ServerKey   string
-	RootKey     string
+	AgentType    AgentType
+	ServerKey    string
+	RootKey      string
 	ServerConfig map[string]any
-	Format      ConfigFormat
-	ConfigPath  string // optional override
-	DryRun      bool
+	Format       ConfigFormat
+	ConfigPath   string // optional override
+	DryRun       bool
 }
 
 // Install injects the OpenPass MCP server configuration into an agent's config

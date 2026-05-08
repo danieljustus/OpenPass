@@ -11,11 +11,11 @@ import (
 // These functions are available in all templates.
 func DefaultFuncMap() template.FuncMap {
 	return template.FuncMap{
-		"b64enc":   base64Encode,
-		"b64url":   base64URLEncode,
-		"upper":    strings.ToUpper,
-		"lower":    strings.ToLower,
-		"tojson":   toJSON,
+		"b64enc": base64Encode,
+		"b64url": base64URLEncode,
+		"upper":  strings.ToUpper,
+		"lower":  strings.ToLower,
+		"tojson": toJSON,
 	}
 }
 

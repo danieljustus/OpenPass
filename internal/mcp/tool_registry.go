@@ -57,8 +57,8 @@ func toolDefinitions() []toolDefinition {
 			Name:        "get_entry",
 			Description: "Get metadata for a vault entry. Returns type, usage hints, and field names without secret values. Use get_entry_value to retrieve actual values.",
 			InputSchema: objectSchema([]string{"path"}, map[string]schemaProperty{
-				"path":           {Type: "string", Description: "Entry path"},
-				"include_value":  {Type: "boolean", Description: "When true, returns the full entry with secret values. Default: false."},
+				"path":          {Type: "string", Description: "Entry path"},
+				"include_value": {Type: "boolean", Description: "When true, returns the full entry with secret values. Default: false."},
 			}),
 			Handler: (*Server).handleGet,
 		},
@@ -378,5 +378,3 @@ func isToolAllowed(token *ScopedToken, toolName string) bool {
 	}
 	return false
 }
-
-

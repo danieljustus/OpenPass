@@ -219,22 +219,22 @@ func Load(path string) (*Config, error) {
 					current.ApprovalMode = "none"
 				}
 			}
-		if profile.RedactFields != nil {
-			current.RedactFields = append([]string(nil), profile.RedactFields...)
-		}
-		if profile.AllowedTools != nil {
-			current.AllowedTools = append([]string(nil), profile.AllowedTools...)
-		}
-		if profile.MaxReadsPerHour != nil {
-			current.MaxReadsPerHour = *profile.MaxReadsPerHour
-		}
-		if profile.MaxReadsPerDay != nil {
-			current.MaxReadsPerDay = *profile.MaxReadsPerDay
-		}
-		if profile.MaxSecretsInSession != nil {
-			current.MaxSecretsInSession = *profile.MaxSecretsInSession
-		}
-		cfg.Agents[name] = current
+			if profile.RedactFields != nil {
+				current.RedactFields = append([]string(nil), profile.RedactFields...)
+			}
+			if profile.AllowedTools != nil {
+				current.AllowedTools = append([]string(nil), profile.AllowedTools...)
+			}
+			if profile.MaxReadsPerHour != nil {
+				current.MaxReadsPerHour = *profile.MaxReadsPerHour
+			}
+			if profile.MaxReadsPerDay != nil {
+				current.MaxReadsPerDay = *profile.MaxReadsPerDay
+			}
+			if profile.MaxSecretsInSession != nil {
+				current.MaxSecretsInSession = *profile.MaxSecretsInSession
+			}
+			cfg.Agents[name] = current
 		}
 	}
 

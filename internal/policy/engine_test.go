@@ -34,10 +34,10 @@ func TestActionIsValid(t *testing.T) {
 
 func TestTimeRangeContains(t *testing.T) {
 	tests := []struct {
-		name    string
-		tr      TimeRange
-		check   time.Time
-		want    bool
+		name  string
+		tr    TimeRange
+		check time.Time
+		want  bool
 	}{
 		{
 			name:  "within range",
@@ -1410,9 +1410,9 @@ func TestEngineEvaluateAuditLogRateLimit(t *testing.T) {
 
 	// Second call should be rate limited and trigger audit log
 	ctx2 := EvalContext{
-		AgentID:      "agent1",
-		Now:          time.Now(),
-		RateLimiter:  rl,
+		AgentID:     "agent1",
+		Now:         time.Now(),
+		RateLimiter: rl,
 		AuditLogFunc: func(action Action, ruleName, reason string) {
 			calls = append(calls, auditCall{action, ruleName, reason})
 		},

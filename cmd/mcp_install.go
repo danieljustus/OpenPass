@@ -211,8 +211,8 @@ func buildHTTPServerConfig(vDir, agentName string) (map[string]any, string, erro
 	// Use the raw token directly in the config instead of env reference
 	// since this is an automated install.
 	config := map[string]any{
-		"url":     httpCfg.URL,
-		"timeout": 120,
+		"url":             httpCfg.URL,
+		"timeout":         120,
 		"connect_timeout": 30,
 		"headers": map[string]string{
 			"Accept":               httpCfg.Header["Accept"],

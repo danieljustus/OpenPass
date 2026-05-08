@@ -29,6 +29,7 @@ rules:
 	rootCmd.SetOut(&out)
 	rootCmd.SetErr(&out)
 	rootCmd.SetArgs([]string{"policy", "validate", policyFile})
+	defer rootCmd.SetArgs(nil)
 
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -58,6 +59,7 @@ rules:
 	rootCmd.SetOut(&out)
 	rootCmd.SetErr(&out)
 	rootCmd.SetArgs([]string{"policy", "validate", policyFile})
+	defer rootCmd.SetArgs(nil)
 
 	err := rootCmd.Execute()
 	if err == nil {

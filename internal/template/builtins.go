@@ -3,11 +3,11 @@ package template
 // builtinTemplates returns the map of built-in template names to their source strings.
 func builtinTemplates() map[string]string {
 	return map[string]string{
-		"env": envTemplate,
+		"env":            envTemplate,
 		"docker-compose": dockerComposeTemplate,
-		"k8s-secret": k8sSecretTemplate,
+		"k8s-secret":     k8sSecretTemplate,
 		"github-actions": githubActionsTemplate,
-		"terraform": terraformTemplate,
+		"terraform":      terraformTemplate,
 	}
 }
 

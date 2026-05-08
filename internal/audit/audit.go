@@ -121,21 +121,21 @@ type ErrorInfo struct {
 }
 
 type LogEntry struct {
-	Timestamp string `json:"ts"`
-	Agent     string `json:"agent"`
-	Action    string `json:"action"`
-	Path      string `json:"path,omitempty"`
-	Field     string `json:"field,omitempty"`
-	Transport string `json:"transport,omitempty"`
+	Timestamp   string `json:"ts"`
+	Agent       string `json:"agent"`
+	Action      string `json:"action"`
+	Path        string `json:"path,omitempty"`
+	Field       string `json:"field,omitempty"`
+	Transport   string `json:"transport,omitempty"`
 	Reason      string `json:"reason,omitempty"`
 	ShareID     string `json:"share_id,omitempty"`
 	FromAgent   string `json:"from_agent,omitempty"`
 	ToAgent     string `json:"to_agent,omitempty"`
 	ShareAction string `json:"share_action,omitempty"`
 	DurMs       int64  `json:"dur_ms,omitempty"`
-	TokenID   string `json:"token_id,omitempty"`
-	HMAC      string `json:"hmac,omitempty"`
-	OK        bool   `json:"ok"`
+	TokenID     string `json:"token_id,omitempty"`
+	HMAC        string `json:"hmac,omitempty"`
+	OK          bool   `json:"ok"`
 }
 
 // VerifyResult reports the outcome of audit log integrity verification.

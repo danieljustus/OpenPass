@@ -702,12 +702,12 @@ func TestHandleExecuteWithSecret_FullEntryRef(t *testing.T) {
 
 func TestParseOpRef(t *testing.T) {
 	tests := []struct {
-		name        string
-		ref         string
-		wantEntry   string
-		wantField   string
-		wantErr     bool
-		wantErrMsg  string
+		name       string
+		ref        string
+		wantEntry  string
+		wantField  string
+		wantErr    bool
+		wantErrMsg string
 	}{
 		{
 			name:      "simple entry and field",

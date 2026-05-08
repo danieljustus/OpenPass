@@ -12,9 +12,9 @@ import (
 type Action string
 
 const (
-	ActionAllow         Action = "allow"
-	ActionDeny          Action = "deny"
-	ActionPrompt        Action = "prompt"
+	ActionAllow           Action = "allow"
+	ActionDeny            Action = "deny"
+	ActionPrompt          Action = "prompt"
 	ActionRequireBiometry Action = "require_biometry"
 )
 
@@ -58,16 +58,16 @@ type RateLimitCondition struct {
 
 // Conditions defines the matching criteria for a policy rule.
 type Conditions struct {
-	AgentID      string               `yaml:"agent_id,omitempty"`
-	Path         string               `yaml:"path,omitempty"`
-	Tags         []string             `yaml:"tags,omitempty"`
-	WorkingDir   string               `yaml:"working_dir,omitempty"`
-	TimeOfDay    *TimeRange           `yaml:"time_of_day,omitempty"`
-	EnvVars      map[string]string    `yaml:"env_vars,omitempty"`
-	ActionType   string               `yaml:"action,omitempty"` // read, write, delete, run, etc.
-	RateLimit    *RateLimitCondition  `yaml:"rate_limit,omitempty"`
-	AllowedTools []string             `yaml:"allowed_tools,omitempty"`
-	MaxSecrets   int                  `yaml:"max_secrets,omitempty"`
+	AgentID      string              `yaml:"agent_id,omitempty"`
+	Path         string              `yaml:"path,omitempty"`
+	Tags         []string            `yaml:"tags,omitempty"`
+	WorkingDir   string              `yaml:"working_dir,omitempty"`
+	TimeOfDay    *TimeRange          `yaml:"time_of_day,omitempty"`
+	EnvVars      map[string]string   `yaml:"env_vars,omitempty"`
+	ActionType   string              `yaml:"action,omitempty"` // read, write, delete, run, etc.
+	RateLimit    *RateLimitCondition `yaml:"rate_limit,omitempty"`
+	AllowedTools []string            `yaml:"allowed_tools,omitempty"`
+	MaxSecrets   int                 `yaml:"max_secrets,omitempty"`
 }
 
 // TimeRange represents a time-of-day range for policy conditions.

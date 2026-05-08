@@ -49,11 +49,11 @@ func (s *Server) handleGenerateDynamicSecret(ctx context.Context, req CallToolRe
 	s.logAudit(ctx, "dynamic_secret", provider, true)
 
 	result := map[string]any{
-		"lease_id":     secret.LeaseID,
-		"engine_type":  secret.EngineType,
-		"expires_in":   secret.LeaseDuration.String(),
-		"created_at":   secret.CreatedAt.Format(time.RFC3339),
-		"credentials":  secret.Data,
+		"lease_id":    secret.LeaseID,
+		"engine_type": secret.EngineType,
+		"expires_in":  secret.LeaseDuration.String(),
+		"created_at":  secret.CreatedAt.Format(time.RFC3339),
+		"credentials": secret.Data,
 	}
 
 	jsonResult, _ := json.MarshalIndent(result, "", "  ")

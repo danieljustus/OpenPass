@@ -1,9 +1,9 @@
 package vault
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
-	"encoding/json"
 
 	"filippo.io/age"
 )

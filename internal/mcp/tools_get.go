@@ -32,12 +32,12 @@ func buildSecretMetadataResponse(entry *vault.Entry, path string) map[string]any
 	}
 
 	response := map[string]any{
-		"path":         path,
-		"type":         entry.SecretMetadata.Type,
-		"usage_hint":   entry.SecretMetadata.UsageHint,
-		"auto_rotate":  entry.SecretMetadata.AutoRotate,
-		"fields":       fields,
-		"has_value":    len(entry.Data) > 0,
+		"path":        path,
+		"type":        entry.SecretMetadata.Type,
+		"usage_hint":  entry.SecretMetadata.UsageHint,
+		"auto_rotate": entry.SecretMetadata.AutoRotate,
+		"fields":      fields,
+		"has_value":   len(entry.Data) > 0,
 		"meta": map[string]any{
 			"created": entry.Metadata.Created.Format(time.RFC3339),
 			"updated": entry.Metadata.Updated.Format(time.RFC3339),

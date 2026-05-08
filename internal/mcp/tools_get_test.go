@@ -69,7 +69,7 @@ func TestHandleGet_WithValue(t *testing.T) {
 
 	req := CallToolRequest{
 		Arguments: map[string]any{
-			"path":           "github",
+			"path":          "github",
 			"include_value": "true",
 		},
 	}
@@ -178,7 +178,7 @@ func TestHandleGet_WithMetadata(t *testing.T) {
 
 	req := CallToolRequest{
 		Arguments: map[string]any{
-			"path":           "github",
+			"path":          "github",
 			"include_value": "true",
 		},
 	}

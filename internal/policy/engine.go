@@ -15,7 +15,7 @@ type Engine struct {
 
 type compiledRule struct {
 	Rule
-	pathPattern   string
+	pathPattern    string
 	workDirPattern string
 }
 

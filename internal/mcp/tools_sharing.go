@@ -55,10 +55,10 @@ func (s *Server) handleRequestShare(ctx context.Context, req CallToolRequest) (*
 	s.logAudit(ctx, "share_request", path, true)
 
 	result := map[string]any{
-		"grant_id":   grant.ID,
-		"status":     grant.Status,
-		"from_agent": grant.FromAgent,
-		"to_agent":   grant.ToAgent,
+		"grant_id":    grant.ID,
+		"status":      grant.Status,
+		"from_agent":  grant.FromAgent,
+		"to_agent":    grant.ToAgent,
 		"secret_path": grant.SecretPath,
 	}
 	resultJSON, err := json.Marshal(result)
