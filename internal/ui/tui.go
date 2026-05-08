@@ -593,7 +593,7 @@ func editEntryCmd(svc vaultsvc.Service, path string) tea.Cmd {
 			return entryEditedMsg{path: path, err: err}
 		}
 		tmpPath := tmp.Name()
-		defer func() { _ = os.Remove(tmpPath) }()
+		defer func() { _ = secureDeleteFile(tmpPath) }()
 
 		encoder := json.NewEncoder(tmp)
 		encoder.SetIndent("", "  ")
@@ -633,6 +633,53 @@ func editEntryCmd(svc vaultsvc.Service, path string) tea.Cmd {
 		}
 		return entryEditedMsg{path: path}
 	}
+}
+
+// secureDeleteFile overwrites the file at path with zeros, syncs it, and
+// then removes it. If overwriting fails, removal is still attempted to
+// avoid leaving temporary files behind.
+func secureDeleteFile(path string) error {
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		// Cannot open, but still try to remove.
+		_ = os.Remove(path)
+		return err
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		_ = os.Remove(path)
+		return err
+	}
+
+	size := fi.Size()
+	zeros := make([]byte, 4096)
+	remaining := size
+	for remaining > 0 {
+		chunk := zeros
+		if remaining < int64(len(chunk)) {
+			chunk = chunk[:remaining]
+		}
+		n, werr := f.Write(chunk)
+		if werr != nil {
+			_ = f.Close()
+			_ = os.Remove(path)
+			return werr
+		}
+		remaining -= int64(n)
+	}
+
+	if serr := f.Sync(); serr != nil {
+		_ = f.Close()
+		_ = os.Remove(path)
+		return serr
+	}
+
+	// Close before remove on some platforms (Windows).
+	_ = f.Close()
+	return os.Remove(path)
 }
 
 func fuzzyMatch(query, value string) bool {

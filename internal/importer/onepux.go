@@ -9,7 +9,14 @@ import (
 	"strings"
 )
 
-const onePUXLoginCategory = "001"
+const (
+	onePUXLoginCategory       = "001"
+	defaultMaxZipEntrySize    = 100 * 1024 * 1024 // 100 MB per entry
+)
+
+// maxZipEntrySize is the maximum size allowed for a single ZIP entry.
+// It is a variable so tests can override it with a smaller value.
+var maxZipEntrySize = defaultMaxZipEntrySize
 
 type onePUXImporter struct{}
 
@@ -124,9 +131,13 @@ func readOnePUXExportJSON(zr *zip.Reader) ([]byte, error) {
 		}
 		defer func() { _ = rc.Close() }()
 
-		data, err := io.ReadAll(rc)
+		limited := io.LimitReader(rc, int64(maxZipEntrySize))
+		data, err := io.ReadAll(limited)
 		if err != nil {
 			return nil, fmt.Errorf("read export.json: %w", err)
+		}
+		if len(data) == maxZipEntrySize {
+			return nil, fmt.Errorf("zip entry exceeds maximum size of %d bytes", maxZipEntrySize)
 		}
 		return data, nil
 	}
