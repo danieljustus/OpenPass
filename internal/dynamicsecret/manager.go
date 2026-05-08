@@ -2,6 +2,7 @@ package dynamicsecret
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/danieljustus/OpenPass/internal/vaultsvc"
@@ -15,6 +16,12 @@ type Manager struct {
 	leases   *LeaseManager
 }
 
+// ErrEngineNotFound is returned when the requested engine type is not registered.
+var ErrEngineNotFound = errors.New("dynamic secret engine not found")
+
+// ErrLeaseNotRenewable is returned when attempting to renew a non-renewable lease.
+var ErrLeaseNotRenewable = errors.New("lease is not renewable")
+
 // NewManager creates a new dynamic secret manager with the given vault service.
 func NewManager(vault vaultsvc.Service) *Manager {
 	return &Manager{
@@ -26,22 +33,79 @@ func NewManager(vault vaultsvc.Service) *Manager {
 
 // Generate creates a new dynamic secret using the specified engine.
 func (m *Manager) Generate(ctx context.Context, engineType string, req GenerateRequest) (*Secret, error) {
-	return nil, nil
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	engine, ok := m.registry.Get(engineType)
+	if !ok {
+		return nil, ErrEngineNotFound
+	}
+
+	secret, err := engine.Generate(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	secret.EngineType = engineType
+	_, err = m.leases.Create(secret)
+	if err != nil {
+		return nil, err
+	}
+
+	return secret, nil
 }
 
 // Revoke invalidates a secret by lease ID.
 func (m *Manager) Revoke(ctx context.Context, leaseID string) error {
-	return nil
+	lease, ok := m.leases.Get(leaseID)
+	if !ok {
+		return ErrLeaseNotFound
+	}
+
+	engine, ok := m.registry.Get(lease.Secret.EngineType)
+	if !ok {
+		return ErrEngineNotFound
+	}
+
+	if err := engine.Revoke(ctx, leaseID); err != nil {
+		return err
+	}
+
+	return m.leases.Revoke(leaseID)
 }
 
 // Renew extends the TTL of an existing secret lease.
 func (m *Manager) Renew(ctx context.Context, leaseID string, increment time.Duration) (*Secret, error) {
-	return nil, nil
+	lease, ok := m.leases.Get(leaseID)
+	if !ok {
+		return nil, ErrLeaseNotFound
+	}
+
+	if !lease.Secret.Renewable {
+		return nil, ErrLeaseNotRenewable
+	}
+
+	return &Secret{
+		LeaseID:       lease.Secret.LeaseID,
+		LeaseDuration: increment,
+		Renewable:     lease.Secret.Renewable,
+		Data:          lease.Secret.Data,
+		CreatedAt:     lease.Secret.CreatedAt,
+		EngineType:    lease.Secret.EngineType,
+	}, nil
 }
 
 // Lookup retrieves a secret by lease ID.
 func (m *Manager) Lookup(ctx context.Context, leaseID string) (*Secret, error) {
-	return nil, nil
+	lease, ok := m.leases.Get(leaseID)
+	if !ok {
+		return nil, ErrLeaseNotFound
+	}
+	if lease.Revoked {
+		return nil, ErrLeaseNotFound
+	}
+	return lease.Secret, nil
 }
 
 // RegisterEngine adds a secret engine to the manager's registry.

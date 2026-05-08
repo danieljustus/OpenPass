@@ -2,6 +2,7 @@ package dynamicsecret
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 )
@@ -23,6 +24,9 @@ type LeaseManager struct {
 	closed    bool
 }
 
+// ErrLeaseNotFound is returned when a lease ID does not match any known lease.
+var ErrLeaseNotFound = errors.New("lease not found")
+
 // NewLeaseManager creates a new lease manager.
 func NewLeaseManager() *LeaseManager {
 	return &LeaseManager{
@@ -33,34 +37,107 @@ func NewLeaseManager() *LeaseManager {
 
 // Create registers a new lease for the given secret.
 func (lm *LeaseManager) Create(secret *Secret) (*Lease, error) {
-	return nil, nil
+	lm.mu.Lock()
+	defer lm.mu.Unlock()
+
+	now := time.Now().UTC()
+	lease := &Lease{
+		ID:        secret.LeaseID,
+		Secret:    secret,
+		ExpiresAt: now.Add(secret.LeaseDuration),
+		Revoked:   false,
+		CreatedAt: now,
+	}
+	lm.leases[lease.ID] = lease
+	return lease, nil
 }
 
 // Revoke marks a lease as revoked.
 func (lm *LeaseManager) Revoke(leaseID string) error {
+	lm.mu.Lock()
+	defer lm.mu.Unlock()
+
+	lease, ok := lm.leases[leaseID]
+	if !ok {
+		return ErrLeaseNotFound
+	}
+	lease.Revoked = true
 	return nil
 }
 
 // Get retrieves a lease by ID.
 func (lm *LeaseManager) Get(leaseID string) (*Lease, bool) {
-	return nil, false
+	lm.mu.RLock()
+	defer lm.mu.RUnlock()
+
+	lease, ok := lm.leases[leaseID]
+	return lease, ok
 }
 
 // IsAlive reports whether the lease exists and has not expired or been revoked.
 func (lm *LeaseManager) IsAlive(leaseID string) bool {
-	return false
+	lm.mu.RLock()
+	defer lm.mu.RUnlock()
+
+	lease, ok := lm.leases[leaseID]
+	if !ok {
+		return false
+	}
+	if lease.Revoked {
+		return false
+	}
+	return !time.Now().After(lease.ExpiresAt)
 }
 
 // ListActive returns all leases that are still alive.
 func (lm *LeaseManager) ListActive() []*Lease {
-	return nil
+	lm.mu.RLock()
+	defer lm.mu.RUnlock()
+
+	now := time.Now()
+	active := make([]*Lease, 0)
+	for _, lease := range lm.leases {
+		if !lease.Revoked && !now.After(lease.ExpiresAt) {
+			active = append(active, lease)
+		}
+	}
+	return active
 }
 
 // StartCleanup begins a background goroutine that periodically removes expired leases.
 func (lm *LeaseManager) StartCleanup(ctx context.Context, interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-lm.cleanupCh:
+				return
+			case <-ticker.C:
+				lm.mu.Lock()
+				now := time.Now()
+				for id, lease := range lm.leases {
+					if now.After(lease.ExpiresAt) || lease.Revoked {
+						delete(lm.leases, id)
+					}
+				}
+				lm.mu.Unlock()
+			}
+		}
+	}()
 }
 
 // Close stops the background cleanup goroutine and releases resources.
 func (lm *LeaseManager) Close() error {
+	lm.mu.Lock()
+	defer lm.mu.Unlock()
+
+	if lm.closed {
+		return nil
+	}
+	lm.closed = true
+	close(lm.cleanupCh)
 	return nil
 }
