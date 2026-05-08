@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -164,21 +163,4 @@ func ParseAgentType(name string) (AgentType, error) {
 		return "", fmt.Errorf("unsupported agent %q (valid: %s)", name, strings.Join(valid, ", "))
 	}
 	return agent, nil
-}
-
-// userConfigDir returns the platform-specific user config directory.
-func userConfigDir() (string, error) {
-	// On macOS, os.UserConfigDir returns ~/Library/Application Support,
-	// but many CLI tools use ~/.config. We prefer ~/.config for CLI agents.
-	if runtime.GOOS == "darwin" {
-		home, err := osUserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		configDir := filepath.Join(home, ".config")
-		if _, err := osStat(configDir); err == nil {
-			return configDir, nil
-		}
-	}
-	return os.UserConfigDir()
 }

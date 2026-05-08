@@ -9,8 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/danieljustus/OpenPass/internal/fileutil"
 	"github.com/google/uuid"
+
+	"github.com/danieljustus/OpenPass/internal/fileutil"
 )
 
 const shareStoreVersion = 1

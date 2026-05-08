@@ -282,6 +282,6 @@ func TestManagerContextCancellation(t *testing.T) {
 
 	_, err := mgr.Generate(ctx, EngineTypeMock, GenerateRequest{})
 	if err == nil {
-		t.Error("Generate with cancelled context = nil, want error")
+		t.Error("Generate with canceled context = nil, want error")
 	}
 }

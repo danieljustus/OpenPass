@@ -84,17 +84,17 @@ func (s *Server) handleGet(ctx context.Context, req CallToolRequest) (*CallToolR
 		if s.agent != nil && s.agent.RedactFields != nil && len(s.agent.RedactFields) > 0 {
 			entry = redactEntry(entry, s.agent.RedactFields)
 		}
-		result, err := json.Marshal(entry)
-		if err != nil {
-			return nil, err
+		result, marshalErr := json.Marshal(entry)
+		if marshalErr != nil {
+			return nil, marshalErr
 		}
 		return NewToolResultText(string(result)), nil
 	}
 
 	response := buildSecretMetadataResponse(entry, path)
-	result, err := json.Marshal(response)
-	if err != nil {
-		return nil, err
+	result, marshalErr := json.Marshal(response)
+	if marshalErr != nil {
+		return nil, marshalErr
 	}
 	return NewToolResultText(string(result)), nil
 }

@@ -32,12 +32,9 @@ func base64URLEncode(s string) string {
 // toJSON returns the JSON encoding of the input value.
 // Strings are quoted; other values are marshaled to JSON.
 func toJSON(v any) string {
-	switch val := v.(type) {
-	case string:
-		b, _ := json.Marshal(val)
-		return string(b)
-	default:
-		b, _ := json.Marshal(val)
-		return string(b)
+	b, err := json.Marshal(v)
+	if err != nil {
+		return ""
 	}
+	return string(b)
 }

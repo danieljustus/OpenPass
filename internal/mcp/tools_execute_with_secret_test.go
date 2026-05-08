@@ -131,6 +131,7 @@ func TestHandleExecuteWithSecret_NeverExposesSecretValue(t *testing.T) {
 	}
 }
 
+//nolint:dupl // similar test structure for different secret ref patterns
 func TestHandleExecuteWithSecret_NestedPath(t *testing.T) {
 	vaultDir, identity := mockVaultWithEntry(t, "work/aws", map[string]any{
 		"access_key": "nested-secret-123",
@@ -661,6 +662,7 @@ func TestHandleExecuteWithSecret_MissingSecretRef(t *testing.T) {
 	}
 }
 
+//nolint:dupl // similar test structure for different secret ref patterns
 func TestHandleExecuteWithSecret_FullEntryRef(t *testing.T) {
 	vaultDir, identity := mockVaultWithEntry(t, "github", map[string]any{
 		"password": "entry-pass-123",

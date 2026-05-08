@@ -18,6 +18,8 @@ import (
 // handleExecuteWithSecret executes a command with secrets injected as environment
 // variables. The agent never sees the secret values — only stdout, stderr, and
 // exit code are returned.
+//
+//nolint:gocyclo // complexity inherent to secret resolution, validation, and command execution
 func (s *Server) handleExecuteWithSecret(ctx context.Context, req CallToolRequest) (*CallToolResult, error) {
 	if !s.canRunCommands() {
 		s.logAudit(ctx, "execute_with_secret", "<run-denied>", false)
@@ -41,8 +43,8 @@ func (s *Server) handleExecuteWithSecret(ctx context.Context, req CallToolReques
 	}
 	command := make([]string, len(cmdSlice))
 	for i, v := range cmdSlice {
-		str, ok := v.(string)
-		if !ok {
+		str, valid := v.(string)
+		if !valid {
 			s.logAudit(ctx, "execute_with_secret", "<invalid:command-type>", false)
 			return NewToolResultError(fmt.Sprintf("command[%d] must be a string", i)), nil
 		}
@@ -236,7 +238,7 @@ func sanitizeEnvVarName(name string) string {
 
 // checkExecuteWithSecretApproval checks the agent's approval mode and either
 // allows execution, denies it, or prompts the user for confirmation.
-func (s *Server) checkExecuteWithSecretApproval(ctx context.Context) error {
+func (s *Server) checkExecuteWithSecretApproval(_ context.Context) error {
 	if s == nil || s.agent == nil {
 		return fmt.Errorf("server not initialized")
 	}

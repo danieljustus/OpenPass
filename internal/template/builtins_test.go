@@ -99,6 +99,7 @@ func TestBuiltinK8sSecretTemplate(t *testing.T) {
 	}
 }
 
+//nolint:dupl // similar test structure for different builtin templates
 func TestBuiltinDockerComposeTemplate(t *testing.T) {
 	funcs := DefaultFuncMap()
 	tmpl, err := template.New("docker-compose").Funcs(funcs).Parse(builtinTemplates()["docker-compose"])
@@ -129,6 +130,7 @@ func TestBuiltinDockerComposeTemplate(t *testing.T) {
 	}
 }
 
+//nolint:dupl // similar test structure for different builtin templates
 func TestBuiltinGitHubActionsTemplate(t *testing.T) {
 	funcs := DefaultFuncMap()
 	tmpl, err := template.New("github-actions").Funcs(funcs).Parse(builtinTemplates()["github-actions"])
@@ -159,6 +161,7 @@ func TestBuiltinGitHubActionsTemplate(t *testing.T) {
 	}
 }
 
+//nolint:dupl // similar test structure for different builtin templates
 func TestBuiltinTerraformTemplate(t *testing.T) {
 	funcs := DefaultFuncMap()
 	tmpl, err := template.New("terraform").Funcs(funcs).Parse(builtinTemplates()["terraform"])

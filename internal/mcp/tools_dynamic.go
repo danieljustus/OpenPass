@@ -56,6 +56,9 @@ func (s *Server) handleGenerateDynamicSecret(ctx context.Context, req CallToolRe
 		"credentials": secret.Data,
 	}
 
-	jsonResult, _ := json.MarshalIndent(result, "", "  ")
+	jsonResult, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal result: %w", err)
+	}
 	return NewToolResultText(string(jsonResult)), nil
 }

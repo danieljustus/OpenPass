@@ -258,6 +258,7 @@ func (f *AddEntryForm) Init() tea.Cmd {
 	return textinput.Blink
 }
 
+//nolint:gocyclo // complexity inherent to TUI state machine handling many input modes
 func (f *AddEntryForm) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:

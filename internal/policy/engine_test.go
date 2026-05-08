@@ -1258,7 +1258,7 @@ func TestMatchAllowedTool(t *testing.T) {
 }
 
 func TestEnginePerformance(t *testing.T) {
-	var rules []Rule
+	rules := make([]Rule, 0, 100)
 	for i := 0; i < 100; i++ {
 		rules = append(rules, Rule{
 			Name:       fmt.Sprintf("rule-%d", i),

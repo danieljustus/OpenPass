@@ -859,7 +859,7 @@ func TestHandleRequestShare_Concurrent(t *testing.T) {
 
 	for i := 0; i < 20; i++ {
 		wg.Add(1)
-		go func(idx int) {
+		go func(_ int) {
 			defer wg.Done()
 			req := testShareRequest(map[string]any{
 				"to_agent":    "bob",

@@ -37,11 +37,10 @@ type RenderData struct {
 
 // Engine provides template rendering and validation for secret generation.
 type Engine struct {
-	vault     vaultsvc.Service
-	funcs     template.FuncMap
-	builtins  map[string]string
-	custom    map[string]string
-	customDir string
+	vault    vaultsvc.Service
+	funcs    template.FuncMap
+	builtins map[string]string
+	custom   map[string]string
 }
 
 // NewEngine creates a new template engine backed by the given vault service.

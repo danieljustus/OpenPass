@@ -101,10 +101,10 @@ func (s *Server) executeTool(ctx context.Context, name string, args json.RawMess
 
 	// Evaluate declarative policies before tool execution
 	if path, _ := req.RequireString("path"); path != "" {
-		if err := s.checkPolicy(ctx, path, toolActionType(name), nil); err != nil {
-			span.SetStatus(codes.Error, err.Error())
+		if policyErr := s.checkPolicy(ctx, path, toolActionType(name)); policyErr != nil {
+			span.SetStatus(codes.Error, policyErr.Error())
 			metrics.RecordMCPRequest(name, agentName, "error", time.Since(start))
-			return nil, err
+			return nil, policyErr
 		}
 	}
 

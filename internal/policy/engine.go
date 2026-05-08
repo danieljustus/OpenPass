@@ -77,6 +77,7 @@ func (e *Engine) Evaluate(ctx EvalContext) Result {
 	return DefaultResult()
 }
 
+//nolint:gocyclo // complexity inherent to policy rule matching with many condition types
 func (e *Engine) matches(rule compiledRule, ctx EvalContext) bool {
 	c := rule.Conditions
 
@@ -146,6 +147,7 @@ func matchString(pattern, value string) bool {
 	return pattern == value
 }
 
+//nolint:gocyclo // complexity inherent to glob-style path matching logic
 func matchPath(pattern, path string) bool {
 	if pattern == "" {
 		return true

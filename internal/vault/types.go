@@ -74,7 +74,6 @@ func IsValidSecretType(s string) bool {
 // detection patterns for common secret types
 var (
 	awsAccessKeyPattern      = regexp.MustCompile(`^AKIA[0-9A-Z]{16}$`)
-	awsSecretKeyPattern      = regexp.MustCompile(`^[0-9a-zA-Z/+]{40}$`)
 	githubPATPattern         = regexp.MustCompile(`^ghp_[a-zA-Z0-9]{36}$`)
 	githubFineGrainedPattern = regexp.MustCompile(`^github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}$`)
 	githubOAuthPattern       = regexp.MustCompile(`^gho_[a-zA-Z0-9]{36}$`)
@@ -94,6 +93,8 @@ var (
 
 // DetectSecretType attempts to automatically detect the secret type from its value.
 // Returns the most specific matching type, or SecretTypePassword as a fallback.
+//
+//nolint:gocyclo // complexity inherent to pattern matching against many secret type signatures
 func DetectSecretType(value string) SecretType {
 	value = strings.TrimSpace(value)
 	if value == "" {

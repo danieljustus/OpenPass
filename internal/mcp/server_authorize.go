@@ -28,7 +28,7 @@ func (s *Server) authorize(ctx context.Context, path string, write bool, approve
 		actionType = "write"
 	}
 
-	if err := s.checkPolicy(ctx, path, actionType, nil); err != nil {
+	if err := s.checkPolicy(ctx, path, actionType); err != nil {
 		return err
 	}
 
@@ -57,13 +57,13 @@ func (s *Server) authorize(ctx context.Context, path string, write bool, approve
 	return nil
 }
 
-func (s *Server) checkPolicy(ctx context.Context, path, actionType string, tags []string) error {
+func (s *Server) checkPolicy(ctx context.Context, path, actionType string) error {
 	if s == nil || s.policyEngine == nil || s.agent == nil {
 		return nil
 	}
 
 	cp := policy.NewContextProvider()
-	evalCtx := cp.BuildContext(s.agent.Name, path, actionType, tags)
+	evalCtx := cp.BuildContext(s.agent.Name, path, actionType, nil)
 
 	start := time.Now()
 	result := s.policyEngine.Evaluate(evalCtx)
@@ -145,7 +145,7 @@ func (s *Server) logAuditWithToken(ctx context.Context, action, path string, ok 
 
 // checkShareAccess checks if the current agent has an approved, non-expired share for the given path.
 // Returns the ShareGrant and true if access is granted, or nil and false otherwise.
-func (s *Server) checkShareAccess(ctx context.Context, path string) (*ShareGrant, bool) {
+func (s *Server) checkShareAccess(_ context.Context, path string) (*ShareGrant, bool) {
 	if s.shareStore == nil {
 		return nil, false
 	}

@@ -58,7 +58,10 @@ func (s *Server) handleGenerateTemplate(ctx context.Context, req CallToolRequest
 			"output_path": outputPath,
 			"dry_run":     dryRun,
 		}
-		jsonResult, _ := json.MarshalIndent(result, "", "  ")
+		jsonResult, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("marshal result: %w", err)
+		}
 		return NewToolResultText(string(jsonResult)), nil
 	}
 

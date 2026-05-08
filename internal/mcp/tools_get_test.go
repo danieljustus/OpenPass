@@ -12,6 +12,7 @@ import (
 	"github.com/danieljustus/OpenPass/internal/vault"
 )
 
+//nolint:dupl // similar test structure for get success cases
 func TestHandleGet_Success(t *testing.T) {
 	vaultDir, identity := mockVault(t)
 	srv := newTestServerWithVault(t, config.AgentProfile{
@@ -208,6 +209,7 @@ func TestHandleGet_WithMetadata(t *testing.T) {
 	}
 }
 
+//nolint:dupl // similar test structure for get success cases
 func TestHandleGet_WithoutMetadata(t *testing.T) {
 	vaultDir, identity := mockVault(t)
 	srv := newTestServerWithVault(t, config.AgentProfile{

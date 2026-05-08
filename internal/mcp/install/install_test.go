@@ -142,6 +142,7 @@ func TestInjectServerConfig(t *testing.T) {
 	})
 }
 
+//nolint:dupl // similar structure for JSON and YAML config tests
 func TestJSONConfigRW(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "config.json")
@@ -183,6 +184,7 @@ func TestJSONConfigRW(t *testing.T) {
 	})
 }
 
+//nolint:dupl // similar structure for JSON and YAML config tests
 func TestYAMLConfigRW(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "config.yaml")

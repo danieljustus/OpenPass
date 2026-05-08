@@ -47,17 +47,17 @@ func (s *Server) handleList(ctx context.Context, req CallToolRequest) (*CallTool
 	includeDetails := req.GetBool("include_details", true)
 
 	if !includeDetails {
-		result, err := json.Marshal(paths)
-		if err != nil {
-			return nil, err
+		result, marshalErr := json.Marshal(paths)
+		if marshalErr != nil {
+			return nil, marshalErr
 		}
 		return NewToolResultText(string(result)), nil
 	}
 
 	summaries := make([]listEntrySummary, 0, len(paths))
 	for _, path := range paths {
-		entry, err := svc.GetEntry(path)
-		if err != nil {
+		entry, getErr := svc.GetEntry(path)
+		if getErr != nil {
 			continue
 		}
 

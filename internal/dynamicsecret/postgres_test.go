@@ -278,7 +278,7 @@ func TestPostgreSQLEngineContextCancellation(t *testing.T) {
 		TTL:  time.Hour,
 	})
 	if err == nil {
-		t.Error("expected error with cancelled context")
+		t.Error("expected error with canceled context")
 	}
 	if execCalled && !errors.Is(err, context.Canceled) {
 		t.Errorf("error = %v, want context.Canceled", err)

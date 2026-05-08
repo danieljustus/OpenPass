@@ -199,7 +199,7 @@ func TestLeaseManagerConcurrentAccess(t *testing.T) {
 	// Concurrent creates
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		go func(id int) {
+		go func(_ int) {
 			defer wg.Done()
 			for j := 0; j < numOps; j++ {
 				secret := &Secret{LeaseID: "lease", LeaseDuration: time.Hour}
@@ -211,7 +211,7 @@ func TestLeaseManagerConcurrentAccess(t *testing.T) {
 	// Concurrent reads
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		go func(id int) {
+		go func(_ int) {
 			defer wg.Done()
 			for j := 0; j < numOps; j++ {
 				lm.ListActive()

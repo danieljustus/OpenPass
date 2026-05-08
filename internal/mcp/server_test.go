@@ -1297,7 +1297,7 @@ func TestCheckPolicy_AllowsWhenNoEngine(t *testing.T) {
 		ApprovalMode: "none",
 	}, "stdio", "")
 
-	err := srv.checkPolicy(context.Background(), "test/path", "read", nil)
+	err := srv.checkPolicy(context.Background(), "test/path", "read")
 	if err != nil {
 		t.Errorf("checkPolicy() unexpected error: %v", err)
 	}
@@ -1324,7 +1324,7 @@ func TestCheckPolicy_DeniesByRule(t *testing.T) {
 	}
 	srv.policyEngine = policy.NewEngine([]*policy.Policy{p})
 
-	err := srv.checkPolicy(context.Background(), "test/path", "read", nil)
+	err := srv.checkPolicy(context.Background(), "test/path", "read")
 	if err == nil {
 		t.Fatal("checkPolicy() expected error, got nil")
 	}
@@ -1354,7 +1354,7 @@ func TestCheckPolicy_AllowsByRule(t *testing.T) {
 	}
 	srv.policyEngine = policy.NewEngine([]*policy.Policy{p})
 
-	err := srv.checkPolicy(context.Background(), "test/path", "read", nil)
+	err := srv.checkPolicy(context.Background(), "test/path", "read")
 	if err != nil {
 		t.Errorf("checkPolicy() unexpected error: %v", err)
 	}
@@ -1381,7 +1381,7 @@ func TestCheckPolicy_RequiresBiometry(t *testing.T) {
 	}
 	srv.policyEngine = policy.NewEngine([]*policy.Policy{p})
 
-	err := srv.checkPolicy(context.Background(), "test/path", "read", nil)
+	err := srv.checkPolicy(context.Background(), "test/path", "read")
 	if err == nil {
 		t.Fatal("checkPolicy() expected error, got nil")
 	}
@@ -1411,7 +1411,7 @@ func TestCheckPolicy_Prompt(t *testing.T) {
 	}
 	srv.policyEngine = policy.NewEngine([]*policy.Policy{p})
 
-	err := srv.checkPolicy(context.Background(), "test/path", "read", nil)
+	err := srv.checkPolicy(context.Background(), "test/path", "read")
 	if err == nil {
 		t.Fatal("checkPolicy() expected error, got nil")
 	}

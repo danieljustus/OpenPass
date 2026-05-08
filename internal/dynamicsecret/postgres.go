@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib" // register pgx driver with database/sql
 )
 
 // sqlExecutor defines the interface for database operations.
@@ -51,7 +51,7 @@ func (e *PostgreSQLEngine) getDB(ctx context.Context) (sqlExecutor, error) {
 		return nil, fmt.Errorf("postgres: open connection: %w", err)
 	}
 	if err := db.PingContext(ctx); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("postgres: ping: %w", err)
 	}
 	e.db = db
