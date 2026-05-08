@@ -822,6 +822,212 @@ rules:
 	}
 }
 
+func TestEngineEvaluateAllowedTools(t *testing.T) {
+	policy := &Policy{
+		Version: "1.0",
+		Rules: []Rule{
+			{
+				Name:     "allow list_entries only",
+				Priority: 100,
+				Conditions: Conditions{
+					AgentID:      "restricted-agent",
+					AllowedTools: []string{"list_entries", "get_entry"},
+				},
+				Action: ActionAllow,
+			},
+		},
+	}
+
+	engine := NewEngine([]*Policy{policy})
+
+	tests := []struct {
+		name     string
+		toolName string
+		want     Action
+	}{
+		{
+			name:     "allowed tool",
+			toolName: "list_entries",
+			want:     ActionAllow,
+		},
+		{
+			name:     "another allowed tool",
+			toolName: "get_entry",
+			want:     ActionAllow,
+		},
+		{
+			name:     "disallowed tool",
+			toolName: "delete_entry",
+			want:     ActionDeny,
+		},
+		{
+			name:     "empty tool name",
+			toolName: "",
+			want:     ActionAllow,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := EvalContext{AgentID: "restricted-agent", ToolName: tt.toolName, Now: time.Now()}
+			got := engine.Evaluate(ctx)
+			if got.Action != tt.want {
+				t.Errorf("Evaluate() = %v, want %v", got.Action, tt.want)
+			}
+		})
+	}
+}
+
+func TestEngineEvaluateAllowedToolsEmpty(t *testing.T) {
+	policy := &Policy{
+		Version: "1.0",
+		Rules: []Rule{
+			{
+				Name:     "no tool restriction",
+				Priority: 100,
+				Conditions: Conditions{
+					AgentID: "any-agent",
+				},
+				Action: ActionAllow,
+			},
+		},
+	}
+
+	engine := NewEngine([]*Policy{policy})
+	ctx := EvalContext{AgentID: "any-agent", ToolName: "any_tool", Now: time.Now()}
+	got := engine.Evaluate(ctx)
+	if got.Action != ActionAllow {
+		t.Errorf("Evaluate() = %v, want %v (no tool restriction should match any tool)", got.Action, ActionAllow)
+	}
+}
+
+func TestEngineEvaluateRateLimitStub(t *testing.T) {
+	policy := &Policy{
+		Version: "1.0",
+		Rules: []Rule{
+			{
+				Name:     "rate limited rule",
+				Priority: 100,
+				Conditions: Conditions{
+					AgentID: "agent1",
+					RateLimit: &RateLimitCondition{
+						MaxReadsPerHour: 1,
+						MaxReadsPerDay:  5,
+					},
+				},
+				Action: ActionAllow,
+			},
+		},
+	}
+
+	engine := NewEngine([]*Policy{policy})
+
+	ctx := EvalContext{AgentID: "agent1", Now: time.Now()}
+	got := engine.Evaluate(ctx)
+	if got.Action != ActionAllow {
+		t.Errorf("Evaluate() = %v, want %v (Wave 1 stub should allow)", got.Action, ActionAllow)
+	}
+}
+
+func TestEngineEvaluateMaxSecretsStub(t *testing.T) {
+	policy := &Policy{
+		Version: "1.0",
+		Rules: []Rule{
+			{
+				Name:     "max secrets rule",
+				Priority: 100,
+				Conditions: Conditions{
+					AgentID:    "agent1",
+					MaxSecrets: 3,
+				},
+				Action: ActionAllow,
+			},
+		},
+	}
+
+	engine := NewEngine([]*Policy{policy})
+
+	ctx := EvalContext{AgentID: "agent1", Now: time.Now()}
+	got := engine.Evaluate(ctx)
+	if got.Action != ActionAllow {
+		t.Errorf("Evaluate() = %v, want %v (Wave 1 stub should allow)", got.Action, ActionAllow)
+	}
+}
+
+func TestYAMLUnmarshalExtendedConditions(t *testing.T) {
+	content := `
+version: "1.0"
+description: "Test policy with extended conditions"
+rules:
+  - name: "extended rule"
+    priority: 50
+    conditions:
+      agent_id: "*"
+      allowed_tools:
+        - "list_entries"
+        - "get_entry"
+      rate_limit:
+        max_reads_per_hour: 60
+        max_reads_per_day: 500
+      max_secrets: 10
+    action: "allow"
+`
+
+	var policy Policy
+	if err := yaml.Unmarshal([]byte(content), &policy); err != nil {
+		t.Fatalf("yaml.Unmarshal() error = %v", err)
+	}
+
+	if len(policy.Rules) != 1 {
+		t.Fatalf("Rules length = %v, want %v", len(policy.Rules), 1)
+	}
+
+	rule := policy.Rules[0]
+	if len(rule.Conditions.AllowedTools) != 2 {
+		t.Errorf("AllowedTools length = %v, want %v", len(rule.Conditions.AllowedTools), 2)
+	}
+	if rule.Conditions.AllowedTools[0] != "list_entries" {
+		t.Errorf("AllowedTools[0] = %v, want %v", rule.Conditions.AllowedTools[0], "list_entries")
+	}
+	if rule.Conditions.AllowedTools[1] != "get_entry" {
+		t.Errorf("AllowedTools[1] = %v, want %v", rule.Conditions.AllowedTools[1], "get_entry")
+	}
+	if rule.Conditions.RateLimit == nil {
+		t.Fatal("RateLimit is nil")
+	}
+	if rule.Conditions.RateLimit.MaxReadsPerHour != 60 {
+		t.Errorf("RateLimit.MaxReadsPerHour = %v, want %v", rule.Conditions.RateLimit.MaxReadsPerHour, 60)
+	}
+	if rule.Conditions.RateLimit.MaxReadsPerDay != 500 {
+		t.Errorf("RateLimit.MaxReadsPerDay = %v, want %v", rule.Conditions.RateLimit.MaxReadsPerDay, 500)
+	}
+	if rule.Conditions.MaxSecrets != 10 {
+		t.Errorf("MaxSecrets = %v, want %v", rule.Conditions.MaxSecrets, 10)
+	}
+}
+
+func TestMatchAllowedTool(t *testing.T) {
+	tests := []struct {
+		allowed  []string
+		toolName string
+		want     bool
+	}{
+		{[]string{"list_entries", "get_entry"}, "list_entries", true},
+		{[]string{"list_entries", "get_entry"}, "get_entry", true},
+		{[]string{"list_entries"}, "get_entry", false},
+		{[]string{}, "any_tool", true},
+		{[]string{"list_entries"}, "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.toolName, func(t *testing.T) {
+			if got := matchAllowedTool(tt.allowed, tt.toolName); got != tt.want {
+				t.Errorf("matchAllowedTool(%v, %q) = %v, want %v", tt.allowed, tt.toolName, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestEnginePerformance(t *testing.T) {
 	var rules []Rule
 	for i := 0; i < 100; i++ {

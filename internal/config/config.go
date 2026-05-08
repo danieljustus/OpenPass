@@ -61,30 +61,38 @@ type fileConfig struct {
 }
 
 type AgentProfile struct {
-	Name            string        `yaml:"-"`
-	ApprovalMode    string        `yaml:"approvalMode"`
-	AllowedPaths    []string      `yaml:"allowedPaths"`
-	RedactFields    []string      `yaml:"redactFields,omitempty"`
-	CanWrite        bool          `yaml:"canWrite"`
-	CanRunCommands  bool          `yaml:"canRunCommands,omitempty"`
-	CanManageConfig bool          `yaml:"canManageConfig,omitempty"`
-	CanUseClipboard bool          `yaml:"canUseClipboard,omitempty"`
-	CanUseAutotype  bool          `yaml:"canUseAutotype,omitempty"`
-	RequireApproval bool          `yaml:"requireApproval"`
-	ApprovalTimeout time.Duration `yaml:"approvalTimeout,omitempty"`
+	Name                string        `yaml:"-"`
+	ApprovalMode        string        `yaml:"approvalMode"`
+	AllowedPaths        []string      `yaml:"allowedPaths"`
+	RedactFields        []string      `yaml:"redactFields,omitempty"`
+	CanWrite            bool          `yaml:"canWrite"`
+	CanRunCommands      bool          `yaml:"canRunCommands,omitempty"`
+	CanManageConfig     bool          `yaml:"canManageConfig,omitempty"`
+	CanUseClipboard     bool          `yaml:"canUseClipboard,omitempty"`
+	CanUseAutotype      bool          `yaml:"canUseAutotype,omitempty"`
+	RequireApproval     bool          `yaml:"requireApproval"`
+	ApprovalTimeout     time.Duration `yaml:"approvalTimeout,omitempty"`
+	AllowedTools        []string      `yaml:"allowed_tools,omitempty"`
+	MaxReadsPerHour     int           `yaml:"max_reads_per_hour,omitempty"`
+	MaxReadsPerDay      int           `yaml:"max_reads_per_day,omitempty"`
+	MaxSecretsInSession int           `yaml:"max_secrets_in_session,omitempty"`
 }
 
 type fileAgentProfile struct {
-	ApprovalTimeout *time.Duration `yaml:"approvalTimeout,omitempty"`
-	CanWrite        *bool          `yaml:"canWrite,omitempty"`
-	CanRunCommands  *bool          `yaml:"canRunCommands,omitempty"`
-	CanManageConfig *bool          `yaml:"canManageConfig,omitempty"`
-	CanUseClipboard *bool          `yaml:"canUseClipboard,omitempty"`
-	CanUseAutotype  *bool          `yaml:"canUseAutotype,omitempty"`
-	RequireApproval *bool          `yaml:"requireApproval,omitempty"`
-	ApprovalMode    *string        `yaml:"approvalMode,omitempty"`
-	AllowedPaths    []string       `yaml:"allowedPaths,omitempty"`
-	RedactFields    []string       `yaml:"redactFields,omitempty"`
+	ApprovalTimeout     *time.Duration `yaml:"approvalTimeout,omitempty"`
+	CanWrite            *bool          `yaml:"canWrite,omitempty"`
+	CanRunCommands      *bool          `yaml:"canRunCommands,omitempty"`
+	CanManageConfig     *bool          `yaml:"canManageConfig,omitempty"`
+	CanUseClipboard     *bool          `yaml:"canUseClipboard,omitempty"`
+	CanUseAutotype      *bool          `yaml:"canUseAutotype,omitempty"`
+	RequireApproval     *bool          `yaml:"requireApproval,omitempty"`
+	ApprovalMode        *string        `yaml:"approvalMode,omitempty"`
+	AllowedPaths        []string       `yaml:"allowedPaths,omitempty"`
+	RedactFields        []string       `yaml:"redactFields,omitempty"`
+	AllowedTools        []string       `yaml:"allowed_tools,omitempty"`
+	MaxReadsPerHour     *int           `yaml:"max_reads_per_hour,omitempty"`
+	MaxReadsPerDay      *int           `yaml:"max_reads_per_day,omitempty"`
+	MaxSecretsInSession *int           `yaml:"max_secrets_in_session,omitempty"`
 }
 
 type fileProfile struct {
@@ -211,10 +219,22 @@ func Load(path string) (*Config, error) {
 					current.ApprovalMode = "none"
 				}
 			}
-			if profile.RedactFields != nil {
-				current.RedactFields = append([]string(nil), profile.RedactFields...)
-			}
-			cfg.Agents[name] = current
+		if profile.RedactFields != nil {
+			current.RedactFields = append([]string(nil), profile.RedactFields...)
+		}
+		if profile.AllowedTools != nil {
+			current.AllowedTools = append([]string(nil), profile.AllowedTools...)
+		}
+		if profile.MaxReadsPerHour != nil {
+			current.MaxReadsPerHour = *profile.MaxReadsPerHour
+		}
+		if profile.MaxReadsPerDay != nil {
+			current.MaxReadsPerDay = *profile.MaxReadsPerDay
+		}
+		if profile.MaxSecretsInSession != nil {
+			current.MaxSecretsInSession = *profile.MaxSecretsInSession
+		}
+		cfg.Agents[name] = current
 		}
 	}
 
@@ -461,6 +481,21 @@ func buildFileAgents(agents map[string]AgentProfile) map[string]fileAgentProfile
 		}
 		if profile.RedactFields != nil {
 			fap.RedactFields = append([]string(nil), profile.RedactFields...)
+		}
+		if profile.AllowedTools != nil {
+			fap.AllowedTools = append([]string(nil), profile.AllowedTools...)
+		}
+		if profile.MaxReadsPerHour != 0 {
+			mrph := profile.MaxReadsPerHour
+			fap.MaxReadsPerHour = &mrph
+		}
+		if profile.MaxReadsPerDay != 0 {
+			mrpd := profile.MaxReadsPerDay
+			fap.MaxReadsPerDay = &mrpd
+		}
+		if profile.MaxSecretsInSession != 0 {
+			msis := profile.MaxSecretsInSession
+			fap.MaxSecretsInSession = &msis
 		}
 		result[name] = fap
 	}

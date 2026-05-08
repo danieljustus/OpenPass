@@ -51,15 +51,23 @@ type Rule struct {
 	Action     Action     `yaml:"action"`
 }
 
+type RateLimitCondition struct {
+	MaxReadsPerHour int `yaml:"max_reads_per_hour,omitempty"`
+	MaxReadsPerDay  int `yaml:"max_reads_per_day,omitempty"`
+}
+
 // Conditions defines the matching criteria for a policy rule.
 type Conditions struct {
-	AgentID     string            `yaml:"agent_id,omitempty"`
-	Path        string            `yaml:"path,omitempty"`
-	Tags        []string          `yaml:"tags,omitempty"`
-	WorkingDir  string            `yaml:"working_dir,omitempty"`
-	TimeOfDay   *TimeRange        `yaml:"time_of_day,omitempty"`
-	EnvVars     map[string]string `yaml:"env_vars,omitempty"`
-	ActionType  string            `yaml:"action,omitempty"` // read, write, delete, run, etc.
+	AgentID      string               `yaml:"agent_id,omitempty"`
+	Path         string               `yaml:"path,omitempty"`
+	Tags         []string             `yaml:"tags,omitempty"`
+	WorkingDir   string               `yaml:"working_dir,omitempty"`
+	TimeOfDay    *TimeRange           `yaml:"time_of_day,omitempty"`
+	EnvVars      map[string]string    `yaml:"env_vars,omitempty"`
+	ActionType   string               `yaml:"action,omitempty"` // read, write, delete, run, etc.
+	RateLimit    *RateLimitCondition  `yaml:"rate_limit,omitempty"`
+	AllowedTools []string             `yaml:"allowed_tools,omitempty"`
+	MaxSecrets   int                  `yaml:"max_secrets,omitempty"`
 }
 
 // TimeRange represents a time-of-day range for policy conditions.
@@ -111,6 +119,7 @@ type EvalContext struct {
 	WorkingDir string
 	EnvVars    map[string]string
 	ActionType string // read, write, delete, run, etc.
+	ToolName   string
 	Now        time.Time
 }
 

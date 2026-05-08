@@ -100,6 +100,16 @@ func (e *Engine) matches(rule compiledRule, ctx EvalContext) bool {
 		return false
 	}
 
+	if len(c.AllowedTools) > 0 && !matchAllowedTool(c.AllowedTools, ctx.ToolName) {
+		return false
+	}
+
+	if c.RateLimit != nil {
+	}
+
+	if c.MaxSecrets > 0 {
+	}
+
 	return true
 }
 
@@ -196,6 +206,18 @@ func matchEnvVars(required, actual map[string]string) bool {
 		}
 	}
 	return true
+}
+
+func matchAllowedTool(allowed []string, toolName string) bool {
+	if len(allowed) == 0 || toolName == "" {
+		return true
+	}
+	for _, t := range allowed {
+		if t == toolName {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizePattern(pattern string) string {
