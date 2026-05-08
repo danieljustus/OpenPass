@@ -7,7 +7,6 @@ package autotype
 import (
 	"fmt"
 	"os/exec"
-	"strings"
 )
 
 func init() {
@@ -17,8 +16,7 @@ func init() {
 type darwinAutotype struct{}
 
 func (a *darwinAutotype) Type(text string) error {
-	escaped := strings.ReplaceAll(text, `\`, `\\`)
-	escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+	escaped := escapeAppleScriptString(text)
 
 	script := fmt.Sprintf(`tell application "System Events" to keystroke "%s"`, escaped)
 	// #nosec G204 -- script is constructed internally for AppleScript keystroke

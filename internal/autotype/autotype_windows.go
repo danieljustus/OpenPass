@@ -7,7 +7,6 @@ package autotype
 import (
 	"fmt"
 	"os/exec"
-	"strings"
 )
 
 func init() {
@@ -17,7 +16,7 @@ func init() {
 type windowsAutotype struct{}
 
 func (a *windowsAutotype) Type(text string) error {
-	escaped := strings.ReplaceAll(text, "'", "''")
+	escaped := escapeSendKeysString(text)
 
 	script := fmt.Sprintf("$wshell = New-Object -ComObject WScript.Shell; $wshell.SendKeys('%s')", escaped)
 	cmd := exec.Command("powershell.exe", "-Command", script)
