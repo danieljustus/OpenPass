@@ -5,12 +5,12 @@ agent-facing secrets manager for Hermes and OpenClaw.
 
 It is intentionally not a live migration plan. Do not enable OpenPass in live
 Hermes configuration, move existing Hermes secrets, rotate credentials, or
-replace Janusz's personal password-management workflow until a human explicitly
+replace the user's personal password-management workflow until a human explicitly
 approves that later gate.
 
 ## Roles and non-goals
 
-- 1Password remains Janusz's personal and canonical human password manager.
+- 1Password remains the user's personal and canonical human password manager.
 - OpenPass is only the local, agent-facing secrets manager used to broker
   narrowly scoped credentials to Hermes/OpenClaw agents.
 - OpenPass should not become a broad default profile that lets every Hermes
