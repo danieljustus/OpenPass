@@ -92,7 +92,7 @@ func outputDoctorText(cmd *cobra.Command, vaultDir string, results []health.Resu
 }
 
 type doctorJSONOutput struct {
-	VaultDir string         `json:"vault_dir"`
+	VaultDir string          `json:"vault_dir"`
 	Results  []health.Result `json:"results"`
 	Score    struct {
 		OK    int `json:"ok"`
