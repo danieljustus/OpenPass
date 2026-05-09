@@ -11,7 +11,7 @@ metadata/read-only access, narrow `allowedPaths`, and an explicit tool allowlist
 do not give broad/default profiles wildcard paths, write access, or command
 execution by default.
 
-For Hermes and OpenClaw, see the conservative adoption packet in
+For a conservative Hermes or local-agent rollout, see the adoption packet in
 [`docs/hermes-safe-adoption.md`](hermes-safe-adoption.md). It covers a
 metadata-first profile, separate runner profiles, stdio-vs-HTTP defaults, and the
 human approval gates required before live config changes or secret migration.
@@ -22,8 +22,8 @@ Example first profile:
 agents:
   hermes-metadata:
     allowedPaths:
-      - hermes/providers/
-      - openclaw/local-dev/
+      - agents/providers/
+      - projects/local-dev/
     canWrite: false
     canRunCommands: false
     canManageConfig: false

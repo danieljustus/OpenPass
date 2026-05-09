@@ -1,7 +1,7 @@
-# Hermes / OpenClaw safe adoption guide
+# Agent safe adoption guide
 
 This guide describes a conservative adoption path for using OpenPass as a local,
-agent-facing secrets manager for Hermes and OpenClaw.
+agent-facing secrets manager for Hermes or other MCP-capable agents.
 
 It is intentionally not a live migration plan. Do not enable OpenPass in live
 Hermes configuration, move existing Hermes secrets, rotate credentials, or
@@ -10,9 +10,10 @@ approves that later gate.
 
 ## Roles and non-goals
 
-- 1Password remains the user's personal and canonical human password manager.
+- The user's existing password manager remains the canonical human password
+  manager.
 - OpenPass is only the local, agent-facing secrets manager used to broker
-  narrowly scoped credentials to Hermes/OpenClaw agents.
+  narrowly scoped credentials to MCP-capable agents.
 - OpenPass should not become a broad default profile that lets every Hermes
   session read raw secrets.
 - OpenPass should not initially execute commands with injected secrets unless
@@ -24,8 +25,8 @@ approves that later gate.
 1. Complete and review the OpenPass hardening work, especially masking of
    `run_command` and `execute_with_secret` output on every success and error
    path.
-2. Create synthetic-test-only OpenPass agent profiles. Do not import live Hermes
-   `.env` values or personal 1Password items.
+2. Create synthetic-test-only OpenPass agent profiles. Do not import live agent
+   `.env` values or personal password-manager items.
 3. Connect Hermes to a read-only, metadata-first profile and verify tool
    discovery and audit logging.
 4. Trial narrow raw-secret reads only for one explicit path scope and one
@@ -47,8 +48,8 @@ agents:
   hermes-metadata:
     # Replace these with the smallest path prefixes needed for the first trial.
     allowedPaths:
-      - hermes/providers/
-      - openclaw/local-dev/
+      - agents/providers/
+      - projects/local-dev/
     canWrite: false
     canRunCommands: false
     canManageConfig: false
@@ -97,7 +98,7 @@ use case rather than granting raw reads to default Hermes profiles.
 agents:
   hermes-provider-read:
     allowedPaths:
-      - hermes/providers/openrouter/
+      - agents/providers/example-provider/
     canWrite: false
     canRunCommands: false
     canManageConfig: false
@@ -132,9 +133,9 @@ reviewed.
 
 ```yaml
 agents:
-  hermes-runner-openrouter-smoke:
+  hermes-runner-provider-smoke:
     allowedPaths:
-      - hermes/providers/openrouter/
+      - agents/providers/example-provider/
     canWrite: false
     canRunCommands: true
     canManageConfig: false
@@ -160,9 +161,9 @@ Runner-profile operating rules:
 - Do not use runner profiles in broad/default Hermes profiles.
 - Disable or revoke the runner token when the specific maintenance window ends.
 
-## Hermes MCP transport defaults
+## MCP transport defaults
 
-Prefer stdio for a local Hermes/OpenClaw integration:
+Prefer stdio for a local agent integration:
 
 ```yaml
 # ~/.hermes/config.yaml snippet for a future approved trial only.
@@ -172,7 +173,7 @@ mcp_servers:
     command: openpass
     args:
       - --vault
-      - /home/openclaw/.openpass-hermes-trial
+      - /path/to/openpass-agent-trial
       - serve
       - --stdio
       - --agent
@@ -198,7 +199,7 @@ HTTP is used, bind loopback only and use a scoped token:
 mcp:
   bind: 127.0.0.1
   port: 8090
-  httpTokenFile: /home/openclaw/.openpass-hermes-trial/mcp-token
+  httpTokenFile: /path/to/openpass-agent-trial/mcp-token
 ```
 
 ```yaml
@@ -258,7 +259,7 @@ Before widening access, record:
 ## Explicit non-approval
 
 This document does not approve live adoption. It does not approve migrating
-Hermes `.env` secrets, importing 1Password data, rotating real credentials,
+agent `.env` secrets, importing personal password-manager data, rotating real credentials,
 enabling OpenPass MCP in default Hermes profiles, broad wildcard path access,
 HTTP exposure beyond loopback, or command execution with injected secrets before
 reviewed masking fixes.
