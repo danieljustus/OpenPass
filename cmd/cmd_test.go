@@ -373,7 +373,10 @@ func TestParseSSHTarget_HostOnly(t *testing.T) {
 }
 
 func TestParseSSHTarget_Empty(t *testing.T) {
-	_, _, _, err := parseSSHTarget("", "")
+	user, host, path, err := parseSSHTarget("", "")
+	_ = user
+	_ = host
+	_ = path
 	if err == nil {
 		t.Error("expected error for empty target")
 	}
