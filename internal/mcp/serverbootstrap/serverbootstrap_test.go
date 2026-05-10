@@ -114,15 +114,18 @@ func runHTTPServerAsync(ctx context.Context, t *testing.T, bind string, port int
 		}
 	}()
 
-	addr := net.JoinHostPort(bind, strconv.Itoa(port))
-	deadline := time.Now().Add(5 * time.Second)
+	healthURL := "http://" + net.JoinHostPort(bind, strconv.Itoa(port)) + "/health"
+	client := &http.Client{Timeout: 500 * time.Millisecond}
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		conn, err := net.Dial("tcp", addr)
+		resp, err := client.Get(healthURL) //nolint:noctx
 		if err == nil {
-			_ = conn.Close()
-			break
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				break
+			}
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(25 * time.Millisecond)
 	}
 
 	return wg.Wait
