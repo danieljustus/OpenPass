@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -29,7 +30,8 @@ import (
 // directory. LoadTokenSystem migrates legacy mcp-token files to the registry
 // and deletes the original file, so tests need a way to retrieve the token
 // after the server has started.
-var testTokens sync.Map // map[string]string
+var testTokens sync.Map            // map[string]string
+var reservedTestListeners sync.Map // map[int]net.Listener
 
 func newTestHTTPClient() *http.Client {
 	return &http.Client{
@@ -45,6 +47,27 @@ func findFreePort(t *testing.T) int {
 	}
 	port := l.Addr().(*net.TCPAddr).Port //nolint:errcheck // net.Listener.Addr() does not return an error
 	_ = l.Close()
+	return port
+}
+
+func reserveFreePort(t *testing.T) int {
+	t.Helper()
+	return reserveFreePortForBind(t, "127.0.0.1")
+}
+
+func reserveFreePortForBind(t *testing.T, bind string) int {
+	t.Helper()
+	l, err := net.Listen("tcp", net.JoinHostPort(bind, "0"))
+	if err != nil {
+		t.Fatalf("reserve free port on %s: %v", bind, err)
+	}
+	port := l.Addr().(*net.TCPAddr).Port //nolint:errcheck // listener uses tcp addr
+	reservedTestListeners.Store(port, l)
+	t.Cleanup(func() {
+		if value, ok := reservedTestListeners.LoadAndDelete(port); ok {
+			_ = value.(net.Listener).Close()
+		}
+	})
 	return port
 }
 
@@ -79,16 +102,32 @@ func newTestVault(t *testing.T) *vaultpkg.Vault {
 
 func runHTTPServerAsyncWithFactory(ctx context.Context, t *testing.T, bind string, port int, v *vaultpkg.Vault, factory func(*vaultpkg.Vault, string, string) (*mcp.Server, error)) func() {
 	t.Helper()
+	var listener net.Listener
+	if value, ok := reservedTestListeners.LoadAndDelete(port); ok {
+		listener = value.(net.Listener)
+	} else if bind == "127.0.0.1" {
+		l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", bind, port))
+		if err != nil {
+			t.Fatalf("reserve HTTP listener: %v", err)
+		}
+		listener = l
+	}
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		vaultDir, _ := vaultPath()
-		if err := serverbootstrap.RunHTTPServer(ctx, bind, port, v, vaultDir, "dev", factory); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		var err error
+		if listener != nil {
+			err = serverbootstrap.RunHTTPServerOnListener(ctx, listener, v, vaultDir, "dev", factory)
+		} else {
+			err = serverbootstrap.RunHTTPServer(ctx, bind, port, v, vaultDir, "dev", factory)
+		}
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			t.Errorf("runHTTPServer error: %v", err)
 		}
 	}()
-	addr := fmt.Sprintf("%s:%d", bind, port)
+	addr := net.JoinHostPort(bind, strconv.Itoa(port))
 	client := newTestHTTPClient()
 	for i := 0; i < 50; i++ {
 		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
@@ -144,7 +183,7 @@ func setValidMCPHeaders(req *http.Request, token string) {
 
 func TestRunHTTPServer_HealthEndpoint(t *testing.T) {
 	v := newTestVault(t)
-	port := findFreePort(t)
+	port := reserveFreePort(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	waitForServer := runHTTPServerAsync(ctx, t, port, v)
@@ -190,7 +229,7 @@ func TestRunHTTPServer_HealthEndpoint(t *testing.T) {
 
 func TestRunHTTPServer_MetricsEndpoint(t *testing.T) {
 	v := newTestVault(t)
-	port := findFreePort(t)
+	port := reserveFreePort(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	waitForServer := runHTTPServerAsync(ctx, t, port, v)
@@ -253,7 +292,7 @@ func TestRunHTTPServer_MetricsEndpoint(t *testing.T) {
 
 func TestRunHTTPServer_MCPEndpoint_Auth(t *testing.T) {
 	v := newTestVault(t)
-	port := findFreePort(t)
+	port := reserveFreePort(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	waitForServer := runHTTPServerAsync(ctx, t, port, v)
@@ -289,7 +328,7 @@ func TestRunHTTPServer_MCPEndpoint_Auth(t *testing.T) {
 
 func TestRunHTTPServer_MCPEndpoint_WithAgent(t *testing.T) {
 	v := newTestVault(t)
-	port := findFreePort(t)
+	port := reserveFreePort(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	waitForServer := runHTTPServerAsync(ctx, t, port, v)
@@ -334,7 +373,7 @@ func TestRunHTTPServer_MCPEndpoint_WithAgent(t *testing.T) {
 
 func TestRunHTTPServer_MethodNotAllowed(t *testing.T) {
 	v := newTestVault(t)
-	port := findFreePort(t)
+	port := reserveFreePort(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	waitForServer := runHTTPServerAsync(ctx, t, port, v)
@@ -364,7 +403,7 @@ func TestRunHTTPServer_MethodNotAllowed(t *testing.T) {
 
 func TestRunHTTPServer_InvalidJSON(t *testing.T) {
 	v := newTestVault(t)
-	port := findFreePort(t)
+	port := reserveFreePort(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	waitForServer := runHTTPServerAsync(ctx, t, port, v)
@@ -411,7 +450,7 @@ func TestRunHTTPServer_InvalidJSON(t *testing.T) {
 
 func TestRunHTTPServer_HTTPTransportHeaderValidation(t *testing.T) {
 	v := newTestVault(t)
-	port := findFreePort(t)
+	port := reserveFreePort(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	waitForServer := runHTTPServerAsync(ctx, t, port, v)
@@ -453,7 +492,7 @@ func TestRunHTTPServer_HTTPTransportHeaderValidation(t *testing.T) {
 
 func TestRunHTTPServer_NotificationReturnsAccepted(t *testing.T) {
 	v := newTestVault(t)
-	port := findFreePort(t)
+	port := reserveFreePort(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	waitForServer := runHTTPServerAsync(ctx, t, port, v)
@@ -485,7 +524,7 @@ func TestRunHTTPServer_NotificationReturnsAccepted(t *testing.T) {
 
 func TestRunHTTPServer_BadOriginForbidden(t *testing.T) {
 	v := newTestVault(t)
-	port := findFreePort(t)
+	port := reserveFreePort(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	waitForServer := runHTTPServerAsync(ctx, t, port, v)
@@ -512,7 +551,7 @@ func TestRunHTTPServer_BadOriginForbidden(t *testing.T) {
 
 func TestRunHTTPServer_UnsupportedProtocolHeader(t *testing.T) {
 	v := newTestVault(t)
-	port := findFreePort(t)
+	port := reserveFreePort(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	waitForServer := runHTTPServerAsync(ctx, t, port, v)
@@ -539,7 +578,7 @@ func TestRunHTTPServer_UnsupportedProtocolHeader(t *testing.T) {
 
 func TestRunHTTPServer_HandlerCreationError(t *testing.T) {
 	v := newTestVault(t)
-	port := findFreePort(t)
+	port := reserveFreePort(t)
 
 	factory := func(_ *vaultpkg.Vault, _ string, _ string) (*mcp.Server, error) {
 		return nil, errors.New("agent not found")
@@ -597,7 +636,7 @@ func TestRunHTTPServer_HandlerCreationError(t *testing.T) {
 
 func TestRunHTTPServer_HandlerCacheHit(t *testing.T) {
 	v := newTestVault(t)
-	port := findFreePort(t)
+	port := reserveFreePort(t)
 
 	var callCount int
 	factory := func(vault *vaultpkg.Vault, agentName string, transport string) (*mcp.Server, error) {
@@ -659,7 +698,7 @@ func TestRunHTTPServer_HandlerCacheHit(t *testing.T) {
 
 func TestRunHTTPServer_CustomTokenPath(t *testing.T) {
 	v := newTestVault(t)
-	port := findFreePort(t)
+	port := reserveFreePort(t)
 
 	customTokenPath := filepath.Join(t.TempDir(), "custom-token")
 	tokenContent := "custom-test-token-12345"
@@ -715,7 +754,7 @@ func TestRunHTTPServer_CustomTokenPath(t *testing.T) {
 
 func TestRunHTTPServer_HandleMessageError(t *testing.T) {
 	v := newTestVault(t)
-	port := findFreePort(t)
+	port := reserveFreePort(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	waitForServer := runHTTPServerAsync(ctx, t, port, v)
@@ -950,7 +989,7 @@ func TestRunStdioServer_WithNilVault(t *testing.T) {
 
 func TestRunHTTPServer_MetricsEndpoint_NonLoopback_RequiresAuth(t *testing.T) {
 	v := newTestVault(t)
-	port := findFreePort(t)
+	port := reserveFreePortForBind(t, "0.0.0.0")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	waitForServer := runHTTPServerAsyncWithBind(ctx, t, "0.0.0.0", port, v)
@@ -990,7 +1029,7 @@ func TestRunHTTPServer_MetricsEndpoint_NonLoopback_AllowsWhenDisabled(t *testing
 	v.Config.MCP = &config.MCPConfig{
 		MetricsAuthRequired: false,
 	}
-	port := findFreePort(t)
+	port := reserveFreePortForBind(t, "0.0.0.0")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	waitForServer := runHTTPServerAsyncWithBind(ctx, t, "0.0.0.0", port, v)
@@ -1013,7 +1052,7 @@ func TestRunHTTPServer_MetricsEndpoint_NonLoopback_AllowsWhenDisabled(t *testing
 
 func TestRunHTTPServer_HealthEndpoint_NonLoopback(t *testing.T) {
 	v := newTestVault(t)
-	port := findFreePort(t)
+	port := reserveFreePortForBind(t, "0.0.0.0")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	waitForServer := runHTTPServerAsyncWithBind(ctx, t, "0.0.0.0", port, v)
@@ -1100,7 +1139,19 @@ func TestServe_RunE_HTTPWithAgent(t *testing.T) {
 	}
 	vaultFlagReset(t)
 
-	port := findFreePort(t)
+	const port = 18080
+
+	origFindAvailablePort := findAvailablePortFunc
+	findAvailablePortFunc = func(bind string, preferredPort int) (int, bool, error) {
+		if bind != "127.0.0.1" {
+			t.Errorf("port allocator bind = %q, want 127.0.0.1", bind)
+		}
+		if preferredPort != port {
+			t.Errorf("preferred port = %d, want %d", preferredPort, port)
+		}
+		return preferredPort, true, nil
+	}
+	t.Cleanup(func() { findAvailablePortFunc = origFindAvailablePort })
 
 	serveSignals := make(chan chan<- os.Signal, 1)
 	origNotify := serveSignalNotify

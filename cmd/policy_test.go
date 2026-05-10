@@ -8,6 +8,7 @@ import (
 )
 
 func TestPolicyValidateCmd_Success(t *testing.T) {
+	resetVaultState(t)
 	tmpDir := t.TempDir()
 	policyFile := filepath.Join(tmpDir, "test-policy.yaml")
 
@@ -42,6 +43,7 @@ rules:
 }
 
 func TestPolicyValidateCmd_Invalid(t *testing.T) {
+	resetVaultState(t)
 	tmpDir := t.TempDir()
 	policyFile := filepath.Join(tmpDir, "invalid-policy.yaml")
 
