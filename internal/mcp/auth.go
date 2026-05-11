@@ -31,12 +31,19 @@ func TokenFromContext(ctx context.Context) (*ScopedToken, bool) {
 	return t, ok
 }
 
+// MaxRateLimiterEntries caps the rate-limiter's in-memory state to prevent
+// memory exhaustion from many distinct source IPs (e.g. spoofed traffic).
+// When the cap is reached, the oldest tracked entries are evicted.
+const MaxRateLimiterEntries = 10000
+
 type RateLimiter struct {
 	attempts       map[string]*rateLimitEntry
 	mu             sync.Mutex
 	limit          int
 	window         time.Duration
+	maxEntries     int
 	cleanupCount   int64
+	evictionCount  int64
 	log            *slog.Logger
 	trustedProxies []string
 }
@@ -51,8 +58,24 @@ func NewRateLimiter(limit int, dur time.Duration, trustedProxies ...string) *Rat
 		attempts:       make(map[string]*rateLimitEntry),
 		limit:          limit,
 		window:         dur,
+		maxEntries:     MaxRateLimiterEntries,
 		trustedProxies: trustedProxies,
 	}
+}
+
+// SetMaxEntriesForTests overrides the eviction cap; intended only for tests.
+func (rl *RateLimiter) SetMaxEntriesForTests(maxEntries int) {
+	rl.mu.Lock()
+	rl.maxEntries = maxEntries
+	rl.mu.Unlock()
+}
+
+// EvictionCount returns how many entries have been forcibly evicted to honor
+// the size cap. Useful for monitoring potential memory-DoS attempts.
+func (rl *RateLimiter) EvictionCount() int64 {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	return rl.evictionCount
 }
 
 func (rl *RateLimiter) Allow(ip string) bool {
@@ -62,6 +85,9 @@ func (rl *RateLimiter) Allow(ip string) bool {
 	now := time.Now()
 	entry, ok := rl.attempts[ip]
 	if !ok || now.After(entry.resetAt) {
+		if rl.maxEntries > 0 && len(rl.attempts) >= rl.maxEntries {
+			rl.evictOldestLocked(now)
+		}
 		rl.attempts[ip] = &rateLimitEntry{
 			count:   1,
 			resetAt: now.Add(rl.window),
@@ -75,6 +101,37 @@ func (rl *RateLimiter) Allow(ip string) bool {
 
 	entry.count++
 	return true
+}
+
+// evictOldestLocked drops expired entries first; if still over the cap,
+// evicts the entry with the oldest resetAt. Caller must hold rl.mu.
+func (rl *RateLimiter) evictOldestLocked(now time.Time) {
+	for ip, e := range rl.attempts {
+		if now.After(e.resetAt) {
+			delete(rl.attempts, ip)
+			rl.evictionCount++
+			if len(rl.attempts) < rl.maxEntries {
+				return
+			}
+		}
+	}
+	if len(rl.attempts) < rl.maxEntries {
+		return
+	}
+	var oldestIP string
+	var oldestReset time.Time
+	first := true
+	for ip, e := range rl.attempts {
+		if first || e.resetAt.Before(oldestReset) {
+			oldestIP = ip
+			oldestReset = e.resetAt
+			first = false
+		}
+	}
+	if oldestIP != "" {
+		delete(rl.attempts, oldestIP)
+		rl.evictionCount++
+	}
 }
 
 func (rl *RateLimiter) Cleanup() {

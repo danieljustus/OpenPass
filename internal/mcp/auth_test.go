@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -253,6 +254,45 @@ func TestRateLimiterCleanup(t *testing.T) {
 	}
 	if !rl.Allow("192.168.1.11") {
 		t.Fatal("expected attempt after cleanup to be allowed for 192.168.1.11")
+	}
+}
+
+func TestRateLimiterEvictsAtCap(t *testing.T) {
+	rl := NewRateLimiter(5, time.Hour)
+	rl.SetMaxEntriesForTests(4)
+
+	for i := 0; i < 10; i++ {
+		rl.Allow(fmt.Sprintf("10.0.0.%d", i))
+	}
+
+	rl.mu.Lock()
+	got := len(rl.attempts)
+	rl.mu.Unlock()
+	if got > 4 {
+		t.Fatalf("expected len(attempts) <= 4 after cap-driven eviction, got %d", got)
+	}
+	if rl.EvictionCount() == 0 {
+		t.Fatal("expected EvictionCount > 0")
+	}
+}
+
+func TestRateLimiterEvictsExpiredFirstWhenAtCap(t *testing.T) {
+	rl := NewRateLimiter(5, 5*time.Millisecond)
+	rl.SetMaxEntriesForTests(3)
+
+	rl.Allow("10.0.0.1")
+	rl.Allow("10.0.0.2")
+	rl.Allow("10.0.0.3")
+	time.Sleep(10 * time.Millisecond) // expire all three
+
+	// New insert at cap → evictOldestLocked should clear all expired ones.
+	rl.Allow("10.0.0.4")
+
+	rl.mu.Lock()
+	got := len(rl.attempts)
+	rl.mu.Unlock()
+	if got > 3 {
+		t.Fatalf("expected len(attempts) <= 3, got %d", got)
 	}
 }
 
