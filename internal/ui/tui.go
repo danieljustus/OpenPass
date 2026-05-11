@@ -99,7 +99,7 @@ type TUIModel struct {
 	help           bool
 	loading        bool
 
-	sortMode  int                                // 0=name-asc, 1=name-desc, 2=updated-asc, 3=updated-desc
+	sortMode  int // 0=name-asc, 1=name-desc, 2=updated-asc, 3=updated-desc
 	filterTag string
 	metaCache map[string]vaultpkg.EntryMetadata
 
