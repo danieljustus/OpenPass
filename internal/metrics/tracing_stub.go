@@ -9,9 +9,10 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
-var noopTracer = trace.NewNoopTracerProvider().Tracer("openpass")
+var noopTracer = noop.NewTracerProvider().Tracer("openpass")
 
 // InitTracing returns a no-op shutdown function when metrics are not compiled in.
 func InitTracing(_, _ string) (func(context.Context) error, error) {

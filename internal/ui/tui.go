@@ -28,6 +28,7 @@ const (
 	redactedValue           = "••••"
 	generatedPasswordLength = 20
 	keyQuit                 = "ctrl+c"
+	keyEnter                = "enter"
 )
 
 type mode int
@@ -176,6 +177,7 @@ func (m TUIModel) Init() tea.Cmd {
 	return loadEntriesCmd(m.svc)
 }
 
+//nolint:gocyclo // TUI update loop naturally has high cyclomatic complexity
 func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -305,7 +307,7 @@ func (m TUIModel) View() string {
 func (m TUIModel) handleKey(msg tea.KeyMsg) (TUIModel, tea.Cmd) {
 	if m.mode == modeFilter {
 		switch msg.String() {
-		case "esc", "enter":
+		case "esc", keyEnter:
 			m.mode = modeNormal
 			m.filterInput.Blur()
 			return m, m.loadSelectedEntry()
@@ -321,7 +323,7 @@ func (m TUIModel) handleKey(msg tea.KeyMsg) (TUIModel, tea.Cmd) {
 
 	if m.mode == modeTagFilter {
 		switch msg.String() {
-		case "enter":
+		case keyEnter:
 			m.mode = modeNormal
 			m.tagFilterInput.Blur()
 			m.filterTag = strings.TrimSpace(m.tagFilterInput.Value())

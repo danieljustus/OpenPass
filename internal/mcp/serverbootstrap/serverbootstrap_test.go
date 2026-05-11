@@ -82,6 +82,7 @@ func newTestHTTPClient() *http.Client {
 	}
 }
 
+//nolint:unparam // bind varies across build tags (metrics build uses "0.0.0.0")
 func runHTTPServerAsync(ctx context.Context, t *testing.T, bind string, port int, v *vaultpkg.Vault, factory func(*vaultpkg.Vault, string, string) (*mcp.Server, error)) func() {
 	t.Helper()
 	var listener net.Listener

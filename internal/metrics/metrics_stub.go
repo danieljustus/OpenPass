@@ -1,5 +1,8 @@
 //go:build !metrics
 
+// Package metrics provides observability instrumentation (Prometheus metrics and
+// OpenTelemetry tracing) for OpenPass. When compiled without the "metrics" build
+// tag, all functions are no-ops.
 package metrics
 
 import (
