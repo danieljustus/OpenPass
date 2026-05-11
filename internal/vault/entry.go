@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"filippo.io/age"
@@ -116,11 +117,53 @@ func validateLegacyEntryPath(vaultDir, path string) error {
 	return nil
 }
 
+// configCache memoizes parsed vault configs per vaultDir, keyed by the
+// config file's mtime. It avoids re-parsing config.yaml on every entry
+// read during a search — the hot path for large vaults.
+var configCache struct {
+	mu    sync.RWMutex
+	items map[string]configCacheEntry
+}
+
+type configCacheEntry struct {
+	cfg   *vaultconfig.Config
+	mtime time.Time
+}
+
+func init() {
+	configCache.items = make(map[string]configCacheEntry)
+}
+
+// InvalidateConfigCache drops the cached config for vaultDir. Callers should
+// invoke this after writing config.yaml so the next load sees the new value.
+func InvalidateConfigCache(vaultDir string) {
+	configCache.mu.Lock()
+	delete(configCache.items, vaultDir)
+	configCache.mu.Unlock()
+}
+
 func loadVaultConfig(vaultDir string) *vaultconfig.Config {
-	cfg, err := vaultconfig.Load(filepath.Join(vaultDir, "config.yaml"))
+	configPath := filepath.Join(vaultDir, "config.yaml")
+	mtime := time.Time{}
+	if info, err := os.Stat(configPath); err == nil {
+		mtime = info.ModTime()
+	}
+
+	configCache.mu.RLock()
+	entry, ok := configCache.items[vaultDir]
+	configCache.mu.RUnlock()
+	if ok && entry.mtime.Equal(mtime) && entry.cfg != nil {
+		return entry.cfg
+	}
+
+	cfg, err := vaultconfig.Load(configPath)
 	if err != nil {
 		return vaultconfig.Default()
 	}
+
+	configCache.mu.Lock()
+	configCache.items[vaultDir] = configCacheEntry{cfg: cfg, mtime: mtime}
+	configCache.mu.Unlock()
 	return cfg
 }
 
