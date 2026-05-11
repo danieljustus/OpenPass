@@ -14,6 +14,6 @@ import (
 func registerMetricsEndpoint(mux *http.ServeMux, _ *vaultpkg.Vault, _ string, _ string, _ any, _ any) {
 	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotImplemented)
-		fmt.Fprintln(w, "metrics not compiled in (build with -tags metrics)")
+		_, _ = fmt.Fprintln(w, "metrics not compiled in (build with -tags metrics)")
 	})
 }

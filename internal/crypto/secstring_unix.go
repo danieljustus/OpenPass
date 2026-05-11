@@ -29,7 +29,7 @@ func SecureString(data []byte) (string, func()) {
 	if err == nil {
 		if err := unix.Mlock(buf); err != nil {
 			// Mmap succeeded but mlock failed — fall through.
-			unix.Munmap(buf)
+			_ = unix.Munmap(buf)
 		} else {
 			copy(buf, data)
 			s := unsafe.String(&buf[0], len(data))
@@ -37,8 +37,8 @@ func SecureString(data []byte) (string, func()) {
 				for i := range buf {
 					buf[i] = 0
 				}
-				unix.Munlock(buf)
-				unix.Munmap(buf)
+				_ = unix.Munlock(buf)
+				_ = unix.Munmap(buf)
 				Wipe(data)
 			}
 			return s, cleanup

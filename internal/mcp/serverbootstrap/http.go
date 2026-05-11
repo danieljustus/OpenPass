@@ -155,7 +155,11 @@ func RunHTTPServerOnListener(ctx context.Context, listener net.Listener, v *vaul
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
 			"version":   version,
 		}
-		buf := bufferPool.Get().(*bytes.Buffer)
+		buf, ok := bufferPool.Get().(*bytes.Buffer)
+		if !ok {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 		buf.Reset()
 		defer func() {
 			buf.Reset()
@@ -230,7 +234,11 @@ func RunHTTPServerOnListener(ctx context.Context, listener net.Listener, v *vaul
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		buf := bufferPool.Get().(*bytes.Buffer)
+		buf, ok := bufferPool.Get().(*bytes.Buffer)
+		if !ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		buf.Reset()
 		//nolint:errchkjson // Best-effort JSON response write; no recovery path if encoding fails
 		_ = json.NewEncoder(buf).Encode(resp)

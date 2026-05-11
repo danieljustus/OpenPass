@@ -97,7 +97,6 @@ func TestConcurrentMergeEntry(t *testing.T) {
 	}
 
 	for _, f := range fields {
-		f := f // capture
 		go func() {
 			defer wg.Done()
 
