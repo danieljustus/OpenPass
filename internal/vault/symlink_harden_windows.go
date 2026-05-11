@@ -4,40 +4,30 @@ package vault
 
 import (
 	"errors"
-	"io"
 	"io/fs"
 	"os"
+
+	"github.com/danieljustus/OpenPass/internal/fileutil"
 )
 
 var errUnsafePath = errors.New("path is not a regular file")
 
+// SafeWriteFile atomically writes data to path, rejecting symlink and
+// non-regular targets. The write is staged in a temporary file and renamed
+// into place — so a crash mid-write cannot corrupt an existing entry.
 func SafeWriteFile(path string, data []byte, perm os.FileMode) error {
 	if err := rejectSymlink(path); err != nil {
 		return err
 	}
-
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, perm)
-	if err != nil {
+	if info, err := os.Lstat(path); err == nil {
+		if !info.Mode().IsRegular() {
+			return &os.PathError{Op: "open", Path: path, Err: errUnsafePath}
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	defer func() { _ = file.Close() }()
 
-	info, err := file.Stat()
-	if err != nil {
-		return &os.PathError{Op: "stat", Path: path, Err: err}
-	}
-	if !info.Mode().IsRegular() {
-		return &os.PathError{Op: "open", Path: path, Err: errUnsafePath}
-	}
-
-	n, err := file.Write(data)
-	if err != nil {
-		return &os.PathError{Op: "write", Path: path, Err: err}
-	}
-	if n != len(data) {
-		return &os.PathError{Op: "write", Path: path, Err: io.ErrShortWrite}
-	}
-	return nil
+	return fileutil.AtomicWriteFile(path, data, perm)
 }
 
 func SafeRemove(path string) error {

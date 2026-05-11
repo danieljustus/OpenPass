@@ -5,39 +5,27 @@ package vault
 import (
 	"os"
 	"syscall"
+
+	"github.com/danieljustus/OpenPass/internal/fileutil"
 )
 
+// SafeWriteFile atomically writes data to path, rejecting symlink and
+// non-regular targets. The write is staged in a temporary file, fsynced,
+// and renamed into place — so a crash mid-write cannot corrupt an existing
+// entry.
 func SafeWriteFile(path string, data []byte, perm os.FileMode) error {
-	flags := syscall.O_NOFOLLOW | os.O_CREATE | os.O_TRUNC | os.O_WRONLY
-
-	fd, err := syscall.Open(path, flags, uint32(perm))
-	if err != nil {
-		return &os.PathError{Op: "open", Path: path, Err: err}
-	}
-	defer func() { _ = syscall.Close(fd) }()
-
-	var stat syscall.Stat_t
-	if err = syscall.Fstat(fd, &stat); err != nil {
-		return &os.PathError{Op: "fstat", Path: path, Err: err}
-	}
-
-	if stat.Mode&syscall.S_IFMT != syscall.S_IFREG {
-		return &os.PathError{
-			Op:   "open",
-			Path: path,
-			Err:  syscall.ENOTDIR,
+	if info, err := os.Lstat(path); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return &os.PathError{Op: "open", Path: path, Err: syscall.ELOOP}
 		}
+		if !info.Mode().IsRegular() {
+			return &os.PathError{Op: "open", Path: path, Err: syscall.ENOTDIR}
+		}
+	} else if !os.IsNotExist(err) {
+		return &os.PathError{Op: "lstat", Path: path, Err: err}
 	}
 
-	n, err := syscall.Write(fd, data)
-	if err != nil {
-		return &os.PathError{Op: "write", Path: path, Err: err}
-	}
-	if n != len(data) {
-		return &os.PathError{Op: "write", Path: path, Err: syscall.ENOSPC}
-	}
-
-	return nil
+	return fileutil.AtomicWriteFile(path, data, perm)
 }
 
 func SafeRemove(path string) error {
