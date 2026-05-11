@@ -606,11 +606,11 @@ func editEntryCmd(svc vaultsvc.Service, path string) tea.Cmd {
 			return entryEditedMsg{path: path, err: closeErr}
 		}
 
-		editor := os.Getenv("EDITOR")
-		if editor == "" {
-			editor = "vi"
+		editor, editorErr := resolveEditor(os.Getenv("EDITOR"))
+		if editorErr != nil {
+			return entryEditedMsg{path: path, err: editorErr}
 		}
-		cmd := exec.Command(editor, tmpPath) //#nosec G204 G702 -- EDITOR is explicitly user-controlled CLI behavior.
+		cmd := exec.Command(editor, tmpPath) //#nosec G204 G702 -- editor path resolved via exec.LookPath above.
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -634,6 +634,23 @@ func editEntryCmd(svc vaultsvc.Service, path string) tea.Cmd {
 		}
 		return entryEditedMsg{path: path}
 	}
+}
+
+// resolveEditor returns an absolute path to a usable editor binary. It tries
+// the user-provided value (typically $EDITOR) first, then falls back to a
+// short list of common editors. Returns an error if none are found on PATH.
+func resolveEditor(preferred string) (string, error) {
+	candidates := make([]string, 0, 4)
+	if preferred != "" {
+		candidates = append(candidates, preferred)
+	}
+	candidates = append(candidates, "vim", "nano", "vi")
+	for _, c := range candidates {
+		if path, err := exec.LookPath(c); err == nil {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("no editor found on PATH (tried %v); set $EDITOR to a valid editor", candidates)
 }
 
 // secureDeleteFile overwrites the file at path with zeros, syncs it, and
