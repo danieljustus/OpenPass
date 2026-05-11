@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 func init() {
@@ -28,12 +29,22 @@ func (a *linuxAutotype) Type(text string) error {
 	return a.typeX11(text)
 }
 
+// runWithStdin spawns cmd with text written to its stdin and waits for it to
+// finish. Passing the password via stdin (instead of argv) hides it from
+// process listings like `ps -ef` and /proc/<pid>/cmdline.
+func runWithStdin(cmd *exec.Cmd, text string) error {
+	cmd.Stdin = strings.NewReader(text)
+	return cmd.Run()
+}
+
 func (a *linuxAutotype) typeX11(text string) error {
 	if _, err := lookPath("xdotool"); err != nil {
 		return fmt.Errorf("autotype failed: xdotool not installed")
 	}
-	cmd := execCommand("xdotool", "type", "--delay", "0", text)
-	if err := cmd.Run(); err != nil {
+	// xdotool reads text from stdin when --file - is used. This keeps the
+	// password out of argv, where any local user could read it via ps.
+	cmd := execCommand("xdotool", "type", "--clearmodifiers", "--delay", "0", "--file", "-")
+	if err := runWithStdin(cmd, text); err != nil {
 		return fmt.Errorf("autotype failed (xdotool may not be installed or display not available): %w", err)
 	}
 	return nil
@@ -41,16 +52,19 @@ func (a *linuxAutotype) typeX11(text string) error {
 
 func (a *linuxAutotype) typeWayland(text string) error {
 	if _, err := lookPath("wtype"); err == nil {
-		cmd := execCommand("wtype", text)
-		if err := cmd.Run(); err != nil {
+		// wtype reads from stdin when "-" is given as the argument.
+		cmd := execCommand("wtype", "-")
+		if err := runWithStdin(cmd, text); err != nil {
 			return fmt.Errorf("autotype failed (wtype): %w", err)
 		}
 		return nil
 	}
 
 	if _, err := lookPath("ydotool"); err == nil {
-		cmd := execCommand("ydotool", "type", text)
-		if err := cmd.Run(); err != nil {
+		// ydotool reads from a file specified with --file; /dev/stdin
+		// routes the text through stdin so it doesn't appear in argv.
+		cmd := execCommand("ydotool", "type", "--file", "/dev/stdin")
+		if err := runWithStdin(cmd, text); err != nil {
 			return fmt.Errorf("autotype failed (ydotool): %w", err)
 		}
 		return nil

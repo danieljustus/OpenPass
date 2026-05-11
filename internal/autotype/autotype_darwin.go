@@ -7,6 +7,7 @@ package autotype
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 )
 
 func init() {
@@ -17,10 +18,14 @@ type darwinAutotype struct{}
 
 func (a *darwinAutotype) Type(text string) error {
 	escaped := escapeAppleScriptString(text)
-
 	script := fmt.Sprintf(`tell application "System Events" to keystroke "%s"`, escaped)
-	// #nosec G204 -- script is constructed internally for AppleScript keystroke
-	cmd := exec.Command("osascript", "-e", script)
+
+	// osascript reads from stdin when invoked without -e/-s and with no script
+	// path argument. Routing the AppleScript (which contains the password
+	// inline) through stdin keeps it out of argv where any local user could
+	// read it via `ps -ef`.
+	cmd := exec.Command("osascript")
+	cmd.Stdin = strings.NewReader(script)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("autotype failed: %w", err)
 	}

@@ -143,6 +143,68 @@ func TestLinuxAutotype_Wayland_NoToolAvailable(t *testing.T) {
 	}
 }
 
+func TestLinuxAutotype_PasswordNotInArgv(t *testing.T) {
+	// Regression test for the argv-leak fix: the password text must NEVER
+	// appear in command arguments. Local users would otherwise read it via
+	// `ps -ef` or /proc/<pid>/cmdline. The password must be passed via stdin.
+	cases := []struct {
+		name        string
+		setupEnv    func(t *testing.T)
+		setupLook   func()
+		password    string
+		expectedBin string
+	}{
+		{
+			name:        "xdotool (X11)",
+			setupEnv:    func(t *testing.T) { t.Setenv("WAYLAND_DISPLAY", "") },
+			setupLook:   func() { lookPath = mockLookPathXdotool },
+			password:    "hunter2-supersecret",
+			expectedBin: "xdotool",
+		},
+		{
+			name:        "wtype (Wayland)",
+			setupEnv:    func(t *testing.T) { t.Setenv("WAYLAND_DISPLAY", "wayland-0") },
+			setupLook:   func() { lookPath = mockLookPathWtype },
+			password:    "hunter2-supersecret",
+			expectedBin: "wtype",
+		},
+		{
+			name:        "ydotool (Wayland)",
+			setupEnv:    func(t *testing.T) { t.Setenv("WAYLAND_DISPLAY", "wayland-0") },
+			setupLook:   func() { lookPath = mockLookPathYdotool },
+			password:    "hunter2-supersecret",
+			expectedBin: "ydotool",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			restore := saveAndRestore()
+			defer restore()
+
+			tc.setupEnv(t)
+			tc.setupLook()
+
+			var capturedArgs []string
+			execCommand = func(name string, arg ...string) *exec.Cmd {
+				capturedArgs = append([]string{name}, arg...)
+				return successExec()
+			}
+
+			a := &linuxAutotype{}
+			if err := a.Type(tc.password); err != nil {
+				t.Fatalf("Type() error = %v", err)
+			}
+
+			for _, a := range capturedArgs {
+				if strings.Contains(a, tc.password) {
+					t.Errorf("password leaked into argv: arg %q contains password", a)
+				}
+			}
+		})
+	}
+}
+
 func TestLinuxAutotype_WaylandDetected(t *testing.T) {
 	restore := saveAndRestore()
 	defer restore()

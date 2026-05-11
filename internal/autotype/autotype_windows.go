@@ -7,6 +7,7 @@ package autotype
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 )
 
 func init() {
@@ -15,11 +16,21 @@ func init() {
 
 type windowsAutotype struct{}
 
+// readSendKeysWrapper is a small PowerShell snippet that reads the password
+// to be typed from stdin and forwards it to WScript.Shell.SendKeys. The text
+// itself never appears in process argv, so a local user cannot recover it
+// from Get-Process / wmic / Task Manager command-line listings.
+const readSendKeysWrapper = `$ErrorActionPreference = 'Stop';
+$text = [System.Console]::In.ReadToEnd();
+$wshell = New-Object -ComObject WScript.Shell;
+$wshell.SendKeys($text);`
+
 func (a *windowsAutotype) Type(text string) error {
 	escaped := escapeSendKeysString(text)
 
-	script := fmt.Sprintf("$wshell = New-Object -ComObject WScript.Shell; $wshell.SendKeys('%s')", escaped)
-	cmd := exec.Command("powershell.exe", "-Command", script)
+	cmd := exec.Command("powershell.exe",
+		"-NoProfile", "-NonInteractive", "-Command", readSendKeysWrapper)
+	cmd.Stdin = strings.NewReader(escaped)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("autotype failed: %w", err)
 	}
