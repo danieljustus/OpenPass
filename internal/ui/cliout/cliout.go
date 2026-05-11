@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"sync"
+
+	"golang.org/x/term"
 )
 
 var (
@@ -36,7 +38,11 @@ func isQuiet() bool {
 }
 
 func noColor() bool {
-	return os.Getenv("NO_COLOR") != ""
+	if os.Getenv("NO_COLOR") != "" {
+		return true
+	}
+	// Suppress ANSI when stderr is redirected so log files stay readable.
+	return !term.IsTerminal(int(os.Stderr.Fd()))
 }
 
 func colorize(color, format string, args ...any) string {
