@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-runewidth"
 
 	clipboardapp "github.com/danieljustus/OpenPass/internal/clipboard"
 	vaultcrypto "github.com/danieljustus/OpenPass/internal/crypto"
@@ -712,10 +713,13 @@ func isSensitiveField(field string) bool {
 }
 
 func truncate(value string, width int) string {
-	if width <= 1 || len(value) <= width {
+	if width <= 1 {
 		return value
 	}
-	return value[:width-1] + "…"
+	if runewidth.StringWidth(value) <= width {
+		return value
+	}
+	return runewidth.Truncate(value, width, "…")
 }
 
 func min(a, b int) int {
