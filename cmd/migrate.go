@@ -13,6 +13,10 @@ import (
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
+var (
+	migrateYes bool
+)
+
 var migrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Vault migration commands",
@@ -46,6 +50,18 @@ to write new entries to pseudonymized paths.`,
 		v, err := unlockVault(vaultDir, true)
 		if err != nil {
 			return err
+		}
+
+		confirmed, err := confirmInteractive(
+			"Migrate all entries to pseudonymized paths. Make a backup first",
+			migrateYes,
+		)
+		if err != nil {
+			return err
+		}
+		if !confirmed {
+			fmt.Fprintln(os.Stderr, "Canceled")
+			return nil
 		}
 
 		return runPseudonymizeMigration(v)
@@ -132,5 +148,6 @@ func enablePseudonymizeConfig(vaultDir string) error {
 
 func init() {
 	migrateCmd.AddCommand(migratePseudonymizeCmd)
+	migratePseudonymizeCmd.Flags().BoolVarP(&migrateYes, "yes", "y", false, "Skip confirmation prompt")
 	rootCmd.AddCommand(migrateCmd)
 }

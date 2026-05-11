@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -36,6 +37,7 @@ const (
 	modeFilter
 	modeConfirmDelete
 	modeConfirmEdit
+	modeTagFilter
 )
 
 type entryLoadedMsg struct {
@@ -73,6 +75,8 @@ type clipboardClearedMsg struct {
 	err error
 }
 
+type clipboardTickMsg struct{}
+
 type logMsg struct {
 	message string
 	isError bool
@@ -88,17 +92,25 @@ type TUIModel struct {
 	entry    *vaultpkg.Entry
 	entryFor string
 
-	filterInput textinput.Model
-	mode        mode
-	revealed    bool
-	help        bool
-	loading     bool
+	filterInput    textinput.Model
+	tagFilterInput textinput.Model
+	mode           mode
+	revealed       bool
+	help           bool
+	loading        bool
+
+	sortMode  int                                // 0=name-asc, 1=name-desc, 2=updated-asc, 3=updated-desc
+	filterTag string
+	metaCache map[string]vaultpkg.EntryMetadata
 
 	width  int
 	height int
 
 	status string
 	err    error
+
+	clipboardSeconds int
+	clipboardMessage string
 }
 
 var (
@@ -129,11 +141,17 @@ func NewTUIModel(svc vaultsvc.Service) TUIModel {
 	input.Prompt = "/ "
 	input.CharLimit = 256
 
+	tagInput := textinput.New()
+	tagInput.Placeholder = "filter by tag"
+	tagInput.Prompt = "t: "
+	tagInput.CharLimit = 256
+
 	return TUIModel{
-		svc:         svc,
-		filterInput: input,
-		loading:     true,
-		status:      "Loading entries...",
+		svc:            svc,
+		filterInput:    input,
+		tagFilterInput: tagInput,
+		loading:        true,
+		status:         "Loading entries...",
 	}
 }
 
@@ -197,7 +215,9 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.err = nil
 		m.status = msg.message
-		return m, clearClipboardCmd(defaultAutoClearSeconds)
+		m.clipboardMessage = msg.message
+		m.clipboardSeconds = defaultAutoClearSeconds
+		return m, tea.Batch(clearClipboardCmd(defaultAutoClearSeconds), clipboardTickCmd())
 	case passwordGeneratedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -233,7 +253,16 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "Clipboard clear failed"
 			return m, nil
 		}
+		m.clipboardSeconds = 0
 		m.status = "Clipboard cleared"
+		return m, nil
+	case clipboardTickMsg:
+		if m.clipboardSeconds > 0 {
+			m.clipboardSeconds--
+			if m.clipboardSeconds > 0 {
+				return m, clipboardTickCmd()
+			}
+		}
 		return m, nil
 	case logMsg:
 		if msg.isError {
@@ -290,6 +319,31 @@ func (m TUIModel) handleKey(msg tea.KeyMsg) (TUIModel, tea.Cmd) {
 		return m, cmd
 	}
 
+	if m.mode == modeTagFilter {
+		switch msg.String() {
+		case "enter":
+			m.mode = modeNormal
+			m.tagFilterInput.Blur()
+			m.filterTag = strings.TrimSpace(m.tagFilterInput.Value())
+			m.applyFilter()
+			return m, m.loadSelectedEntry()
+		case "esc":
+			m.mode = modeNormal
+			m.tagFilterInput.Blur()
+			m.tagFilterInput.SetValue("")
+			m.filterTag = ""
+			m.applyFilter()
+			return m, m.loadSelectedEntry()
+		case keyQuit:
+			return m, tea.Quit
+		}
+
+		var cmd tea.Cmd
+		m.tagFilterInput, cmd = m.tagFilterInput.Update(msg)
+		m.applyFilter()
+		return m, cmd
+	}
+
 	if m.mode == modeConfirmDelete || m.mode == modeConfirmEdit {
 		switch msg.String() {
 		case "y", "Y":
@@ -325,22 +379,36 @@ func (m TUIModel) handleKey(msg tea.KeyMsg) (TUIModel, tea.Cmd) {
 	case "r":
 		m.revealed = !m.revealed
 		return m, nil
+	case "s":
+		m.sortMode = (m.sortMode + 1) % 4
+		m.applyFilter()
+		return m, nil
+	case "t":
+		m.ensureMetaCache()
+		m.tagFilterInput.SetValue(m.filterTag)
+		m.mode = modeTagFilter
+		m.tagFilterInput.Focus()
+		return m, textinput.Blink
 	case "up", "k":
 		if m.selected > 0 {
 			m.selected--
+			m.clipboardSeconds = 0
 			return m, m.loadSelectedEntry()
 		}
 	case "down", "j":
 		if m.selected < len(m.filtered)-1 {
 			m.selected++
+			m.clipboardSeconds = 0
 			return m, m.loadSelectedEntry()
 		}
 	case "home":
 		m.selected = 0
+		m.clipboardSeconds = 0
 		return m, m.loadSelectedEntry()
 	case "end":
 		if len(m.filtered) > 0 {
 			m.selected = len(m.filtered) - 1
+			m.clipboardSeconds = 0
 			return m, m.loadSelectedEntry()
 		}
 	case "enter":
@@ -366,12 +434,92 @@ func (m *TUIModel) applyFilter() {
 	query := strings.TrimSpace(m.filterInput.Value())
 	m.filtered = m.filtered[:0]
 	for _, entry := range m.entries {
-		if fuzzyMatch(query, entry) {
+		if fuzzyMatch(query, entry) && m.tagMatch(entry) {
 			m.filtered = append(m.filtered, entry)
 		}
 	}
+	m.sortFiltered()
 	if m.selected >= len(m.filtered) {
 		m.selected = max(0, len(m.filtered)-1)
+	}
+}
+
+func (m *TUIModel) ensureMetaCache() {
+	if m.metaCache != nil {
+		return
+	}
+	m.metaCache = make(map[string]vaultpkg.EntryMetadata)
+	for _, path := range m.entries {
+		meta, err := vaultpkg.GetEntryMetadata(m.svc.GetDir(), path, m.svc.GetIdentity())
+		if err != nil {
+			continue
+		}
+		m.metaCache[path] = *meta
+	}
+}
+
+func (m TUIModel) tagMatch(entry string) bool {
+	if m.filterTag == "" {
+		return true
+	}
+	meta, ok := m.metaCache[entry]
+	if !ok {
+		return false
+	}
+	for _, tag := range meta.Tags {
+		if strings.HasPrefix(strings.ToLower(tag), strings.ToLower(m.filterTag)) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *TUIModel) sortFiltered() {
+	if m.sortMode == 0 || m.sortMode == 1 {
+		sort.SliceStable(m.filtered, func(i, j int) bool {
+			if m.sortMode == 0 {
+				return m.filtered[i] < m.filtered[j]
+			}
+			return m.filtered[i] > m.filtered[j]
+		})
+		return
+	}
+	m.ensureMetaCache()
+	sort.SliceStable(m.filtered, func(i, j int) bool {
+		mi := m.metaCache[m.filtered[i]]
+		mj := m.metaCache[m.filtered[j]]
+		if m.sortMode == 2 {
+			return mi.Updated.Before(mj.Updated)
+		}
+		return mi.Updated.After(mj.Updated)
+	})
+}
+
+func (m TUIModel) availableTags() []string {
+	tagSet := make(map[string]struct{})
+	for _, meta := range m.metaCache {
+		for _, tag := range meta.Tags {
+			tagSet[tag] = struct{}{}
+		}
+	}
+	tags := make([]string, 0, len(tagSet))
+	for tag := range tagSet {
+		tags = append(tags, tag)
+	}
+	sort.Strings(tags)
+	return tags
+}
+
+func (m TUIModel) sortLabel() string {
+	switch m.sortMode {
+	case 0:
+		return "name↑"
+	case 1:
+		return "name↓"
+	case 2:
+		return "updated↑"
+	default:
+		return "updated↓"
 	}
 }
 
@@ -407,13 +555,28 @@ func (m TUIModel) copySelectedPassword() tea.Cmd {
 func (m TUIModel) leftView(width, height int) string {
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("Entries"))
+	b.WriteString(" ")
+	b.WriteString(mutedStyle.Render(fmt.Sprintf("[sort: %s]", m.sortLabel())))
 	b.WriteString("\n")
 	if m.mode == modeFilter {
 		b.WriteString(m.filterInput.View())
+	} else if m.mode == modeTagFilter {
+		b.WriteString(m.tagFilterInput.View())
+		tags := m.availableTags()
+		if len(tags) > 0 {
+			b.WriteString("\n")
+			b.WriteString(mutedStyle.Render("tags: " + strings.Join(tags, " ")))
+		}
 	} else if q := strings.TrimSpace(m.filterInput.Value()); q != "" {
 		b.WriteString(mutedStyle.Render("Filter: " + q))
+		if m.filterTag != "" {
+			b.WriteString(" ")
+			b.WriteString(mutedStyle.Render(fmt.Sprintf("[tag:%s]", m.filterTag)))
+		}
+	} else if m.filterTag != "" {
+		b.WriteString(mutedStyle.Render(fmt.Sprintf("Tag: %s", m.filterTag)))
 	} else {
-		b.WriteString(mutedStyle.Render("/ to filter"))
+		b.WriteString(mutedStyle.Render("/ filter · t tag · s sort"))
 	}
 	b.WriteString("\n\n")
 
@@ -488,7 +651,7 @@ func (m TUIModel) statusView() string {
 	if m.err != nil {
 		status = errorStyle.Render(m.err.Error())
 	}
-	keys := "↑/↓ select · Enter copy password · r reveal · e edit · d delete · g generate · ? help · q quit"
+	keys := "↑/↓ select · Enter copy password · r reveal · e edit · d delete · g generate · s sort · t tag · ? help · q quit"
 	return mutedStyle.Render(keys) + "\n" + status
 }
 
@@ -497,6 +660,8 @@ func (m TUIModel) helpView() string {
 		titleStyle.Render("Help"),
 		"↑/↓ or k/j: move selection",
 		"/: fuzzy filter entries",
+		"s: cycle sort (name/updated, asc/desc)",
+		"t: filter by tag",
 		"Enter: copy password field to clipboard",
 		"r: reveal or redact sensitive fields",
 		"e: edit selected entry after confirmation",
@@ -566,6 +731,12 @@ func clearClipboardCmd(seconds int) tea.Cmd {
 		<-done
 		return clipboardClearedMsg{err: clearErr}
 	}
+}
+
+func clipboardTickCmd() tea.Cmd {
+	return tea.Tick(time.Second, func(_ time.Time) tea.Msg {
+		return clipboardTickMsg{}
+	})
 }
 
 func generatePasswordCmd() tea.Cmd {

@@ -98,6 +98,90 @@ The agent name must match a profile in the vault configuration.
 
 ---
 
+## OAuth Well-Known Endpoints
+
+OpenPass exposes OAuth well-known endpoints for MCP client discovery. These endpoints comply with RFC 9728 (OAuth Protected Resource Metadata) and RFC 8414 (OAuth Authorization Server Metadata). They exist so that OAuth-only MCP clients (such as opencode) can discover server capabilities without crashing on JSON parse errors during auto-discovery.
+
+### Endpoint Reference
+
+| Endpoint | Method | Status | Description |
+|----------|--------|--------|-------------|
+| `/.well-known/oauth-protected-resource` | GET | 200 | Protected resource metadata (RFC 9728) |
+| `/.well-known/oauth-authorization-server` | GET | 200 | Authorization server metadata (RFC 8414) |
+| `/mcp/oauth/authorize` | POST | 501 | OAuth authorization stub |
+| `/mcp/oauth/token` | POST | 501 | OAuth token exchange stub |
+
+### Well-Known Endpoint Responses
+
+The two well-known discovery endpoints return static metadata that describes how OpenPass handles OAuth:
+
+```json
+GET /.well-known/oauth-protected-resource
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "resource": "http://127.0.0.1:8080/mcp",
+  "bearer_methods_supported": ["header"],
+  "resource_name": "OpenPass MCP Server"
+}
+```
+
+```json
+GET /.well-known/oauth-authorization-server
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "issuer": "http://127.0.0.1:8080",
+  "authorization_endpoint": "http://127.0.0.1:8080/mcp/oauth/authorize",
+  "token_endpoint": "http://127.0.0.1:8080/mcp/oauth/token",
+  "response_types_supported": ["code"],
+  "code_challenge_methods_supported": ["S256"],
+  "token_endpoint_auth_methods_supported": ["none"],
+  "grant_types_supported": ["authorization_code", "refresh_token"]
+}
+```
+
+The authorization and token endpoints return 501 Not Implemented:
+
+```json
+POST /mcp/oauth/authorize
+HTTP/1.1 501 Not Implemented
+Content-Type: application/json
+
+{
+  "error": "not_implemented",
+  "error_description": "OAuth authorization is not yet implemented. Use bearer token authentication."
+}
+```
+
+### OpenCode Integration Guide
+
+OpenPass uses bearer token authentication, not OAuth. The well-known endpoints exist only to prevent client crashes during auto-discovery. They are not used for actual OAuth flows.
+
+To configure opencode to use OpenPass as an MCP server with bearer token auth:
+
+```json
+{
+  "mcp": {
+    "openpass": {
+      "type": "remote",
+      "url": "http://127.0.0.1:8080/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_OPENPASS_TOKEN",
+        "X-OpenPass-Agent": "opencode"
+      },
+      "oauth": false
+    }
+  }
+}
+```
+
+With this configuration, `opencode mcp auth openpass` will no longer crash with a JSON parse error. The client discovers the well-known endpoints, reads the bearer token metadata, and falls back to the supplied `Authorization` header instead of attempting an OAuth flow.
+
+---
+
 ## Transport Modes
 
 ### Stdio Mode (Recommended for Local Agents)

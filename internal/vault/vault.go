@@ -102,6 +102,7 @@ func Open(vaultDir string, identity *age.X25519Identity) (*Vault, error) {
 	}
 
 	normalizeConfig(cfg)
+	applyScryptWorkFactor(cfg)
 	if err := detectLegacyMode(cfg, vaultDir); err != nil {
 		return nil, fmt.Errorf("detect legacy mode: %w", err)
 	}
@@ -168,6 +169,8 @@ func InitWithPassphrase(vaultDir string, passphrase []byte, cfg *vaultconfig.Con
 	if err != nil {
 		return nil, fmt.Errorf("generate identity: %w", err)
 	}
+
+	applyScryptWorkFactor(cfg)
 
 	if mkdirErr := os.MkdirAll(entriesDir(vaultDir), 0o700); mkdirErr != nil {
 		return nil, fmt.Errorf("create vault dir: %w", mkdirErr)
@@ -266,6 +269,15 @@ func (v *Vault) AutoCommit(message string) error {
 	}
 
 	return git.AutoCommitAndPush(v.Dir, commitMessage, autoPush)
+}
+
+func applyScryptWorkFactor(cfg *vaultconfig.Config) {
+	if cfg == nil || cfg.Vault == nil {
+		return
+	}
+	if cfg.Vault.ScryptWorkFactor > 0 {
+		vaultcrypto.SetScryptWorkFactor(cfg.Vault.ScryptWorkFactor)
+	}
 }
 
 func normalizeConfig(cfg *vaultconfig.Config) {

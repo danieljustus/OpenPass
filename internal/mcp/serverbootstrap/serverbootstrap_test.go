@@ -18,7 +18,6 @@ import (
 
 	"github.com/danieljustus/OpenPass/internal/config"
 	"github.com/danieljustus/OpenPass/internal/mcp"
-	"github.com/danieljustus/OpenPass/internal/metrics"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
@@ -302,47 +301,6 @@ func TestRunHTTPServer_HealthEndpoint(t *testing.T) {
 	}
 	if healthResp["port"] == nil {
 		t.Error("health port is missing")
-	}
-}
-
-func TestRunHTTPServer_MetricsEndpoint(t *testing.T) {
-	v := newTestVault(t)
-	port := reserveFreePort(t)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	waitForServer := runHTTPServerAsync(ctx, t, "127.0.0.1", port, v, mcp.New)
-	defer func() {
-		cancel()
-		waitForServer()
-	}()
-
-	metrics.RecordMCPRequest("test_tool", "test_agent", "success", 100*time.Millisecond)
-
-	client := newTestHTTPClient()
-	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/metrics", port))
-	if err != nil {
-		t.Fatalf("metrics request failed: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("metrics status = %d, want %d", resp.StatusCode, http.StatusOK)
-	}
-
-	contentType := resp.Header.Get("Content-Type")
-	if !strings.Contains(contentType, "text/plain") {
-		t.Errorf("metrics Content-Type = %q, want text/plain", contentType)
-	}
-
-	body := new(bytes.Buffer)
-	_, _ = body.ReadFrom(resp.Body)
-	bodyStr := body.String()
-
-	if !strings.Contains(bodyStr, "go_goroutines") {
-		t.Error("metrics response missing go_goroutines")
-	}
-	if !strings.Contains(bodyStr, "openpass_mcp_requests_total") {
-		t.Error("metrics response missing openpass_mcp_requests_total")
 	}
 }
 
@@ -630,48 +588,6 @@ func TestRunHTTPServer_CustomConfig(t *testing.T) {
 	}
 }
 
-func TestRunHTTPServer_NonLoopbackMetricsRequiresAuth(t *testing.T) {
-	v := newTestVault(t)
-	// Non-loopback bind without TLS now requires explicit opt-in.
-	if v.Config.MCP == nil {
-		v.Config.MCP = &config.MCPConfig{MetricsAuthRequired: true}
-	} else {
-		v.Config.MCP.MetricsAuthRequired = true
-	}
-	v.Config.MCP.AllowInsecureBind = true
-	port := reserveFreePortForBind(t, "0.0.0.0")
-
-	ctx, cancel := context.WithCancel(context.Background())
-	waitForServer := runHTTPServerAsync(ctx, t, "0.0.0.0", port, v, mcp.New)
-	defer func() {
-		cancel()
-		waitForServer()
-	}()
-
-	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
-
-	resp, err := newTestHTTPClient().Get(baseURL + "/metrics")
-	if err != nil {
-		t.Fatalf("metrics request failed: %v", err)
-	}
-	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("metrics without auth status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
-	}
-
-	token := testMCPToken(t, v.Dir)
-	req, _ := http.NewRequest(http.MethodGet, baseURL+"/metrics", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err = newTestHTTPClient().Do(req)
-	if err != nil {
-		t.Fatalf("metrics request with auth failed: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("metrics with auth status = %d, want %d", resp.StatusCode, http.StatusOK)
-	}
-}
-
 func TestRunHTTPServer_NonLoopbackWithoutTLSRefused(t *testing.T) {
 	v := newTestVault(t)
 	// Default config: AllowInsecureBind = false, no TLS cert. Non-loopback
@@ -774,6 +690,177 @@ func TestRunHTTPServer_NotificationReturnsAccepted(t *testing.T) {
 	_, _ = body.ReadFrom(resp.Body)
 	if strings.TrimSpace(body.String()) != "" {
 		t.Fatalf("notification response body = %q, want empty", body.String())
+	}
+}
+
+func TestRunHTTPServer_OAuthProtectedResource(t *testing.T) {
+	v := newTestVault(t)
+	port := reserveFreePort(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	waitForServer := runHTTPServerAsync(ctx, t, "127.0.0.1", port, v, mcp.New)
+	defer func() {
+		cancel()
+		waitForServer()
+	}()
+
+	client := newTestHTTPClient()
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+
+	req, _ := http.NewRequest(http.MethodGet, baseURL+"/.well-known/oauth-protected-resource", nil)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("oauth-protected-resource request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "application/json") {
+		t.Errorf("Content-Type = %q, want application/json", contentType)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if body["resource"] == nil {
+		t.Error("resource field is missing")
+	} else if resource, ok := body["resource"].(string); !ok {
+		t.Error("resource field is not a string")
+	} else if !strings.HasSuffix(resource, "/mcp") {
+		t.Errorf("resource = %q, want suffix /mcp", resource)
+	}
+
+	if body["bearer_methods_supported"] == nil {
+		t.Error("bearer_methods_supported field is missing")
+	}
+	if body["resource_name"] == nil {
+		t.Error("resource_name field is missing")
+	}
+	if _, ok := body["authorization_servers"]; ok {
+		t.Error("authorization_servers field must NOT be present")
+	}
+}
+
+func TestRunHTTPServer_OAuthAuthorizationServer(t *testing.T) {
+	v := newTestVault(t)
+	port := reserveFreePort(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	waitForServer := runHTTPServerAsync(ctx, t, "127.0.0.1", port, v, mcp.New)
+	defer func() {
+		cancel()
+		waitForServer()
+	}()
+
+	client := newTestHTTPClient()
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+
+	req, _ := http.NewRequest(http.MethodGet, baseURL+"/.well-known/oauth-authorization-server", nil)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("oauth-authorization-server request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "application/json") {
+		t.Errorf("Content-Type = %q, want application/json", contentType)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	requiredFields := []string{"issuer", "authorization_endpoint", "token_endpoint",
+		"response_types_supported", "code_challenge_methods_supported",
+		"token_endpoint_auth_methods_supported", "grant_types_supported"}
+	for _, field := range requiredFields {
+		if body[field] == nil {
+			t.Errorf("%s field is missing", field)
+		}
+	}
+
+	if authEP, ok := body["authorization_endpoint"].(string); ok {
+		if !strings.HasSuffix(authEP, "/mcp/oauth/authorize") {
+			t.Errorf("authorization_endpoint = %q, want suffix /mcp/oauth/authorize", authEP)
+		}
+	}
+	if tokenEP, ok := body["token_endpoint"].(string); ok {
+		if !strings.HasSuffix(tokenEP, "/mcp/oauth/token") {
+			t.Errorf("token_endpoint = %q, want suffix /mcp/oauth/token", tokenEP)
+		}
+	}
+}
+
+func TestRunHTTPServer_OAuthStubEndpoints(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+	}{
+		{
+			name: "authorize endpoint",
+			path: "/mcp/oauth/authorize",
+		},
+		{
+			name: "token endpoint",
+			path: "/mcp/oauth/token",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestVault(t)
+			port := reserveFreePort(t)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			waitForServer := runHTTPServerAsync(ctx, t, "127.0.0.1", port, v, mcp.New)
+			defer func() {
+				cancel()
+				waitForServer()
+			}()
+
+			client := newTestHTTPClient()
+			baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+
+			req, _ := http.NewRequest(http.MethodPost, baseURL+tc.path, nil)
+			resp, err := client.Do(req)
+			if err != nil {
+				t.Fatalf("request to %s failed: %v", tc.path, err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+
+			if resp.StatusCode != http.StatusNotImplemented {
+				t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusNotImplemented)
+			}
+
+			contentType := resp.Header.Get("Content-Type")
+			if !strings.Contains(contentType, "application/json") {
+				t.Errorf("Content-Type = %q, want application/json", contentType)
+			}
+
+			var body map[string]any
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+
+			if body["error"] != "not_implemented" {
+				t.Errorf("error = %v, want not_implemented", body["error"])
+			}
+			if body["error_description"] == nil {
+				t.Error("error_description field is missing")
+			}
+		})
 	}
 }
 

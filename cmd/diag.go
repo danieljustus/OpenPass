@@ -1,3 +1,5 @@
+//go:build metrics
+
 package cmd
 
 import (

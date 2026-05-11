@@ -11,6 +11,7 @@ import (
 
 	"github.com/danieljustus/OpenPass/internal/audit"
 	configpkg "github.com/danieljustus/OpenPass/internal/config"
+	vaultcrypto "github.com/danieljustus/OpenPass/internal/crypto"
 	"github.com/danieljustus/OpenPass/internal/git"
 	"github.com/danieljustus/OpenPass/internal/mcp"
 	"github.com/danieljustus/OpenPass/internal/session"
@@ -59,6 +60,7 @@ func RunChecks(vaultDir string, opts Options) []Result {
 		checkAuditLog,
 		checkUpdateAvailable,
 		checkVaultSize,
+		checkScryptBenchmark,
 	}
 
 	if opts.NoNetwork {
@@ -76,6 +78,7 @@ func RunChecks(vaultDir string, opts Options) []Result {
 			checkMCPTokens,
 			checkAuditLog,
 			checkVaultSize,
+			checkScryptBenchmark,
 		}
 	}
 
@@ -506,5 +509,30 @@ func checkVaultSize(vaultDir string, _ Options) Result {
 	}
 	r.Status = StatusOK
 	r.Message = fmt.Sprintf("%d entries, %.2f MB", count, float64(totalBytes)/1024/1024)
+	return r
+}
+
+func checkScryptBenchmark(_ string, _ Options) Result {
+	r := Result{ID: "crypto.scrypt.benchmark", Name: "Scrypt KDF performance"}
+	wf, elapsed, err := vaultcrypto.BenchmarkScryptWorkFactor(250 * time.Millisecond)
+	if err != nil {
+		r.Status = StatusWarn
+		r.Message = "scrypt benchmark failed: " + err.Error()
+		return r
+	}
+
+	current := vaultcrypto.ScryptWorkFactor()
+	switch {
+	case wf == current:
+		r.Status = StatusOK
+		r.Message = fmt.Sprintf("config work factor %d matches recommendation (%d, %.0fms)", current, wf, elapsed.Seconds()*1000)
+	case wf > current:
+		r.Status = StatusWarn
+		r.Message = fmt.Sprintf("config work factor %d is below recommended %d (%.0fms)", current, wf, elapsed.Seconds()*1000)
+		r.Hint = fmt.Sprintf("set vault.scrypt_work_factor: %d in config.yaml for better security", wf)
+	default:
+		r.Status = StatusOK
+		r.Message = fmt.Sprintf("config work factor %d exceeds recommendation (benchmark: %d, %.0fms)", current, wf, elapsed.Seconds()*1000)
+	}
 	return r
 }

@@ -1,3 +1,5 @@
+//go:build dynamic_secrets
+
 package dynamicsecret
 
 import (

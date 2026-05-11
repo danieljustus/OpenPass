@@ -2,13 +2,16 @@ package crypto
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"filippo.io/age"
+	"golang.org/x/crypto/scrypt"
 
 	"github.com/danieljustus/OpenPass/internal/fileutil"
 	"github.com/danieljustus/OpenPass/internal/pathutil"
@@ -24,6 +27,58 @@ func SetScryptWorkFactorForTests(workFactor int) func() {
 	return func() {
 		scryptWorkFactor = old
 	}
+}
+
+// SetScryptWorkFactor overrides the scrypt work factor used for passphrase-based
+// encryption. It applies globally within the process. Pass 0 to reset to default (18).
+func SetScryptWorkFactor(workFactor int) {
+	if workFactor <= 0 {
+		scryptWorkFactor = 18
+		return
+	}
+	scryptWorkFactor = workFactor
+}
+
+// DefaultScryptWorkFactor returns the default scrypt work factor (18).
+func DefaultScryptWorkFactor() int {
+	return 18
+}
+
+// ScryptWorkFactor returns the current scrypt work factor.
+func ScryptWorkFactor() int {
+	return scryptWorkFactor
+}
+
+// BenchmarkScryptWorkFactor measures scrypt KDF timing on the current hardware
+// by trying progressively higher work factors until the key derivation exceeds
+// the target duration.
+func BenchmarkScryptWorkFactor(target time.Duration) (int, time.Duration, error) {
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return 0, 0, fmt.Errorf("generate salt: %w", err)
+	}
+
+	password := []byte("benchmark-password")
+
+	for wf := 1; wf <= 22; wf++ {
+		N := 1 << wf
+		start := time.Now()
+		_, err := scrypt.Key(password, salt, N, 1, 1, 32)
+		elapsed := time.Since(start)
+		if err != nil {
+			return 0, 0, fmt.Errorf("scrypt key at work factor %d: %w", wf, err)
+		}
+		if elapsed >= target {
+			return wf, elapsed, nil
+		}
+	}
+
+	start := time.Now()
+	_, err := scrypt.Key(password, salt, 1<<22, 1, 1, 32)
+	if err != nil {
+		return 0, 0, fmt.Errorf("scrypt key at max work factor: %w", err)
+	}
+	return 22, time.Since(start), nil
 }
 
 // GenerateIdentity generates a new age X25519 identity.

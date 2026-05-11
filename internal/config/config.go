@@ -360,6 +360,7 @@ func (c *Config) SaveTo(path string) error {
 		if vaultAuthMethod == "" && authMethod != "" {
 			vaultAuthMethod = authMethod
 		}
+		scryptWF := c.Vault.ScryptWorkFactor
 		raw.Vault = &fileVaultConfig{
 			Path:              c.Vault.Path,
 			DefaultRecipients: append([]string(nil), c.Vault.DefaultRecipients...),
@@ -368,6 +369,7 @@ func (c *Config) SaveTo(path string) error {
 			LegacyMode:        c.Vault.LegacyMode,
 			SearchWorkers:     &searchWorkers,
 			PseudonymizePaths: &pseudonymizePaths,
+			ScryptWorkFactor:  &scryptWF,
 		}
 	}
 

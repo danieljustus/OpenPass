@@ -29,6 +29,10 @@ type VaultConfig struct {
 	// instead of plaintext paths. This prevents leaking entry names via git filenames.
 	// Default: false (opt-in). Requires migration via 'openpass migrate pseudonymize'.
 	PseudonymizePaths bool `yaml:"pseudonymize_paths,omitempty"`
+	// ScryptWorkFactor sets the scrypt KDF work factor for passphrase-based encryption.
+	// Higher values are more secure but slower. Default: 18 (N=262144).
+	// Set to 0 to use the default.
+	ScryptWorkFactor int `yaml:"scrypt_work_factor,omitempty"`
 }
 
 // GitConfig holds git-related configuration for automatic commits and pushes.
@@ -98,6 +102,7 @@ func defaultVaultConfig() VaultConfig {
 		Path:              "",
 		DefaultRecipients: []string{},
 		AuthMethod:        AuthMethodPassphrase,
+		ScryptWorkFactor:  18,
 	}
 }
 
@@ -171,6 +176,7 @@ type fileVaultConfig struct {
 	DefaultRecipients []string `yaml:"default_recipients,omitempty"`
 	SearchWorkers     *int     `yaml:"search_workers,omitempty"`
 	PseudonymizePaths *bool    `yaml:"pseudonymize_paths,omitempty"`
+	ScryptWorkFactor  *int     `yaml:"scrypt_work_factor,omitempty"`
 }
 
 // fileGitConfig is the file-based git configuration with pointer fields
@@ -255,6 +261,9 @@ func MergeFileVaultConfig(fileCfg *fileVaultConfig, defaults VaultConfig) VaultC
 	}
 	if fileCfg.PseudonymizePaths != nil {
 		result.PseudonymizePaths = *fileCfg.PseudonymizePaths
+	}
+	if fileCfg.ScryptWorkFactor != nil {
+		result.ScryptWorkFactor = *fileCfg.ScryptWorkFactor
 	}
 	return result
 }

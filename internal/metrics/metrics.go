@@ -1,3 +1,5 @@
+//go:build metrics
+
 // Package metrics provides Prometheus metrics for OpenPass MCP server.
 //
 // It instruments MCP tool calls, authentication denials, approval outcomes,

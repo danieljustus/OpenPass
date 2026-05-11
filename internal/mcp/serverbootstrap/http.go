@@ -2,6 +2,7 @@
 package serverbootstrap
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,13 +14,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 	"github.com/danieljustus/OpenPass/internal/audit"
 	"github.com/danieljustus/OpenPass/internal/mcp"
 	"github.com/danieljustus/OpenPass/internal/metrics"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
+
+// bufferPool reduces allocations for JSON encoding on the hot path.
+// Each Get returns a clean (Reset) *bytes.Buffer.
+var bufferPool = sync.Pool{
+	New: func() any {
+		return new(bytes.Buffer)
+	},
+}
 
 // RunHTTPServer starts the HTTP MCP server.
 func RunHTTPServer(ctx context.Context, bind string, port int, v *vaultpkg.Vault, vaultDir string, version string, factory func(*vaultpkg.Vault, string, string) (*mcp.Server, error)) error {
@@ -148,19 +155,26 @@ func RunHTTPServerOnListener(ctx context.Context, listener net.Listener, v *vaul
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
 			"version":   version,
 		}
-		_ = json.NewEncoder(w).Encode(resp)
+		buf := bufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer func() {
+			buf.Reset()
+			bufferPool.Put(buf)
+		}()
+		//nolint:errchkjson // Best-effort health response write
+		_ = json.NewEncoder(buf).Encode(resp)
+		_, _ = w.Write(buf.Bytes())
 	})
 
-	metricsHandler := promhttp.HandlerFor(metrics.Registry(), promhttp.HandlerOpts{})
-	metricsAuthRequired := true
-	if v != nil && v.Config != nil && v.Config.MCP != nil {
-		metricsAuthRequired = v.Config.MCP.MetricsAuthRequired
-	}
-	if !mcp.IsLoopbackBind(bind) && metricsAuthRequired {
-		mux.Handle("/metrics", mcp.BearerAuthMiddleware(legacyToken, registry, authAuditLog, metricsHandler))
-	} else {
-		mux.Handle("/metrics", metricsHandler)
-	}
+	registerMetricsEndpoint(mux, v, bind, legacyToken, registry, authAuditLog)
+
+	// OAuth well-known endpoints (RFC 9728, RFC 8414)
+	mux.HandleFunc("GET /.well-known/oauth-protected-resource", handleOAuthProtectedResource(bind, port))
+	mux.HandleFunc("GET /.well-known/oauth-authorization-server", handleOAuthAuthorizationServer(bind, port))
+
+	// OAuth stub endpoints
+	mux.HandleFunc("POST /mcp/oauth/authorize", handleOAuthAuthorizeStub)
+	mux.HandleFunc("POST /mcp/oauth/token", handleOAuthTokenStub)
 
 	const maxRequestBodySize = 1 * 1024 * 1024
 	mcpHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -216,8 +230,13 @@ func RunHTTPServerOnListener(ctx context.Context, listener net.Listener, v *vaul
 		}
 
 		w.Header().Set("Content-Type", "application/json")
+		buf := bufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
 		//nolint:errchkjson // Best-effort JSON response write; no recovery path if encoding fails
-		_ = json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(buf).Encode(resp)
+		_, _ = w.Write(buf.Bytes())
+		buf.Reset()
+		bufferPool.Put(buf)
 	})
 	mcpChain := mcp.OriginValidationMiddleware(addr, mcp.BearerAuthMiddleware(legacyToken, registry, authAuditLog, mcp.AgentHeaderMiddleware(mcpHandler)))
 	if rateLimiter != nil {

@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -134,17 +132,13 @@ Use --yes to skip confirmation (useful for scripts).`,
 		return withVaultRaw(func(v *vaultpkg.Vault) error {
 			recipient := args[0]
 
-			// Confirmation prompt unless --yes is passed or config disables it
-			if !confirmRemove {
-				fmt.Fprintf(os.Stderr, "Remove recipient %s? (y/N): ", recipient)
-				answer, err := bufio.NewReader(os.Stdin).ReadString('\n')
-				if err != nil && answer == "" {
-					return fmt.Errorf("read confirmation: %w", err)
-				}
-				if strings.ToLower(strings.TrimSpace(answer)) != "y" {
-					fmt.Fprintln(os.Stderr, "Canceled")
-					return nil
-				}
+			confirmed, err := confirmInteractive(fmt.Sprintf("Remove recipient %s", recipient), confirmRemove)
+			if err != nil {
+				return err
+			}
+			if !confirmed {
+				fmt.Fprintln(os.Stderr, "Canceled")
+				return nil
 			}
 
 			rm := vaultpkg.NewRecipientsManager(v.Dir)
