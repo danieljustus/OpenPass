@@ -35,7 +35,7 @@ Use --no-network to skip checks that require network access (git remote reachabi
 		opts := health.Options{NoNetwork: doctorNoNetwork}
 		results := health.RunChecks(vaultDir, opts)
 
-		if doctorJSON {
+		if wantJSONOutput(doctorJSON) {
 			return outputDoctorJSON(cmd, vaultDir, results)
 		}
 		return outputDoctorText(cmd, vaultDir, results)
@@ -129,6 +129,6 @@ func getVaultDir() string {
 
 func init() {
 	rootCmd.AddCommand(doctorCmd)
-	doctorCmd.Flags().BoolVar(&doctorJSON, "json", false, "Output in JSON format")
+	doctorCmd.Flags().BoolVar(&doctorJSON, "json", false, "Output in JSON format (deprecated: use --output=json)")
 	doctorCmd.Flags().BoolVar(&doctorNoNetwork, "no-network", false, "Skip network-dependent checks")
 }

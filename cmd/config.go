@@ -48,8 +48,9 @@ If no path is given, validates the default config at ~/.openpass/config.yaml.`,
 		}
 
 		cfg, err := configpkg.Load(path)
+		jsonOut := wantJSONOutput(configValidateJSON)
 		if err != nil {
-			if configValidateJSON {
+			if jsonOut {
 				PrintJSON(map[string]interface{}{
 					"valid": false,
 					"error": err.Error(),
@@ -60,7 +61,7 @@ If no path is given, validates the default config at ~/.openpass/config.yaml.`,
 		}
 
 		if err := cfg.Validate(); err != nil {
-			if configValidateJSON {
+			if jsonOut {
 				PrintJSON(map[string]interface{}{
 					"valid":  false,
 					"errors": strings.Split(err.Error(), "\n"),
@@ -76,7 +77,7 @@ If no path is given, validates the default config at ~/.openpass/config.yaml.`,
 			return errorspkg.NewCLIError(exitConfigError, "config validation failed", err)
 		}
 
-		if configValidateJSON {
+		if jsonOut {
 			PrintJSON(map[string]interface{}{
 				"valid": true,
 				"path":  path,
@@ -90,7 +91,7 @@ If no path is given, validates the default config at ~/.openpass/config.yaml.`,
 }
 
 func init() {
-	configValidateCmd.Flags().BoolVar(&configValidateJSON, "json", false, "output validation result as JSON")
+	configValidateCmd.Flags().BoolVar(&configValidateJSON, "json", false, "output validation result as JSON (deprecated: use --output=json)")
 	configCmd.AddCommand(configValidateCmd)
 	rootCmd.AddCommand(configCmd)
 }

@@ -85,7 +85,7 @@ var updateCheckCmd = &cobra.Command{
 			return fmt.Errorf("check for updates: %w", err)
 		}
 
-		if updateCheckJSON {
+		if wantJSONOutput(updateCheckJSON) {
 			output := updateCheckJSONOutput{
 				CurrentVersion:  result.CurrentVersion,
 				LatestVersion:   result.LatestVersion,
@@ -135,7 +135,7 @@ var updateCheckCmd = &cobra.Command{
 }
 
 func init() {
-	updateCheckCmd.Flags().BoolVar(&updateCheckJSON, "json", false, "output update check result as JSON")
+	updateCheckCmd.Flags().BoolVar(&updateCheckJSON, "json", false, "output update check result as JSON (deprecated: use --output=json)")
 	updateCheckCmd.Flags().BoolVar(&updateCheckQuiet, "quiet", false, "suppress non-essential output (exit code 1 if update available)")
 	updateCheckCmd.Flags().BoolVar(&updateCheckForce, "force", false, "bypass cache and force a fresh check")
 

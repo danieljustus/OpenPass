@@ -38,7 +38,7 @@ var authStatusCmd = &cobra.Command{
 			"touchIDAvailable": session.BiometricAvailable(),
 			"cache":            cache,
 		}
-		if authStatusJSON {
+		if wantJSONOutput(authStatusJSON) {
 			PrintJSON(payload)
 			return nil
 		}
@@ -111,7 +111,7 @@ var authSetCmd = &cobra.Command{
 }
 
 func init() {
-	authStatusCmd.Flags().BoolVar(&authStatusJSON, "json", false, "output auth status as JSON")
+	authStatusCmd.Flags().BoolVar(&authStatusJSON, "json", false, "output auth status as JSON (deprecated: use --output=json)")
 	authCmd.AddCommand(authStatusCmd)
 	authCmd.AddCommand(authSetCmd)
 	rootCmd.AddCommand(authCmd)

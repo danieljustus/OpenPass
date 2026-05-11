@@ -41,7 +41,7 @@ Use --since to filter by time (e.g. "1h", "24h", "7d").`,
 
 		entries = filterAuditEntries(entries, auditSince, auditFailed)
 
-		if auditJSON {
+		if wantJSONOutput(auditJSON) {
 			return outputAuditJSON(cmd, entries)
 		}
 
@@ -201,7 +201,7 @@ func outputAuditTable(cmd *cobra.Command, entries []audit.LogEntry) error {
 
 func init() {
 	auditCmd.Flags().IntVarP(&auditTail, "tail", "n", 20, "Number of entries to show")
-	auditCmd.Flags().BoolVarP(&auditJSON, "json", "j", false, "Output as JSON")
+	auditCmd.Flags().BoolVarP(&auditJSON, "json", "j", false, "Output as JSON (deprecated: use --output=json)")
 	auditCmd.Flags().StringVarP(&auditAgent, "agent", "a", "default", "Agent name to filter by")
 	auditCmd.Flags().StringVarP(&auditSince, "since", "s", "", "Show entries since duration (e.g. 1h, 24h, 7d)")
 	auditCmd.Flags().BoolVar(&auditFailed, "failed", false, "Show only failed entries")
