@@ -204,6 +204,140 @@ Autotype, secure secret execution, MCP token management, and session hardening r
 - Fixed macOS keychain hang in CI by stubbing session save identity
 - Updated ADR-0003 with completed memory wipe phases
 
+## [v2.2.1] - 2026-05-05
+
+Documentation and bug fix release.
+
+### Added
+
+- Extended comparison table with 1Password, Bitwarden, and pass including accurate pricing, features, and legal disclaimers
+- AI chat anti-pattern documentation highlighting the risks of pasting secrets into chat interfaces
+
+### Changed
+
+- Updated README comparison section with a comprehensive five-column feature matrix
+- Revised MCP documentation to reflect v2.2.0 features
+
+### Fixed
+
+- Improved argument validation for auth set command with custom validation replacing cobra.ExactArgs, showing help on invalid input
+
+## [v2.3.0] - 2026-05-06
+
+Interactive form, secure memory handling, and MCP token migration release.
+
+### Added
+
+- Interactive Bubble Tea form for guided password entry creation
+- Auto-migration of legacy MCP tokens to scoped tokens for enhanced security
+- cliout package for consistent colored output with --quiet and NO_COLOR support
+- Service interface abstraction in vault service layer
+
+### Changed
+
+- Refactored vault service errors into consolidated error types
+- Extracted SafeWriteFile utility to break import cycles across packages
+- Upgraded charmbracelet/bubbles to v1.0.0, bubbletea to v1.3.10, and lipgloss to v1.1.0
+- Bumped prometheus/common dependency to v0.67.5
+
+### Fixed
+
+- Secret keys and passphrases are now wiped from heap after use
+- Atomic file writes via SafeWriteFile pattern for crash-safe vault and config operations
+- Touch ID now checks keychain item existence before prompting, preventing double authentication
+- Resolved Windows test flakiness and data races in crypto Wipe operations
+- Fixed gosec linting violations across the codebase
+
+## [v2.4.0] - 2026-05-07
+
+Daemon mode, device pairing, and multi-device synchronization release.
+
+### Added
+
+- Background daemon mode for persistent MCP server operation
+- Device pairing workflow for linking multiple devices to the same vault
+- New CLI commands: device, remote, sync, migrate, and serve-install
+- Device support in vault and config layers with entry re-encryption for device-specific identities
+- Enhanced search functionality for improved entry discovery
+- Server handler improvements in MCP layer with bootstrap logic and refined service layer
+- macOS notarization documentation and service management scripts
+
+### Changed
+
+- Updated README with multi-device workflow documentation
+- Improved server bootstrap sequence for reliable daemon startup
+- Refactored input handling across CLI commands for consistency
+
+## [v2.5.0] - 2026-05-08
+
+Dynamic secrets, secret sharing, template engine, and audit integrity release.
+
+### Added
+
+- AWS and PostgreSQL dynamic secret support with automatic lease management and rotation
+- Agent-to-agent secret sharing with human approval workflow including ShareStore, approve, revoke, and list tools with full audit integration
+- Template engine for secret generation with variable substitution support
+- HMAC chain for audit log integrity with chained HMAC per entry and VerifyLogIntegrity function
+- Output sanitization for MCP tools to redact secrets before LLM chat interactions
+- New sanitize_output MCP tool for secret-safe agent communication
+- Editor plugin build targets for IDE integration
+
+### Changed
+
+- Upgraded Go to 1.26.3, fixing eight CVEs (CVE-2026-39820, CVE-2026-39823, CVE-2026-33811, CVE-2026-39826, CVE-2026-42499, CVE-2026-39825, CVE-2026-39836, CVE-2026-33814)
+- Refactored autotype string escaping into shared utilities for macOS and Windows
+
+### Fixed
+
+- Hardened crypto with explicit scrypt work factor configuration
+- Added ZIP bomb protection in the importer for safe data migration
+- Enforced secure deletion of temporary files
+- Protected mcp-tokens.json as a runtime path in Git operations
+- Resolved Windows CI failures and lint warnings across gosec and gofmt
+
+## [v2.7.0] - 2026-05-11
+
+KDF configuration, vault file locking, MCP security hardening, and platform diagnostics release. Supersedes all v2.6.0 changes (tagged but unreleased).
+
+### Added
+
+- Doctor command for vault health diagnostics including init check, config parsing, identity encryption, permissions, auth, session cache, Git, recipients, MCP tokens, audit log, update check, and vault size, with --no-network option and JSON and text output
+- Interactive setup wizard with guided TUI for vault initialization covering passphrase, authentication, agents, backup, multi-device, recipients, profile, sync, and passphrase strength meter
+- Scrypt KDF configuration parameter for age passphrase encryption
+- Vault file locking using Unix flock and Windows LockFileEx with automatic cleanup on process exit
+- OAuth well-known endpoints for MCP server discovery and integration
+- Build tag infrastructure for platform-specific feature compilation
+- Dynamic shell completion for entry names in openpass get, openpass delete, and related commands
+- Hermes and OpenClaw safe adoption guidance documentation
+- Expanded test coverage across multiple packages to reach the 70% threshold
+
+### Changed
+
+- Consolidated --json flag onto a persistent --output flag, with --json still functional but deprecated with a warning
+- Go toolchain pinning for reproducible MCP agent builds
+- Improved MCP agent integration test isolation and port allocation
+
+### Fixed
+
+- Suppressed ANSI color codes when stderr is not a TTY for scripted and piped usage
+- Editor resolution now uses LookPath with a fallback chain of EDITOR, sensible-editor, vi, nano, and notepad
+- Entry display truncation now operates on rune width instead of byte count for correct multi-byte character rendering
+- WriteEntry is now atomic via temporary file write, fsync, and rename
+- Command output redaction in MCP agent tests
+- Resolved golangci-lint findings across copyloopvar, errcheck, gocyclo, goconst, revive, staticcheck, and unparam
+
+### Performance
+
+- Cached parsed vault configuration by modification time to avoid repeated file reads
+- Skipped legacy top-level directory walk when LegacyMode is disabled
+
+### Security
+
+- Autotype now passes passwords via stdin instead of command-line arguments to prevent exposure in process listings
+- MCP server now requires TLS or explicit opt-in for non-loopback bind addresses
+- Capped RateLimiter map size with LRU eviction to prevent memory exhaustion attacks
+- Added loud warning on legacy token migration with wildcard scope
+
 ## [v2.1.0] - 2026-04-29
 
 Interactive TUI, vault management, and observability release.
@@ -244,3 +378,8 @@ Interactive TUI, vault management, and observability release.
 [v2.0.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.0.0
 [v2.1.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.1.0
 [v2.2.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.2.0
+[v2.2.1]: https://github.com/danieljustus/OpenPass/releases/tag/v2.2.1
+[v2.3.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.3.0
+[v2.4.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.4.0
+[v2.5.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.5.0
+[v2.7.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.7.0
