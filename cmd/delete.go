@@ -23,7 +23,8 @@ var deleteCmd = &cobra.Command{
 
   # Skip confirmation
   openpass delete github --yes`,
-	Args: cobra.ExactArgs(1),
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: entryCompletionFunc,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := args[0]
 		return withVault(func(svc vaultsvc.Service) error {

@@ -29,7 +29,8 @@ var setCmd = &cobra.Command{
 
   # Set TOTP data
   openpass set github --totp-secret JBSWY3DPEHPK3PXP`,
-	Args: cobra.ExactArgs(1),
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: entryCompletionFunc,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		query := args[0]
 		path := query

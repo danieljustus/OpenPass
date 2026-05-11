@@ -54,7 +54,8 @@ var getCmd = &cobra.Command{
 
   # Use a specific profile
   openpass get github.password --profile work`,
-	Args: cobra.ExactArgs(1),
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: entryCompletionFunc,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return withVault(func(svc vaultsvc.Service) error {
 			maybeAutoPull(svc.GetDir(), svc.Vault().Config)

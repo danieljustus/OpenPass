@@ -29,7 +29,8 @@ The editor is determined by the --editor flag or EDITOR environment variable (de
   openpass edit work/aws
   openpass edit personal/bank --editor nano
   EDITOR=nano openpass edit personal/bank`,
-	Args: cobra.ExactArgs(1),
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: entryCompletionFunc,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return withVaultRaw(func(v *vaultpkg.Vault) error {
 			name := args[0]
