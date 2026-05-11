@@ -32,7 +32,7 @@ func SecureString(data []byte) (string, func()) {
 			_ = unix.Munmap(buf)
 		} else {
 			copy(buf, data)
-			s := unsafe.String(&buf[0], len(data))
+			s := unsafe.String(&buf[0], len(data)) // #nosec G103 — intentional use of unsafe to create string over mlock'd buffer without copying; audited.
 			cleanup := func() {
 				for i := range buf {
 					buf[i] = 0
@@ -45,7 +45,7 @@ func SecureString(data []byte) (string, func()) {
 		}
 	}
 
-	s := unsafe.String(unsafe.SliceData(data), len(data))
+	s := unsafe.String(unsafe.SliceData(data), len(data)) // #nosec G103 — intentional use of unsafe for zero-copy string over caller-owned buffer; audited.
 	cleanup := func() {
 		Wipe(data)
 	}

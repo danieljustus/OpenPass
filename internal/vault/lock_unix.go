@@ -33,7 +33,7 @@ func AcquireWriteLock(vaultDir string, timeout time.Duration) (*os.File, error) 
 		return nil, fmt.Errorf("create vault directory for lock: %w", err)
 	}
 
-	f, err := os.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0o600)
+	f, err := os.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0o600) // #nosec G304 — lockPath is filepath.Join(vaultDir, hardcoded ".lock"); vaultDir is trusted config from caller.
 	if err != nil {
 		return nil, fmt.Errorf("open lock file: %w", err)
 	}
