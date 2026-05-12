@@ -329,8 +329,10 @@ func TestHandleApproveShare_NotPending(t *testing.T) {
 }
 
 func TestHandleApproveShare_NoTTY(t *testing.T) {
-	srv := testShareServer(t, "", nil)
-	grant, err := srv.shareStore.Create("test-agent", "target", "vault/secret/password", "", 0)
+	// Agent "approver" is NOT the same as from_agent "requester", so
+	// the self-approval check passes; the error is from missing TTY.
+	srv := testShareServer(t, "approver", nil)
+	grant, err := srv.shareStore.Create("requester", "target", "vault/secret/password", "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,8 +358,8 @@ func TestHandleApproveShare_NoTTY(t *testing.T) {
 
 func TestHandleApproveShare_Success(t *testing.T) {
 	withMockApprovalTTY(t, "y", func() {
-		srv := testShareServer(t, "", nil)
-		grant, err := srv.shareStore.Create("test-agent", "target", "vault/secret/password", "", 0)
+		srv := testShareServer(t, "approver", nil)
+		grant, err := srv.shareStore.Create("requester", "target", "vault/secret/password", "", 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -381,8 +383,8 @@ func TestHandleApproveShare_Success(t *testing.T) {
 		if updated.Status != ShareApproved {
 			t.Errorf("status = %q, want %q", updated.Status, ShareApproved)
 		}
-		if updated.ApprovedBy != "human" {
-			t.Errorf("ApprovedBy = %q, want human", updated.ApprovedBy)
+		if updated.ApprovedBy != "approver" {
+			t.Errorf("ApprovedBy = %q, want approver", updated.ApprovedBy)
 		}
 		if updated.ApprovedAt == nil {
 			t.Error("ApprovedAt should be set")
@@ -392,8 +394,8 @@ func TestHandleApproveShare_Success(t *testing.T) {
 
 func TestHandleApproveShare_Rejected(t *testing.T) {
 	withMockApprovalTTY(t, "n", func() {
-		srv := testShareServer(t, "", nil)
-		grant, err := srv.shareStore.Create("test-agent", "target", "vault/secret/password", "", 0)
+		srv := testShareServer(t, "approver", nil)
+		grant, err := srv.shareStore.Create("requester", "target", "vault/secret/password", "", 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -419,8 +421,8 @@ func TestHandleApproveShare_Rejected(t *testing.T) {
 
 func TestHandleApproveShare_ApprovedWithTTL(t *testing.T) {
 	withMockApprovalTTY(t, "y", func() {
-		srv := testShareServer(t, "", nil)
-		grant, err := srv.shareStore.Create("test-agent", "target", "vault/secret/key", "", 10*time.Minute)
+		srv := testShareServer(t, "approver", nil)
+		grant, err := srv.shareStore.Create("requester", "target", "vault/secret/key", "", 10*time.Minute)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -345,6 +345,13 @@ func OriginValidationMiddleware(serverAddr string, next http.Handler) http.Handl
 			_ = json.NewEncoder(w).Encode(NewErrorResponse(nil, ErrCodeInvalidRequest, "invalid Origin header", nil))
 			return
 		}
+		if origin == "" && strings.HasPrefix(r.URL.Path, "/mcp") {
+			slog.Default().Warn("MCP request received without Origin header",
+				"path", r.URL.Path,
+				"remote", r.RemoteAddr,
+				"user_agent", r.UserAgent(),
+			)
+		}
 		next.ServeHTTP(w, r)
 	})
 }

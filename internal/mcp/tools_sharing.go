@@ -85,12 +85,20 @@ func (s *Server) handleApproveShare(ctx context.Context, req CallToolRequest) (*
 		return NewToolResultError(fmt.Sprintf("share grant %q is not pending (status: %s)", grantID, grant.Status)), nil
 	}
 
+	// Reject self-approval: the agent that requested the share cannot also
+	// approve it. This prevents social-engineering attacks where a malicious
+	// agent uses a look-alike name to trick the human into approving (#29).
+	if s.agent != nil && s.agent.Name == grant.FromAgent {
+		s.logAudit(ctx, "share_approve_denied", grant.SecretPath, false)
+		return NewToolResultError("the requesting agent cannot approve its own share request"), nil
+	}
+
 	if !IsTTYPresent() {
 		s.logAudit(ctx, "share_approve", grant.SecretPath, false)
 		return NewToolResultError("cannot approve share: no TTY available for human confirmation"), nil
 	}
 
-	details := fmt.Sprintf("Share %s: %s → %s, path: %s", grant.ID[:8], grant.FromAgent, grant.ToAgent, grant.SecretPath)
+	details := fmt.Sprintf("Share %s: %s → %s, path: %s\nAgent requesting approval: %s", grant.ID[:8], grant.FromAgent, grant.ToAgent, grant.SecretPath, s.agent.Name)
 	if grant.SecretField != "" {
 		details += fmt.Sprintf(", field: %s", grant.SecretField)
 	}
@@ -110,7 +118,11 @@ func (s *Server) handleApproveShare(ctx context.Context, req CallToolRequest) (*
 	}
 
 	if approvalResult.Approved {
-		if err := s.shareStore.Approve(grantID, "human"); err != nil {
+		approvedBy := "human"
+		if s.agent != nil {
+			approvedBy = s.agent.Name
+		}
+		if err := s.shareStore.Approve(grantID, approvedBy); err != nil {
 			return nil, fmt.Errorf("failed to approve share grant: %w", err)
 		}
 		s.logAudit(ctx, "share_approve", grant.SecretPath, true)
