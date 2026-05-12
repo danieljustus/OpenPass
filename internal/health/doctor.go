@@ -6,10 +6,13 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,6 +44,7 @@ type Result struct {
 	Status  Status       `json:"status"`
 	Message string       `json:"message"`
 	Hint    string       `json:"hint,omitempty"`
+	Tags    []string     `json:"tags,omitempty"`
 	Fixable bool         `json:"fixable"`         // set to true by checks with a fix
 	Fix     func() error `json:"-"`               // closure, nil for non-fixable checks
 	Fixed   bool         `json:"fixed,omitempty"` // set to true after successful fix
@@ -49,10 +53,15 @@ type Result struct {
 // Options controls which checks are run.
 type Options struct {
 	NoNetwork bool
+	Quick     bool
 	Version   string
 	Only      []string
 	Exclude   []string
 }
+
+// FixDryRun controls whether fix closures should skip actual modifications.
+// Set to true to log intent without applying changes.
+var FixDryRun bool
 
 // matchesAny returns true if name matches any pattern via path.Match.
 func matchesAny(patterns []string, name string) bool {
@@ -64,57 +73,83 @@ func matchesAny(patterns []string, name string) bool {
 	return false
 }
 
+// hasTag returns true if tags contains the target string.
+func hasTag(tags []string, target string) bool {
+	for _, t := range tags {
+		if t == target {
+			return true
+		}
+	}
+	return false
+}
+
+// checkDef pairs a check function with its tags for filtering.
+type checkDef struct {
+	fn   func(string, Options) Result
+	tags []string
+}
+
+// allChecks is the single source of truth for all doctor health checks.
+// Each checkDef pairs a check function with tags for filtering (e.g., "network", "slow").
+var allChecks = []checkDef{
+	{fn: checkVaultInitialized},
+	{fn: checkVaultConfigParses},
+	{fn: checkVaultIdentityEncrypted},
+	{fn: checkVaultPermissions},
+	{fn: checkAuthMethod},
+	{fn: checkSessionCache},
+	{fn: checkGitRepo},
+	{fn: checkGitRemote},
+	{fn: checkGitignoreProtects},
+	{fn: checkGitLastSync, tags: []string{"network"}},
+	{fn: checkRecipients},
+	{fn: checkRecipientsRecovery},
+	{fn: checkMCPTokens},
+	{fn: checkAuditLog},
+	{fn: checkUpdateAvailable, tags: []string{"network", "slow"}},
+	{fn: checkVaultSize},
+	{fn: checkScryptBenchmark, tags: []string{"slow"}},
+	{fn: checkKDFModern},
+	{fn: checkManifestIntegrity},
+	{fn: checkPassphraseRotation},
+	{fn: checkAutoTypeBackend},
+	{fn: checkClipboardBackend},
+	{fn: checkDaemonStatus},
+	{fn: checkMCPServer, tags: []string{"network"}},
+	{fn: checkDynamicSecretEngines},
+	{fn: checkMCPAgents},
+	{fn: checkSecureUI},
+	{fn: checkPreCommitHooks},
+	{fn: checkSessionKeyring},
+}
+
 // RunChecks runs all doctor checks against vaultDir and returns the results.
 func RunChecks(vaultDir string, opts Options) []Result {
-	checks := []func(string, Options) Result{
-		checkVaultInitialized,
-		checkVaultConfigParses,
-		checkVaultIdentityEncrypted,
-		checkVaultPermissions,
-		checkAuthMethod,
-		checkSessionCache,
-		checkGitRepo,
-		checkGitRemote,
-		checkGitignoreProtects,
-		checkGitLastSync,
-		checkRecipients,
-		checkRecipientsRecovery,
-		checkMCPTokens,
-		checkAuditLog,
-		checkUpdateAvailable,
-		checkVaultSize,
-		checkScryptBenchmark,
-		checkKDFModern,
-		checkManifestIntegrity,
-		checkPassphraseRotation,
-	}
+	checks := allChecks
 
 	if opts.NoNetwork {
-		checks = []func(string, Options) Result{
-			checkVaultInitialized,
-			checkVaultConfigParses,
-			checkVaultIdentityEncrypted,
-			checkVaultPermissions,
-			checkAuthMethod,
-			checkSessionCache,
-			checkGitRepo,
-			checkGitRemote,
-			checkGitignoreProtects,
-			checkRecipients,
-			checkRecipientsRecovery,
-			checkMCPTokens,
-			checkAuditLog,
-			checkVaultSize,
-			checkScryptBenchmark,
-			checkKDFModern,
-			checkManifestIntegrity,
-			checkPassphraseRotation,
+		filtered := make([]checkDef, 0, len(checks))
+		for _, c := range checks {
+			if !hasTag(c.tags, "network") {
+				filtered = append(filtered, c)
+			}
 		}
+		checks = filtered
+	}
+
+	if opts.Quick {
+		filtered := make([]checkDef, 0, len(checks))
+		for _, c := range checks {
+			if !hasTag(c.tags, "slow") {
+				filtered = append(filtered, c)
+			}
+		}
+		checks = filtered
 	}
 
 	results := make([]Result, 0, len(checks))
-	for _, fn := range checks {
-		results = append(results, fn(vaultDir, opts))
+	for _, c := range checks {
+		results = append(results, c.fn(vaultDir, opts))
 	}
 
 	if len(opts.Only) > 0 {
@@ -223,6 +258,9 @@ func checkVaultPermissions(vaultDir string, _ Options) Result {
 	}
 	r.Fixable = true
 	r.Fix = func() error {
+		if FixDryRun {
+			return nil
+		}
 		// #nosec G302 -- directory needs execute bit
 		if err := os.Chmod(filepath.Join(vaultDir, "entries"), 0o700); err != nil {
 			return fmt.Errorf("chmod entries: %w", err)
@@ -310,6 +348,9 @@ func checkGitRepo(vaultDir string, _ Options) Result {
 	r := Result{ID: "git.repo", Name: "Git repository"}
 	r.Fixable = true
 	r.Fix = func() error {
+		if FixDryRun {
+			return nil
+		}
 		return git.Init(vaultDir)
 	}
 	gitDir := filepath.Join(vaultDir, ".git")
@@ -347,6 +388,9 @@ func checkGitignoreProtects(vaultDir string, _ Options) Result {
 	r := Result{ID: "git.gitignore.protects", Name: ".gitignore protects sensitive files"}
 	r.Fixable = true
 	r.Fix = func() error {
+		if FixDryRun {
+			return nil
+		}
 		gitignorePath := filepath.Join(vaultDir, ".gitignore")
 		var existing []string
 		// #nosec G304 -- vaultDir is controlled
@@ -865,5 +909,330 @@ func checkPassphraseRotation(vaultDir string, _ Options) Result {
 		r.Status = StatusOK
 		r.Message = fmt.Sprintf("last rotated %s ago", age.Round(24*time.Hour))
 	}
+	return r
+}
+
+// --- DOC-13: Auto-type backend check ---
+
+func checkAutoTypeBackend(_ string, _ Options) Result {
+	r := Result{ID: "tooling.autotype.backend", Name: "Auto-type backend"}
+	switch runtime.GOOS {
+	case "darwin":
+		if _, err := exec.LookPath("osascript"); err != nil {
+			r.Status = StatusWarn
+			r.Message = "osascript not found — autotype unavailable on macOS"
+			r.Hint = "install Xcode command line tools: xcode-select --install"
+		} else {
+			r.Status = StatusOK
+			r.Message = "osascript available"
+		}
+	case "linux":
+		if _, err := exec.LookPath("xdotool"); err != nil {
+			r.Status = StatusWarn
+			r.Message = "xdotool not found — autotype unavailable on X11"
+			r.Hint = "install xdotool (apt install xdotool, dnf install xdotool)"
+		} else {
+			r.Status = StatusOK
+			r.Message = "xdotool available"
+		}
+	default:
+		r.Status = StatusOK
+		r.Message = "not applicable on " + runtime.GOOS
+	}
+	return r
+}
+
+// --- DOC-14: Clipboard backend check ---
+
+func checkClipboardBackend(_ string, _ Options) Result {
+	r := Result{ID: "tooling.clipboard.backend", Name: "Clipboard backend"}
+	switch runtime.GOOS {
+	case "darwin":
+		if _, err := exec.LookPath("pbcopy"); err != nil {
+			r.Status = StatusWarn
+			r.Message = "pbcopy not found — clipboard unavailable"
+		} else {
+			r.Status = StatusOK
+			r.Message = "pbcopy available"
+		}
+	case "linux":
+		for _, name := range []string{"xclip", "wl-copy"} {
+			if _, err := exec.LookPath(name); err == nil {
+				r.Status = StatusOK
+				r.Message = name + " available"
+				return r
+			}
+		}
+		r.Status = StatusWarn
+		r.Message = "no clipboard tool found (xclip or wl-clipboard)"
+		r.Hint = "install xclip (apt install xclip) or wl-clipboard (apt install wl-clipboard)"
+	default:
+		r.Status = StatusOK
+		r.Message = "not applicable on " + runtime.GOOS
+	}
+	return r
+}
+
+// --- DOC-15: Daemon status check ---
+
+func checkDaemonStatus(_ string, _ Options) Result {
+	r := Result{ID: "daemon.status", Name: "Daemon status"}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		r.Status = StatusWarn
+		r.Message = "cannot determine home directory"
+		return r
+	}
+	var svcPath string
+	switch runtime.GOOS {
+	case "darwin":
+		svcPath = filepath.Join(home, "Library", "LaunchAgents", "com.openpass.mcp.plist")
+	case "linux":
+		svcPath = filepath.Join(home, ".config", "systemd", "user", "openpass-mcp.service")
+	default:
+		r.Status = StatusOK
+		r.Message = "daemon not supported on " + runtime.GOOS
+		return r
+	}
+	info, err := os.Stat(svcPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			r.Status = StatusOK
+			r.Message = "daemon not installed"
+			return r
+		}
+		r.Status = StatusWarn
+		r.Message = "cannot stat daemon file: " + err.Error()
+		return r
+	}
+	perm := info.Mode().Perm()
+	if perm != 0o600 {
+		r.Status = StatusWarn
+		r.Message = fmt.Sprintf("daemon file has mode %o (expected 0600)", perm)
+		r.Hint = "run chmod 0600 " + svcPath
+	} else {
+		r.Status = StatusOK
+		r.Message = "daemon installed with correct permissions"
+	}
+	return r
+}
+
+// --- DOC-16: MCP server reachability check ---
+
+func checkMCPServer(vaultDir string, _ Options) Result {
+	r := Result{ID: "mcp.server.reachable", Name: "MCP server reachable"}
+	cfgPath := filepath.Join(vaultDir, "config.yaml")
+	cfg, err := configpkg.Load(cfgPath)
+	if err != nil {
+		r.Status = StatusWarn
+		r.Message = "cannot load config: " + err.Error()
+		return r
+	}
+	port := 8080
+	if cfg.MCP != nil && cfg.MCP.Port > 0 {
+		port = cfg.MCP.Port
+	}
+	url := fmt.Sprintf("http://127.0.0.1:%d/health", port)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		r.Status = StatusWarn
+		r.Message = "cannot create request: " + err.Error()
+		return r
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		r.Status = StatusWarn
+		r.Message = "MCP server not reachable at " + url
+		r.Hint = "start the server with `openpass serve --port " + strconv.Itoa(port) + "`"
+		return r
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		r.Status = StatusWarn
+		r.Message = fmt.Sprintf("MCP server returned HTTP %d", resp.StatusCode)
+		return r
+	}
+	r.Status = StatusOK
+	r.Message = "server reachable at " + url
+	// Check token presence for HTTP auth
+	tokenPath := filepath.Join(vaultDir, "mcp-token")
+	if _, err := os.Stat(tokenPath); err == nil {
+		r.Message += ", token present"
+	} else {
+		r.Message += ", no token file"
+		r.Hint = "generate an MCP token with `openpass mcp token create`"
+	}
+	return r
+}
+
+// --- DOC-17: Dynamic secret engines check ---
+
+func checkDynamicSecretEngines(vaultDir string, _ Options) Result {
+	r := Result{ID: "mcp.dynamic.engines", Name: "Dynamic secret engines"}
+	cfgPath := filepath.Join(vaultDir, "config.yaml")
+	cfg, err := configpkg.Load(cfgPath)
+	if err != nil {
+		r.Status = StatusWarn
+		r.Message = "cannot load config: " + err.Error()
+		return r
+	}
+	var configured bool
+	for _, profile := range cfg.Agents {
+		if len(profile.DynamicProviders) > 0 {
+			configured = true
+			break
+		}
+	}
+	if !configured {
+		r.Status = StatusOK
+		r.Message = "no dynamic providers configured"
+		return r
+	}
+	r.Status = StatusWarn
+	r.Message = "dynamic providers configured but engines not registered"
+	r.Hint = "dynamic provider engines were never wired to the MCP server"
+	return r
+}
+
+// --- DOC-18: MCP agents check ---
+
+func checkMCPAgents(vaultDir string, _ Options) Result {
+	r := Result{ID: "mcp.agents", Name: "MCP agents configured"}
+	cfgPath := filepath.Join(vaultDir, "config.yaml")
+	cfg, err := configpkg.Load(cfgPath)
+	if err != nil {
+		r.Status = StatusWarn
+		r.Message = "cannot load config: " + err.Error()
+		return r
+	}
+	knownAgents := []string{"claude-code", "codex", "opencode", "hermes", "openclaw"}
+	var found []string
+	for _, agent := range knownAgents {
+		if _, ok := cfg.Agents[agent]; ok {
+			found = append(found, agent)
+		}
+	}
+	if len(found) > 0 {
+		r.Status = StatusOK
+		r.Message = strings.Join(found, ", ") + " configured"
+	} else {
+		r.Status = StatusOK
+		r.Message = "no AI agent MCP configs found"
+		r.Hint = "run `openpass mcp-config <agent>` to generate config"
+	}
+	return r
+}
+
+// --- DOC-19: Secure input UI check ---
+
+func checkSecureUI(_ string, _ Options) Result {
+	r := Result{ID: "tooling.secureui", Name: "Secure input UI"}
+	switch runtime.GOOS {
+	case "darwin":
+		if _, err := exec.LookPath("osascript"); err != nil {
+			r.Status = StatusWarn
+			r.Message = "osascript not found — secure input dialogs unavailable"
+		} else {
+			r.Status = StatusOK
+			r.Message = "osascript available (GUI dialogs)"
+		}
+	case "linux":
+		var found string
+		for _, name := range []string{"zenity", "kdialog"} {
+			if _, err := exec.LookPath(name); err == nil {
+				found = name
+				break
+			}
+		}
+		if found != "" {
+			r.Status = StatusOK
+			r.Message = found + " available (GUI dialogs)"
+		} else {
+			r.Status = StatusWarn
+			r.Message = "no GUI dialog tool found (zenity or kdialog)"
+			r.Hint = "install zenity (apt install zenity) or kdialog"
+		}
+	default:
+		r.Status = StatusOK
+		r.Message = "no GUI secure input available on " + runtime.GOOS
+	}
+	return r
+}
+
+// --- DOC-20: Pre-commit hooks check ---
+
+func checkPreCommitHooks(_ string, _ Options) Result {
+	r := Result{ID: "tooling.precommit", Name: "Pre-commit hooks"}
+	cwd, err := os.Getwd()
+	if err != nil {
+		r.Status = StatusWarn
+		r.Message = "cannot determine working directory"
+		return r
+	}
+	preCommitPath := filepath.Join(cwd, ".pre-commit-config.yaml")
+	if _, err := os.Stat(preCommitPath); os.IsNotExist(err) {
+		r.Status = StatusOK
+		r.Message = "no .pre-commit-config.yaml (not a dev environment)"
+		return r
+	}
+	gitDir := filepath.Join(cwd, ".git")
+	hooksDir := filepath.Join(gitDir, "hooks")
+	if _, err := os.Stat(hooksDir); os.IsNotExist(err) {
+		r.Status = StatusWarn
+		r.Message = ".pre-commit-config.yaml exists but not a git repository"
+		return r
+	}
+	entries, err := os.ReadDir(hooksDir)
+	if err != nil {
+		r.Status = StatusWarn
+		r.Message = "cannot read hooks directory: " + err.Error()
+		return r
+	}
+	var hookCount int
+	for _, e := range entries {
+		if !e.IsDir() && e.Name() != ".gitignore" {
+			hookCount++
+		}
+	}
+	if hookCount == 0 {
+		r.Status = StatusWarn
+		r.Message = "pre-commit hooks not installed"
+		r.Hint = "run `pre-commit install` to activate hooks"
+	} else {
+		r.Status = StatusOK
+		r.Message = fmt.Sprintf("%d hook(s) installed", hookCount)
+	}
+	return r
+}
+
+// --- DOC-21: Session keyring roundtrip check ---
+
+func checkSessionKeyring(vaultDir string, _ Options) Result {
+	r := Result{ID: "session.keyring", Name: "Session keyring roundtrip"}
+	testData := "openpass-doctor-test"
+	if err := session.SavePassphrase(vaultDir, []byte(testData), 10*time.Second); err != nil {
+		r.Status = StatusWarn
+		r.Message = "cannot write to keyring: " + err.Error()
+		r.Hint = "check OS keyring availability (macOS Keychain, GNOME Keyring, etc.)"
+		return r
+	}
+	loaded, err := session.LoadPassphrase(vaultDir)
+	if err != nil {
+		r.Status = StatusFail
+		r.Message = "keyring roundtrip failed: " + err.Error()
+		_ = session.ClearSession(vaultDir)
+		return r
+	}
+	if string(loaded) != testData {
+		r.Status = StatusFail
+		r.Message = "keyring returned corrupted data"
+		_ = session.ClearSession(vaultDir)
+		return r
+	}
+	_ = session.ClearSession(vaultDir)
+	r.Status = StatusOK
+	r.Message = "keyring encrypt/decrypt roundtrip OK"
 	return r
 }

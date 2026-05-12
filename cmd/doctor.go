@@ -14,12 +14,14 @@ import (
 )
 
 var (
-	doctorJSON      bool
-	doctorNoNetwork bool
-	doctorStrict    bool
-	doctorOnly      []string
-	doctorExclude   []string
-	doctorFix       bool
+	doctorJSON        bool
+	doctorNoNetwork   bool
+	doctorStrict      bool
+	doctorOnly        []string
+	doctorExclude     []string
+	doctorFix         bool
+	doctorFixDryRun   bool
+	doctorQuick       bool
 )
 
 var doctorCmd = &cobra.Command{
@@ -39,16 +41,24 @@ Use --no-network to skip checks that require network access (git remote reachabi
 		vaultDir := getVaultDir()
 		opts := health.Options{
 			NoNetwork: doctorNoNetwork,
+			Quick:     doctorQuick,
 			Version:   appVersion,
 			Only:      doctorOnly,
 			Exclude:   doctorExclude,
 		}
 		results := health.RunChecks(vaultDir, opts)
 
+		// Fix ordering: --fix runs first to patch results (changing their Status),
+		// then Score() evaluates the final state. This ensures the score reflects
+		// any repairs that were applied. --fix-dry-run logs intent without changes.
 		if doctorFix {
 			for i := range results {
 				r := &results[i]
 				if r.Fixable && r.Status != health.StatusOK && r.Fix != nil {
+					if doctorFixDryRun {
+						cmd.Printf("Would fix %s: %s\n", r.ID, r.Message)
+						continue
+					}
 					if err := r.Fix(); err != nil {
 						r.Message = "fix failed: " + err.Error()
 					} else {
@@ -115,7 +125,11 @@ func outputDoctorText(cmd *cobra.Command, vaultDir string, results []health.Resu
 		if r.Fixed {
 			fixedTag = " (fixed)"
 		}
-		line := fmt.Sprintf("%-3s %-40s %s%s", symbol, r.Name, r.Message, fixedTag)
+		fixableTag := ""
+		if r.Fixable && r.Status != health.StatusOK {
+			fixableTag = " (fixable — run with --fix)"
+		}
+		line := fmt.Sprintf("%-3s %-40s %s%s%s", symbol, r.Name, r.Message, fixedTag, fixableTag)
 		cmd.Println(colorize(colorCode, line))
 		if r.Hint != "" {
 			indent := strings.Repeat(" ", 4)
@@ -137,9 +151,10 @@ func outputDoctorText(cmd *cobra.Command, vaultDir string, results []health.Resu
 }
 
 type doctorJSONOutput struct {
-	VaultDir string          `json:"vault_dir"`
-	Results  []health.Result `json:"results"`
-	Score    struct {
+	SchemaVersion string          `json:"schema_version"`
+	VaultDir      string          `json:"vault_dir"`
+	Results       []health.Result `json:"results"`
+	Score         struct {
 		OK    int `json:"ok"`
 		Warn  int `json:"warn"`
 		Fail  int `json:"fail"`
@@ -150,8 +165,9 @@ type doctorJSONOutput struct {
 func outputDoctorJSON(cmd *cobra.Command, vaultDir string, results []health.Result) error {
 	ok, warn, fail := health.Score(results)
 	out := doctorJSONOutput{
-		VaultDir: vaultDir,
-		Results:  results,
+		SchemaVersion: "1.0",
+		VaultDir:      vaultDir,
+		Results:       results,
 	}
 	out.Score.OK = ok
 	out.Score.Warn = warn
@@ -180,4 +196,6 @@ func init() {
 	doctorCmd.Flags().StringSliceVar(&doctorOnly, "only", nil, "Only run checks matching these glob patterns (comma-separated, e.g. vault.*)")
 	doctorCmd.Flags().StringSliceVar(&doctorExclude, "exclude", nil, "Skip checks matching these glob patterns (comma-separated)")
 	doctorCmd.Flags().BoolVar(&doctorFix, "fix", false, "auto-repair safe issues (permissions, gitignore, git init)")
+	doctorCmd.Flags().BoolVar(&doctorFixDryRun, "fix-dry-run", false, "Log what --fix would do without modifying anything")
+	doctorCmd.Flags().BoolVar(&doctorQuick, "quick", false, "Skip slow checks (scrypt benchmark, update check)")
 }
