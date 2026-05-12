@@ -146,17 +146,18 @@ func TestTokenStore_CleanupExpired(t *testing.T) {
 	}
 }
 
-func TestTokenStore_FailedAttemptsLimit(t *testing.T) {
+func TestTokenStore_GlobalCooldown(t *testing.T) {
 	ts := NewTokenStore()
-	token := Token("BURNABLE")
-	pubKey := "burn-test-key"
+	token := Token("COOLDOWN")
+	pubKey := "cooldown-key"
 
 	if err := ts.Store(token, pubKey); err != nil {
 		t.Fatalf("Store error: %v", err)
 	}
 
-	// 5 failed attempts with wrong tokens should NOT affect "BURNABLE"
-	// since we're not actually targeting the same token string.
+	// 5 failed attempts with different wrong tokens trigger the global
+	// cooldown. Previously the per-guess tracking never reached the limit
+	// (each wrong token was a different key), making brute-force possible.
 	for i := 0; i < 5; i++ {
 		badToken := string(token) + "_wrong"
 		_, ok := ts.Validate(badToken)
@@ -165,14 +166,24 @@ func TestTokenStore_FailedAttemptsLimit(t *testing.T) {
 		}
 	}
 
-	// The real token should still be valid.
+	// The real token is temporarily rejected due to global cooldown.
 	got, ok := ts.Validate(string(token))
-	if !ok {
-		t.Fatal("Validate should succeed — failed attempts on other tokens should not burn this one")
+	if ok {
+		t.Fatal("Validate should fail — global cooldown active after 5 failures")
 	}
-	if got != pubKey {
-		t.Errorf("Validate returned %q, want %q", got, pubKey)
+	if got != "" {
+		t.Errorf("Validate returned %q, want empty", got)
 	}
+
+	// Verify cooldown state is set.
+	ts.mu.Lock()
+	if ts.failedCount < maxFailedAttempts {
+		t.Error("failedCount should be >= maxFailedAttempts")
+	}
+	if ts.cooldownUntil.IsZero() {
+		t.Error("cooldownUntil should be set")
+	}
+	ts.mu.Unlock()
 }
 
 func TestTokenStore_FailedAttemptsBurnSameToken(t *testing.T) {
@@ -200,17 +211,17 @@ func TestTokenStore_FailedAttemptsBurnSameToken(t *testing.T) {
 		}
 	}
 
-	// After 5 failed attempts on the same token, it should be burned.
+	// After 5 failed global attempts, cooldown should trigger.
 	ts.mu.Lock()
 	_, tokenExists := ts.tokens["SELFBURN"]
-	_, failedEntryExists := ts.failedAttempts["SELFBURN"]
+	inCooldown := ts.failedCount >= maxFailedAttempts && time.Now().Before(ts.cooldownUntil)
 	ts.mu.Unlock()
 
 	if tokenExists {
 		t.Error("expected token to be deleted after 5 failed attempts")
 	}
-	if failedEntryExists {
-		t.Error("expected failed attempt tracking to be cleaned up after burning")
+	if !inCooldown {
+		t.Error("expected cooldown to be active after 5 failed attempts")
 	}
 }
 

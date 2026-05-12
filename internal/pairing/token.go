@@ -41,16 +41,22 @@ type tokenEntry struct {
 // TokenStore holds pairing tokens in memory with automatic expiry
 // and failed-attempt rate limiting.
 type TokenStore struct {
-	mu             sync.RWMutex
-	tokens         map[string]tokenEntry
-	failedAttempts map[string]int
+	mu            sync.RWMutex
+	tokens        map[string]tokenEntry
+	failedCount   int
+	cooldownUntil time.Time
 }
+
+const maxFailedAttempts = 5
+
+// failedAttemptCooldown is how long all attempts are rejected after
+// maxFailedAttempts global failures.
+var failedAttemptCooldown = 30 * time.Second
 
 // NewTokenStore creates a new in-memory token store.
 func NewTokenStore() *TokenStore {
 	return &TokenStore{
-		tokens:         make(map[string]tokenEntry),
-		failedAttempts: make(map[string]int),
+		tokens: make(map[string]tokenEntry),
 	}
 }
 
@@ -81,29 +87,40 @@ func (ts *TokenStore) Store(token Token, publicKey string) error {
 
 // Validate checks a token and returns the associated public key if valid.
 // Tokens are single-use: successful validation removes the token.
-// After 5 failed attempts for a given token, it is burned (deleted from the store).
-// Returns (publicKey, true) on success, ("", false) if token is invalid, expired, or burned.
+// After maxFailedAttempts global failures, a cooldown is triggered during
+// which all attempts are rejected (defense-in-depth, see #25).
+// Returns (publicKey, true) on success, ("", false) if token is invalid, expired,
+// or a cooldown is active.
 func (ts *TokenStore) Validate(token string) (string, bool) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 
+	// Global cooldown: after maxFailedAttempts, reject all attempts until
+	// the cooldown expires. This prevents brute-force by per-guess keying.
+	if ts.failedCount >= maxFailedAttempts && time.Now().Before(ts.cooldownUntil) {
+		return "", false
+	}
+
+	if ts.failedCount >= maxFailedAttempts && time.Now().After(ts.cooldownUntil) {
+		ts.failedCount = 0
+	}
+
 	entry, ok := ts.tokens[token]
 	if !ok {
-		// Token not found — track the failed attempt.
-		ts.failedAttempts[token]++
-		if ts.failedAttempts[token] >= 5 {
-			// Burn: remove tracking data (token was never in store or already deleted).
-			delete(ts.failedAttempts, token)
+		// Token not found — track the failed attempt globally.
+		ts.failedCount++
+		if ts.failedCount >= maxFailedAttempts {
+			ts.cooldownUntil = time.Now().Add(failedAttemptCooldown)
 		}
 		return "", false
 	}
 
 	if time.Now().After(entry.expiresAt) {
 		// Expired token — count as failed attempt and clean up.
-		ts.failedAttempts[token]++
+		ts.failedCount++
 		delete(ts.tokens, token)
-		if ts.failedAttempts[token] >= 5 {
-			delete(ts.failedAttempts, token)
+		if ts.failedCount >= maxFailedAttempts {
+			ts.cooldownUntil = time.Now().Add(failedAttemptCooldown)
 		}
 		return "", false
 	}
@@ -111,12 +128,13 @@ func (ts *TokenStore) Validate(token string) (string, bool) {
 	// Token is valid — single-use, delete immediately.
 	publicKey := entry.publicKey
 	delete(ts.tokens, token)
-	delete(ts.failedAttempts, token)
+	ts.failedCount = 0
+	ts.cooldownUntil = time.Time{}
 	return publicKey, true
 }
 
-// CleanupExpired removes all expired tokens and stale failed-attempt tracking
-// from the store.
+// CleanupExpired removes all expired tokens and resets the failed-attempt
+// counter once the cooldown has expired.
 func (ts *TokenStore) CleanupExpired() {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
@@ -125,7 +143,11 @@ func (ts *TokenStore) CleanupExpired() {
 	for token, entry := range ts.tokens {
 		if now.After(entry.expiresAt) {
 			delete(ts.tokens, token)
-			delete(ts.failedAttempts, token)
 		}
+	}
+
+	// Reset failed count if cooldown has expired.
+	if ts.failedCount >= maxFailedAttempts && now.After(ts.cooldownUntil) {
+		ts.failedCount = 0
 	}
 }
