@@ -61,9 +61,9 @@ func (s *Server) handleGenerateDynamicSecret(ctx context.Context, req CallToolRe
 	// generation, since this is a high-risk operation (grants database access,
 	// cloud IAM roles, etc.).
 	if s.requiresApproval() {
-		if err := checkDynamicSecretApproval(s, provider, role, ttlStr); err != nil {
+		if apErr := checkDynamicSecretApproval(s, provider, role, ttlStr); apErr != nil {
 			s.logAudit(ctx, "dynamic_secret_denied", provider, false)
-			return toolError(err.Error()), nil
+			return toolError(apErr.Error()), nil
 		}
 	}
 
