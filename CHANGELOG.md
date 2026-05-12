@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v2.8.2] - 2026-05-12
+
+### Fixed
+
+- Resolve gosec code scanning alerts (G115, G302, G304):
+  - Add overflow bounds check for int32 conversion in `SetTestScryptWorkFactor`
+  - Fix nosec annotation format for directory permissions check
+  - Fix nosec annotation format for controlled file read
+
 ## [v2.8.1] - 2026-05-12
 
 ### Fixed
@@ -417,5 +426,6 @@ Interactive TUI, vault management, and observability release.
 [v2.4.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.4.0
 [v2.5.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.5.0
 [v2.7.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.7.0
+[v2.8.2]: https://github.com/danieljustus/OpenPass/releases/tag/v2.8.2
 [v2.8.1]: https://github.com/danieljustus/OpenPass/releases/tag/v2.8.1
 [v2.8.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.8.0
