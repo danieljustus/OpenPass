@@ -193,19 +193,19 @@ func renderTOML(data map[string]any, depth int) string {
 		switch val := v.(type) {
 		case map[string]any:
 			if depth == 0 {
-				sb.WriteString(fmt.Sprintf("\n[%s]\n", k))
+				fmt.Fprintf(&sb, "\n[%s]\n", k)
 			} else {
-				sb.WriteString(fmt.Sprintf("%s[%s]\n", prefix, k))
+				fmt.Fprintf(&sb, "%s[%s]\n", prefix, k)
 			}
 			sb.WriteString(renderTOML(val, depth+1))
 		case string:
-			sb.WriteString(fmt.Sprintf("%s%s = %q\n", prefix, k, val))
+			fmt.Fprintf(&sb, "%s%s = %q\n", prefix, k, val)
 		case bool:
-			sb.WriteString(fmt.Sprintf("%s%s = %v\n", prefix, k, val))
+			fmt.Fprintf(&sb, "%s%s = %v\n", prefix, k, val)
 		case int, int64, float64:
-			sb.WriteString(fmt.Sprintf("%s%s = %v\n", prefix, k, val))
+			fmt.Fprintf(&sb, "%s%s = %v\n", prefix, k, val)
 		default:
-			sb.WriteString(fmt.Sprintf("%s%s = %q\n", prefix, k, fmt.Sprintf("%v", val)))
+			fmt.Fprintf(&sb, "%s%s = %q\n", prefix, k, fmt.Sprintf("%v", val))
 		}
 	}
 	return sb.String()
