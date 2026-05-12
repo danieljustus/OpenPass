@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -213,6 +214,13 @@ func checkVaultIdentityEncrypted(vaultDir string, _ Options) Result {
 
 func checkVaultPermissions(vaultDir string, _ Options) Result {
 	r := Result{ID: "vault.permissions", Name: "File permissions"}
+
+	// Unix file permission semantics do not apply on Windows.
+	if runtime.GOOS == "windows" {
+		r.Status = StatusOK
+		r.Message = "not applicable on Windows"
+		return r
+	}
 	r.Fixable = true
 	r.Fix = func() error {
 		if err := os.Chmod(filepath.Join(vaultDir, "entries"), 0o700); err != nil {

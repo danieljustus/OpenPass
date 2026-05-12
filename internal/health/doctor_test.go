@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -377,6 +378,9 @@ func TestRunChecks_Recipients_NoRecipients(t *testing.T) {
 }
 
 func TestFix_VaultPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file permissions not enforced on Windows")
+	}
 	vaultDir := t.TempDir()
 	entriesDir := filepath.Join(vaultDir, "entries")
 	identityPath := filepath.Join(vaultDir, "identity.age")

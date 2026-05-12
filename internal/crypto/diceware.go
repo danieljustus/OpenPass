@@ -26,6 +26,8 @@ func loadDicewareWordlist() {
 		lines := strings.Split(strings.TrimSpace(dicewareWordlistData), "\n")
 		dicewareWordlist = make([]string, 0, len(lines))
 		for _, line := range lines {
+			// Strip Windows \r in case the file was checked out with CRLF.
+			line = strings.TrimRight(line, "\r")
 			// Format: "11111\tabacus" — extract word after tab
 			if _, word, ok := strings.Cut(line, "\t"); ok {
 				dicewareWordlist = append(dicewareWordlist, word)
