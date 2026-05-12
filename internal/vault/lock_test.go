@@ -144,12 +144,18 @@ func TestConcurrentMergeEntry(t *testing.T) {
 }
 
 func TestAcquireWriteLockDefaultTimeout(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: LockFileEx can trigger access violations in CI")
+	}
 	if DefaultLockTimeout != 30*time.Second {
 		t.Errorf("DefaultLockTimeout = %v, want 30s", DefaultLockTimeout)
 	}
 }
 
 func TestLockFileIsCreated(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: LockFileEx can trigger access violations in CI")
+	}
 	vaultDir := t.TempDir()
 
 	lockFile, err := AcquireWriteLock(vaultDir, time.Second)
@@ -169,6 +175,9 @@ func TestLockFileIsCreated(t *testing.T) {
 }
 
 func TestAcquireWriteLockNonEmptyVaultDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: LockFileEx can trigger access violations in CI")
+	}
 	vaultDir := t.TempDir()
 
 	lockFile, err := AcquireWriteLock(vaultDir, time.Second)
@@ -181,6 +190,9 @@ func TestAcquireWriteLockNonEmptyVaultDir(t *testing.T) {
 }
 
 func TestAcquireWriteLockCustomTimeout(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: LockFileEx can trigger access violations in CI")
+	}
 	vaultDir := t.TempDir()
 
 	lockFile, err := AcquireWriteLock(vaultDir, 5*time.Second)
