@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v2.8.1] - 2026-05-12
+
+### Fixed
+
+- Accept `application/json; charset=utf-8` Content-Type in OAuth dynamic client registration
+- Security hardening, concurrency locking, and audit error handling
+- Resolve golangci-lint errors (prealloc, errorlint, errcheck)
+- Fix test helper vars and Windows LockFileEx test skipping
+
 ## [v2.8.0] - 2026-05-12
 
 ### Added
@@ -408,4 +417,5 @@ Interactive TUI, vault management, and observability release.
 [v2.4.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.4.0
 [v2.5.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.5.0
 [v2.7.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.7.0
+[v2.8.1]: https://github.com/danieljustus/OpenPass/releases/tag/v2.8.1
 [v2.8.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.8.0
