@@ -139,17 +139,6 @@ func toolDefinitions() []toolDefinition {
 			Handler: (*Server).handleGenerate,
 		},
 		{
-			Name:        "generate_dynamic_secret",
-			Description: "Generate a dynamic secret with time-limited lease",
-			InputSchema: objectSchema([]string{"provider", "role"}, map[string]schemaProperty{
-				"provider":    {Type: "string", Description: "Secret provider (postgres, aws-sts)"},
-				"role":        {Type: "string", Description: "Role or permission level"},
-				"ttl":         {Type: "string", Description: "Time-to-live duration (e.g., 1h, 30m). Default: 1h"},
-				"permissions": {Type: "string", Description: "Additional permissions (optional)"},
-			}),
-			Handler: (*Server).handleGenerateDynamicSecret,
-		},
-		{
 			Name:        "generate_template",
 			Description: "Generate a configuration file from a template",
 			InputSchema: objectSchema([]string{"template_type"}, map[string]schemaProperty{

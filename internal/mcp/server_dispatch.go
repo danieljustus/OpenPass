@@ -30,11 +30,8 @@ func toolActionType(toolName string) string {
 		return "get"
 	case "find_entries":
 		return "find"
-	case "generate_password", "generate_totp":
+	case "generate_password", "generate_totp", "generate_template":
 		return "generate"
-	case "generate_dynamic_secret":
-		return "generate"
-	case "generate_template":
 		return "generate"
 	case "copy_to_clipboard", "autotype":
 		return "read"

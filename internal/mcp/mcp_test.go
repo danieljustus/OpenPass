@@ -191,7 +191,6 @@ func TestToolActionType(t *testing.T) {
 		{"find_entries", "find"},
 		{"generate_password", "generate"},
 		{"generate_totp", "generate"},
-		{"generate_dynamic_secret", "generate"},
 		{"generate_template", "generate"},
 		{"copy_to_clipboard", "read"},
 		{"autotype", "read"},
