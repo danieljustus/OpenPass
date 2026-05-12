@@ -853,6 +853,35 @@ func TestRunHTTPServer_OAuthEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("register endpoint success with charset", func(t *testing.T) {
+		reqBody := `{"redirect_uris": ["http://127.0.0.1:1234/callback"]}`
+		req, _ := http.NewRequest(http.MethodPost, baseURL+"/oauth/register", strings.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json; charset=utf-8")
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("register request failed: %v", err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+
+		if resp.StatusCode != http.StatusCreated {
+			t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusCreated)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if body["client_id"] == nil {
+			t.Error("client_id missing from registration response")
+		}
+		redirectURIs, ok := body["redirect_uris"].([]interface{})
+		if !ok {
+			t.Fatal("redirect_uris missing from registration response")
+		}
+		if len(redirectURIs) != 1 || redirectURIs[0] != "http://127.0.0.1:1234/callback" {
+			t.Errorf("redirect_uris = %v, want [http://127.0.0.1:1234/callback]", redirectURIs)
+		}
+	})
+
 	t.Run("register endpoint missing redirect_uris", func(t *testing.T) {
 		req, _ := http.NewRequest(http.MethodPost, baseURL+"/oauth/register", strings.NewReader(`{}`))
 		req.Header.Set("Content-Type", "application/json")
