@@ -112,7 +112,7 @@ func TestInitWithPassphraseMkdirAllError(t *testing.T) {
 func TestCollectFieldMatchesPrefixlessScalar(t *testing.T) {
 	matches := make(map[string]struct{})
 	// A scalar value with empty prefix should be skipped (not added to matches)
-	CollectFieldMatches(matches, "", "just-a-scalar", "just")
+	CollectFieldMatches(matches, "", "just-a-scalar", "just", nil)
 	if len(matches) != 0 {
 		t.Errorf("expected no matches for prefix-less scalar, got %v", matches)
 	}
@@ -206,7 +206,7 @@ func TestReadEntryCorruptedFile(t *testing.T) {
 // TestCollectFieldMatchesNilMap covers nil map handling in CollectFieldMatches.
 func TestCollectFieldMatchesNilMap(t *testing.T) {
 	matches := make(map[string]struct{})
-	CollectFieldMatches(matches, "prefix", nil, "search")
+	CollectFieldMatches(matches, "prefix", nil, "search", nil)
 	if len(matches) != 0 {
 		t.Errorf("expected no matches for nil, got %v", matches)
 	}
@@ -215,7 +215,7 @@ func TestCollectFieldMatchesNilMap(t *testing.T) {
 // TestCollectFieldMatchesEmptyMap covers empty map handling.
 func TestCollectFieldMatchesEmptyMap(t *testing.T) {
 	matches := make(map[string]struct{})
-	CollectFieldMatches(matches, "prefix", map[string]any{}, "search")
+	CollectFieldMatches(matches, "prefix", map[string]any{}, "search", nil)
 	if len(matches) != 0 {
 		t.Errorf("expected no matches for empty map, got %v", matches)
 	}
@@ -224,7 +224,7 @@ func TestCollectFieldMatchesEmptyMap(t *testing.T) {
 // TestCollectFieldMatchesArrayWithNil covers array with nil elements.
 func TestCollectFieldMatchesArrayWithNil(t *testing.T) {
 	matches := make(map[string]struct{})
-	CollectFieldMatches(matches, "arr", []any{nil, "valid"}, "valid")
+	CollectFieldMatches(matches, "arr", []any{nil, "valid"}, "valid", nil)
 	if _, ok := matches["arr[1]"]; !ok {
 		t.Errorf("expected arr[1] to match, got %v", matches)
 	}
@@ -239,7 +239,7 @@ func TestCollectFieldMatchesDeeplyNested(t *testing.T) {
 				"level3": "secret123",
 			},
 		},
-	}, "secret")
+	}, "secret", nil)
 	if _, ok := matches["level1.level2.level3"]; !ok {
 		t.Errorf("expected nested path to match, got %v", matches)
 	}

@@ -17,37 +17,9 @@ import (
 	"github.com/danieljustus/OpenPass/internal/pathutil"
 )
 
-var scryptWorkFactor = 18
-
-// SetScryptWorkFactorForTests overrides the scrypt work factor for identities
-// created in tests and returns a restore function.
-func SetScryptWorkFactorForTests(workFactor int) func() {
-	old := scryptWorkFactor
-	scryptWorkFactor = workFactor
-	return func() {
-		scryptWorkFactor = old
-	}
-}
-
-// SetScryptWorkFactor overrides the scrypt work factor used for passphrase-based
-// encryption. It applies globally within the process. Pass 0 to reset to default (18).
-func SetScryptWorkFactor(workFactor int) {
-	if workFactor <= 0 {
-		scryptWorkFactor = 18
-		return
-	}
-	scryptWorkFactor = workFactor
-}
-
-// DefaultScryptWorkFactor returns the default scrypt work factor (18).
-func DefaultScryptWorkFactor() int {
-	return 18
-}
-
-// ScryptWorkFactor returns the current scrypt work factor.
-func ScryptWorkFactor() int {
-	return scryptWorkFactor
-}
+// DefaultScryptWorkFactor is the default scrypt work factor used when no explicit
+// value is provided. Higher values increase KDF cost exponentially (N = 1<<workFactor).
+const DefaultScryptWorkFactor = 18
 
 // BenchmarkScryptWorkFactor measures scrypt KDF timing on the current hardware
 // by trying progressively higher work factors until the key derivation exceeds
@@ -107,7 +79,8 @@ func GenerateIdentityString() (string, error) {
 // SaveIdentity encrypts and saves an identity to a file using a passphrase.
 // The identity is encrypted with scrypt before being written to disk.
 // The file permissions are set to 0o600 (readable/writable by owner only).
-func SaveIdentity(id *age.X25519Identity, path string, passphrase []byte) error {
+// workFactor controls the scrypt KDF cost (N = 1<<workFactor). Pass 0 to use DefaultScryptWorkFactor.
+func SaveIdentity(id *age.X25519Identity, path string, passphrase []byte, workFactor int) error {
 	if id == nil {
 		return ErrNilIdentity
 	}
@@ -125,7 +98,10 @@ func SaveIdentity(id *age.X25519Identity, path string, passphrase []byte) error 
 	if err != nil {
 		return fmt.Errorf("create scrypt recipient: %w", err)
 	}
-	recipient.SetWorkFactor(scryptWorkFactor)
+	if workFactor <= 0 {
+		workFactor = DefaultScryptWorkFactor
+	}
+	recipient.SetWorkFactor(workFactor)
 
 	var buf bytes.Buffer
 	w, err := age.Encrypt(&buf, recipient)
