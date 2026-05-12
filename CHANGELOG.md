@@ -7,16 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v2.8.0] - 2026-05-12
+
 ### Added
 
 - MCP **Prompts** capability with four slash commands surfaced in Claude Code, OpenCode, Hermes and other MCP clients: `add-credential`, `rotate-credential`, `find-and-use`, `share-credential`. Each prompt renders a guided workflow that the agent follows step-by-step (e.g. `/mcp__openpass__add-credential` walks the agent through collecting a new secret without ever exposing the value)
 - `request_credential` MCP tool — the agent calls this when it discovers a credential is missing from the vault during a task; the user gets a native input dialog, types the value, and it lands in the vault without ever transiting the chat
 - New `internal/secureui` package providing cross-platform secure input: native macOS dialogs via `osascript`, Linux dialogs via `zenity` or `kdialog`, Windows credential prompts via PowerShell `Get-Credential`, with the existing TTY backend as a fallback. Backend selection honors a new `OPENPASS_SECUREUI=tty|gui|none` environment override
+- `auth_rotate` CLI command for credential rotation
+- `verify` CLI command for vault integrity checks
+- `internal/audit/keystore` with OS-level and fallback backends
+- `internal/crypto/diceware` passphrase generator with EFF large wordlist
+- Multi-device QR pairing in wizard
+- Wizard state persistence
+- Vault manifest for metadata tracking
+- OAuth well-known endpoints for MCP server discovery
 
 ### Changed
 
 - `secure_input` MCP tool is now available in HTTP mode as well, provided the host has a native dialog backend (previously stdio + TTY only)
 - Server initialize response now advertises the `prompts` capability so clients enable the slash-command surface
+- Doctor checks expanded for crypto KDF modern status and keystore health
+- Vault entry, lock, reencrypt, and search improvements
 
 ## [v1.0.0] - 2026-04-22
 
@@ -396,3 +408,4 @@ Interactive TUI, vault management, and observability release.
 [v2.4.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.4.0
 [v2.5.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.5.0
 [v2.7.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.7.0
+[v2.8.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.8.0
