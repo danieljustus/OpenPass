@@ -155,14 +155,19 @@ func (s *Server) handleListShares(ctx context.Context, req CallToolRequest) (*Ca
 	toAgent := req.GetString("to_agent", "")
 	secretPath := req.GetString("secret_path", "")
 
+	// Scope results to the calling agent first — an agent must only see shares
+	// where it is either the source or the target. Without this, any agent can
+	// enumerate all other agents and secret paths on the host (see #22).
+	agentGrants := s.shareStore.ListForAgent(s.agent.Name)
+
+	// Apply user-supplied filter on top of the agent-scoped results.
 	filter := ShareFilter{
 		Status:     shareStatusFromString(statusStr),
 		FromAgent:  fromAgent,
 		ToAgent:    toAgent,
 		SecretPath: secretPath,
 	}
-
-	grants := s.shareStore.List(filter)
+	grants := filterShareGrants(agentGrants, filter)
 
 	resultJSON, err := json.Marshal(grants)
 	if err != nil {
@@ -171,4 +176,28 @@ func (s *Server) handleListShares(ctx context.Context, req CallToolRequest) (*Ca
 
 	s.logAudit(ctx, "share_list", "", true)
 	return NewToolResultText(string(resultJSON)), nil
+}
+
+// filterShareGrants applies a ShareFilter to a slice of grants in place.
+func filterShareGrants(grants []*ShareGrant, filter ShareFilter) []*ShareGrant {
+	if filter.Status == nil && filter.FromAgent == "" && filter.ToAgent == "" && filter.SecretPath == "" {
+		return grants
+	}
+	filtered := make([]*ShareGrant, 0, len(grants))
+	for _, g := range grants {
+		if filter.Status != nil && g.Status != *filter.Status {
+			continue
+		}
+		if filter.FromAgent != "" && g.FromAgent != filter.FromAgent {
+			continue
+		}
+		if filter.ToAgent != "" && g.ToAgent != filter.ToAgent {
+			continue
+		}
+		if filter.SecretPath != "" && g.SecretPath != filter.SecretPath {
+			continue
+		}
+		filtered = append(filtered, g)
+	}
+	return filtered
 }

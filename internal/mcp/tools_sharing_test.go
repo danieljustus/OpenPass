@@ -580,9 +580,10 @@ func TestHandleRevokeShare_FromPending(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestHandleListShares_NoFilters(t *testing.T) {
-	srv := testShareServer(t, "", nil)
+	// The agent "alice" is involved as from_agent in both shares.
+	srv := testShareServer(t, "alice", nil)
 	srv.shareStore.Create("alice", "bob", "path/a", "", 0)
-	srv.shareStore.Create("charlie", "dave", "path/b", "", 0)
+	srv.shareStore.Create("alice", "charlie", "path/b", "", 0)
 
 	req := testShareRequest(map[string]any{})
 	result, err := srv.handleListShares(context.Background(), req)
@@ -603,9 +604,11 @@ func TestHandleListShares_NoFilters(t *testing.T) {
 }
 
 func TestHandleListShares_StatusFilter(t *testing.T) {
-	srv := testShareServer(t, "", nil)
+	// Agent "alice" is from_agent for the first share (approved) and second
+	// share (pending), so she sees both before filtering by status.
+	srv := testShareServer(t, "alice", nil)
 	g, _ := srv.shareStore.Create("alice", "bob", "path/a", "", 0)
-	srv.shareStore.Create("charlie", "dave", "path/b", "", 0)
+	srv.shareStore.Create("alice", "charlie", "path/b", "", 0)
 	srv.shareStore.Approve(g.ID, "admin")
 
 	req := testShareRequest(map[string]any{"status": "approved"})
@@ -625,7 +628,9 @@ func TestHandleListShares_StatusFilter(t *testing.T) {
 }
 
 func TestHandleListShares_AgentFilter(t *testing.T) {
-	srv := testShareServer(t, "", nil)
+	// Agent "alice" is involved in all three grants (twice as from_agent,
+	// once as to_agent). The from/to filter is applied on top of the agent scope.
+	srv := testShareServer(t, "alice", nil)
 	srv.shareStore.Create("alice", "bob", "path/a", "", 0)
 	srv.shareStore.Create("alice", "charlie", "path/b", "", 0)
 	srv.shareStore.Create("bob", "alice", "path/c", "", 0)
@@ -641,18 +646,18 @@ func TestHandleListShares_AgentFilter(t *testing.T) {
 	})
 
 	t.Run("to_agent", func(t *testing.T) {
-		req := testShareRequest(map[string]any{"to_agent": "charlie"})
+		req := testShareRequest(map[string]any{"to_agent": "alice"})
 		result, _ := srv.handleListShares(context.Background(), req)
 		var grants []*ShareGrant
 		json.Unmarshal([]byte(result.Text), &grants)
 		if len(grants) != 1 {
-			t.Errorf("got %d grants to charlie, want 1", len(grants))
+			t.Errorf("got %d grants to alice, want 1", len(grants))
 		}
 	})
 }
 
 func TestHandleListShares_PathFilter(t *testing.T) {
-	srv := testShareServer(t, "", nil)
+	srv := testShareServer(t, "alice", nil)
 	srv.shareStore.Create("alice", "bob", "vault/secret/api-key", "", 0)
 	srv.shareStore.Create("alice", "bob", "vault/secret/db-pass", "", 0)
 	srv.shareStore.Create("alice", "charlie", "vault/secret/api-key", "", 0)
@@ -667,7 +672,7 @@ func TestHandleListShares_PathFilter(t *testing.T) {
 }
 
 func TestHandleListShares_CombinedFilter(t *testing.T) {
-	srv := testShareServer(t, "", nil)
+	srv := testShareServer(t, "alice", nil)
 	g, _ := srv.shareStore.Create("alice", "bob", "vault/secret/api-key", "", 0)
 	srv.shareStore.Create("alice", "bob", "vault/secret/other", "", 0)
 	srv.shareStore.Approve(g.ID, "admin")
@@ -699,7 +704,7 @@ func TestHandleListShares_EmptyResults(t *testing.T) {
 }
 
 func TestHandleListShares_NonMatchingFilter(t *testing.T) {
-	srv := testShareServer(t, "", nil)
+	srv := testShareServer(t, "alice", nil)
 	srv.shareStore.Create("alice", "bob", "path/a", "", 0)
 
 	req := testShareRequest(map[string]any{"from_agent": "nonexistent"})
@@ -712,7 +717,7 @@ func TestHandleListShares_NonMatchingFilter(t *testing.T) {
 }
 
 func TestHandleListShares_InvalidStatus(t *testing.T) {
-	srv := testShareServer(t, "", nil)
+	srv := testShareServer(t, "alice", nil)
 	srv.shareStore.Create("alice", "bob", "path/a", "", 0)
 
 	// An invalid status string still produces a non-nil pointer via
@@ -723,6 +728,22 @@ func TestHandleListShares_InvalidStatus(t *testing.T) {
 	json.Unmarshal([]byte(result.Text), &grants)
 	if len(grants) != 0 {
 		t.Errorf("expected empty list, got %d grants", len(grants))
+	}
+}
+
+func TestHandleListShares_ScopedToCallingAgent(t *testing.T) {
+	// Agent "alice" should NOT see shares that only involve other agents.
+	// This is the core security fix for #22.
+	srv := testShareServer(t, "alice", nil)
+	srv.shareStore.Create("bob", "charlie", "path/a", "", 0)
+	srv.shareStore.Create("dave", "eve", "path/b", "", 0)
+
+	req := testShareRequest(map[string]any{})
+	result, _ := srv.handleListShares(context.Background(), req)
+	var grants []*ShareGrant
+	json.Unmarshal([]byte(result.Text), &grants)
+	if len(grants) != 0 {
+		t.Errorf("agent alice sees %d unrelated grants (none expected)", len(grants))
 	}
 }
 
