@@ -86,6 +86,8 @@ func TestMergeEntryNotFound(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping on windows: LockFileEx access violation in AcquireWriteLock")
 	}
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
 	_, err := MergeEntry(vaultDir, "nonexistent/entry", map[string]any{"key": "val"}, id)
 	if err == nil {
 		t.Fatal("MergeEntry() error = nil, want error for non-existent entry")
