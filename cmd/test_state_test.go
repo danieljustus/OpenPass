@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"unsafe"
@@ -23,6 +24,9 @@ import (
 func TestMain(m *testing.M) {
 	_ = os.Unsetenv("OPENPASS_MCP_TOKEN")
 	restoreScryptWorkFactor := vaultcrypto.SetTestScryptWorkFactor(12)
+	if runtime.GOOS == "windows" {
+		return // skip cmd tests on Windows: LockFileEx access violation in AcquireWriteLock
+	}
 	code := m.Run()
 	restoreScryptWorkFactor()
 	os.Exit(code)
