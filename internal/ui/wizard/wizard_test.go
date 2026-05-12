@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/danieljustus/OpenPass/internal/ui/wizard"
 )
 

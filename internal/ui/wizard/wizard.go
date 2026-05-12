@@ -159,28 +159,7 @@ func (m WizardModel) handleStepDone() (tea.Model, tea.Cmd) {
 	case *ProfileStep:
 		m.state.ProfileName = s.Value()
 	case *SummaryStep:
-		switch s.Decision() {
-		case 0: // Apply
-			// Update the summary step's state pointer (already set, but refresh).
-			err := Apply(&m.state)
-			m.applyErr = err
-			// If multi-device with git sync, insert the pairing QR step.
-			if m.state.MultiDevice && m.state.SyncMode == syncGit {
-				m.steps = append(m.steps, NewPairingQRStep(&m.state))
-			}
-			// Append the next-steps screen.
-			m.steps = append(m.steps, NewNextStepsStep(&m.state))
-		case 1: // Back
-			// Go back two steps (skip current summary).
-			if m.current > 0 {
-				m.current--
-				m.advanceToPrevVisible()
-			}
-			return m, nil
-		case 2: // Cancel
-			m.canceled = true
-			return m, tea.Quit
-		}
+		return m.handleSummaryStep(s)
 	case *NextStepsStep:
 		return m, tea.Quit
 	}
@@ -192,6 +171,32 @@ func (m WizardModel) handleStepDone() (tea.Model, tea.Cmd) {
 		}
 	}
 
+	return m.advanceToNextVisible()
+}
+
+func (m WizardModel) handleSummaryStep(s *SummaryStep) (tea.Model, tea.Cmd) {
+	switch s.Decision() {
+	case 0: // Apply
+		// Update the summary step's state pointer (already set, but refresh).
+		err := Apply(&m.state)
+		m.applyErr = err
+		// If multi-device with git sync, insert the pairing QR step.
+		if m.state.MultiDevice && m.state.SyncMode == syncGit {
+			m.steps = append(m.steps, NewPairingQRStep(&m.state))
+		}
+		// Append the next-steps screen.
+		m.steps = append(m.steps, NewNextStepsStep(&m.state))
+	case 1: // Back
+		// Go back two steps (skip current summary).
+		if m.current > 0 {
+			m.current--
+			m.advanceToPrevVisible()
+		}
+		return m, nil
+	case 2: // Cancel
+		m.canceled = true
+		return m, tea.Quit
+	}
 	return m.advanceToNextVisible()
 }
 

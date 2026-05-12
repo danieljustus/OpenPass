@@ -126,7 +126,6 @@ func TestHMACTamperedEntryDetected(t *testing.T) {
 	if result.FirstBadIdx != 1 {
 		t.Fatalf("FirstBadIdx = %d, want 1", result.FirstBadIdx)
 	}
-
 }
 
 func TestHMACLegacyLogAccepted(t *testing.T) {

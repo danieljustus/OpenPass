@@ -463,8 +463,8 @@ request so the first device can accept it.`,
 		}
 
 		// Create vault directory structure
-		if err := os.MkdirAll(filepath.Join(vaultDir, "entries"), 0o700); err != nil {
-			return fmt.Errorf("create entries dir: %w", err)
+		if mkdirErr := os.MkdirAll(filepath.Join(vaultDir, "entries"), 0o700); mkdirErr != nil {
+			return fmt.Errorf("create entries dir: %w", mkdirErr)
 		}
 
 		// Write config

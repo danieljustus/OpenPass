@@ -3,6 +3,7 @@ package vault
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -11,6 +12,9 @@ import (
 )
 
 func TestConcurrentWriteEntry(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: concurrent cgo calls can trigger access violations in age crypto")
+	}
 	vaultDir := t.TempDir()
 	id := testutil.TempIdentity(t)
 
@@ -60,6 +64,9 @@ func TestConcurrentWriteEntry(t *testing.T) {
 }
 
 func TestConcurrentMergeEntry(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: concurrent cgo calls can trigger access violations in age crypto")
+	}
 	vaultDir := t.TempDir()
 	id := testutil.TempIdentity(t)
 

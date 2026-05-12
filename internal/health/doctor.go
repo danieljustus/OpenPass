@@ -459,6 +459,8 @@ func checkRecipients(vaultDir string, _ Options) Result {
 	return r
 }
 
+const recipientsListHint = "run `openpass recipients list`"
+
 func checkRecipientsRecovery(vaultDir string, _ Options) Result {
 	r := Result{ID: "recipients.recovery", Name: "Recipient decrypt test"}
 
@@ -474,7 +476,7 @@ func checkRecipientsRecovery(vaultDir string, _ Options) Result {
 	if err != nil {
 		r.Status = StatusFail
 		r.Message = "cannot read recipients: " + err.Error()
-		r.Hint = "run `openpass recipients list`"
+		r.Hint = recipientsListHint
 		return r
 	}
 
@@ -484,13 +486,13 @@ func checkRecipientsRecovery(vaultDir string, _ Options) Result {
 		return r
 	}
 
-	var recipients []*age.X25519Recipient
+	recipients := make([]*age.X25519Recipient, 0, len(rawStrings))
 	for _, rs := range rawStrings {
-		rec, err := vaultcrypto.ValidateRecipient(rs)
-		if err != nil {
+		rec, recErr := vaultcrypto.ValidateRecipient(rs)
+		if recErr != nil {
 			r.Status = StatusFail
-			r.Message = fmt.Sprintf("invalid recipient: %s (%s)", rs, err.Error())
-			r.Hint = "run `openpass recipients list`"
+			r.Message = fmt.Sprintf("invalid recipient: %s (%s)", rs, recErr.Error())
+			r.Hint = recipientsListHint
 			return r
 		}
 		recipients = append(recipients, rec)
@@ -500,18 +502,19 @@ func checkRecipientsRecovery(vaultDir string, _ Options) Result {
 	if err != nil {
 		r.Status = StatusFail
 		r.Message = "generate test identity: " + err.Error()
-		r.Hint = "run `openpass recipients list`"
+		r.Hint = recipientsListHint
 		return r
 	}
 
-	allRecipients := []*age.X25519Recipient{testIdentity.Recipient()}
+	allRecipients := make([]*age.X25519Recipient, 0, 1+len(recipients))
+	allRecipients = append(allRecipients, testIdentity.Recipient())
 	allRecipients = append(allRecipients, recipients...)
 
 	testBlob := make([]byte, 32)
-	if _, err := rand.Read(testBlob); err != nil {
+	if _, randErr := rand.Read(testBlob); randErr != nil {
 		r.Status = StatusFail
-		r.Message = "generate test data: " + err.Error()
-		r.Hint = "run `openpass recipients list`"
+		r.Message = "generate test data: " + randErr.Error()
+		r.Hint = recipientsListHint
 		return r
 	}
 
@@ -519,7 +522,7 @@ func checkRecipientsRecovery(vaultDir string, _ Options) Result {
 	if err != nil {
 		r.Status = StatusFail
 		r.Message = "encryption failed: " + err.Error()
-		r.Hint = "run `openpass recipients list`"
+		r.Hint = recipientsListHint
 		return r
 	}
 
@@ -527,14 +530,14 @@ func checkRecipientsRecovery(vaultDir string, _ Options) Result {
 	if err != nil {
 		r.Status = StatusFail
 		r.Message = "decryption failed: " + err.Error()
-		r.Hint = "run `openpass recipients list`"
+		r.Hint = recipientsListHint
 		return r
 	}
 
 	if !bytes.Equal(decrypted, testBlob) {
 		r.Status = StatusFail
 		r.Message = "decrypted data does not match original"
-		r.Hint = "run `openpass recipients list`"
+		r.Hint = recipientsListHint
 		return r
 	}
 
@@ -554,7 +557,7 @@ func checkRecipientsRecovery(vaultDir string, _ Options) Result {
 	if stanzaCount != expectedCount {
 		r.Status = StatusFail
 		r.Message = fmt.Sprintf("expected %d stanzas, got %d", expectedCount, stanzaCount)
-		r.Hint = "run `openpass recipients list`"
+		r.Hint = recipientsListHint
 		return r
 	}
 
