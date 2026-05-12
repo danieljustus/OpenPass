@@ -177,10 +177,21 @@ func RunHTTPServerOnListener(ctx context.Context, listener net.Listener, v *vaul
 	mux.HandleFunc("GET /.well-known/oauth-authorization-server", handleOAuthAuthorizationServer(bind, port))
 
 	// OAuth 2.1 + PKCE endpoints (RFC 7591, RFC 6749, RFC 7636)
+	// NOTE: OAuth endpoints use OriginValidation + rate limiting but NOT
+	// BearerAuthMiddleware — clients don't have a token yet at this point.
+	// User consent is required at the authorize step (see handleOAuthAuthorize).
 	oauthStore := newOAuthCodeStore()
-	mux.HandleFunc("POST /oauth/register", handleOAuthRegister)
-	mux.HandleFunc("GET /mcp/oauth/authorize", handleOAuthAuthorize(oauthStore))
-	mux.HandleFunc("POST /mcp/oauth/token", handleOAuthToken(oauthStore, legacyToken))
+	clientStore := newOAuthClientStore()
+
+	oauthRegisterHandler := mcp.OriginValidationMiddleware(addr, handleOAuthRegister(clientStore))
+	mux.HandleFunc("POST /oauth/register", oauthRegisterHandler.ServeHTTP)
+
+	oauthAuthorizeHandler := mcp.OriginValidationMiddleware(addr, handleOAuthAuthorize(oauthStore, clientStore))
+	mux.HandleFunc("GET /mcp/oauth/authorize", oauthAuthorizeHandler.ServeHTTP)
+
+	// Token endpoint uses the scoped token registry instead of the legacy bearer token.
+	oauthTokenHandler := mcp.OriginValidationMiddleware(addr, handleOAuthToken(oauthStore, registry))
+	mux.HandleFunc("POST /mcp/oauth/token", oauthTokenHandler.ServeHTTP)
 
 	const maxRequestBodySize = 1 * 1024 * 1024
 	mcpHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

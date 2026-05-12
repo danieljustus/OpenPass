@@ -7,13 +7,44 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/danieljustus/OpenPass/internal/mcp"
 )
+
+// oauthClientStore persists registered OAuth client applications in memory.
+type oauthClientStore struct {
+	mu      sync.Mutex
+	clients map[string]*registeredClient
+}
+
+type registeredClient struct {
+	ClientID     string    `json:"client_id"`
+	RedirectURIs []string  `json:"redirect_uris"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+func newOAuthClientStore() *oauthClientStore {
+	return &oauthClientStore{clients: make(map[string]*registeredClient)}
+}
+
+func (s *oauthClientStore) put(c *registeredClient) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clients[c.ClientID] = c
+}
+
+func (s *oauthClientStore) get(clientID string) (*registeredClient, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.clients[clientID]
+	return c, ok
+}
 
 type oauthCodeStore struct {
 	mu    sync.Mutex
@@ -26,10 +57,6 @@ type pendingCode struct {
 	codeChallenge   string
 	challengeMethod string
 	expiresAt       time.Time
-}
-
-type oauthRegisterRequest struct {
-	RedirectURIs []string `json:"redirect_uris"`
 }
 
 func newOAuthCodeStore() *oauthCodeStore {
@@ -53,42 +80,63 @@ func (s *oauthCodeStore) take(code string) (*pendingCode, bool) {
 	return p, true
 }
 
+type oauthRegisterRequest struct {
+	RedirectURIs []string `json:"redirect_uris"`
+}
+
 // handleOAuthRegister implements RFC 7591 dynamic client registration.
-// Parses the JSON request body to extract redirect_uris, validates them,
-// and returns a public client identity — no secret is issued.
-func handleOAuthRegister(w http.ResponseWriter, r *http.Request) {
-	if !mcp.IsJSONContentType(r.Header.Get("Content-Type")) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_redirect_uri"})
-		return
-	}
+// It stores the registered client with its allowed redirect URIs and returns
+// a public client identity — no secret is issued.
+func handleOAuthRegister(clientStore *oauthClientStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !mcp.IsJSONContentType(r.Header.Get("Content-Type")) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_client_metadata"})
+			return
+		}
 
-	var req oauthRegisterRequest
-	bodyReader := http.MaxBytesReader(w, r.Body, 1<<20)
-	if err := json.NewDecoder(bodyReader).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_redirect_uri"})
-		return
-	}
+		var req oauthRegisterRequest
+		bodyReader := http.MaxBytesReader(w, r.Body, 1<<20)
+		if err := json.NewDecoder(bodyReader).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_client_metadata"})
+			return
+		}
 
-	if len(req.RedirectURIs) == 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_redirect_uri"})
-		return
-	}
+		if len(req.RedirectURIs) == 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_redirect_uri"})
+			return
+		}
 
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"client_id":                  "openpass-mcp-client",
-		"client_id_issued_at":        time.Now().Unix(),
-		"client_secret_expires_at":   0,
-		"token_endpoint_auth_method": "none",
-		"grant_types":                []string{"authorization_code"},
-		"response_types":             []string{"code"},
-		"redirect_uris":              req.RedirectURIs,
-	})
+		// Generate a unique client_id instead of a hardcoded value.
+		b := make([]byte, 16)
+		if _, err := rand.Read(b); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
+			return
+		}
+		clientID := hex.EncodeToString(b)
+
+		clientStore.put(&registeredClient{
+			ClientID:     clientID,
+			RedirectURIs: req.RedirectURIs,
+			CreatedAt:    time.Now(),
+		})
+
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"client_id":                  clientID,
+			"client_id_issued_at":        time.Now().Unix(),
+			"client_secret_expires_at":   0,
+			"token_endpoint_auth_method": "none",
+			"grant_types":                []string{"authorization_code"},
+			"response_types":             []string{"code"},
+			"redirect_uris":              req.RedirectURIs,
+		})
+	}
 }
 
 // handleOAuthAuthorize handles the authorization code request (RFC 6749 §4.1.1).
-// Since the MCP server is local and the vault is already unlocked, we auto-approve
-// and immediately redirect back with a short-lived authorization code.
-func handleOAuthAuthorize(store *oauthCodeStore) http.HandlerFunc {
+// It validates the client_id and redirect_uri against the registered client,
+// requires explicit user consent via TTY, and only then issues a short-lived
+// authorization code bound to the client_id.
+func handleOAuthAuthorize(store *oauthCodeStore, clientStore *oauthClientStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		redirectURI := q.Get("redirect_uri")
@@ -97,10 +145,10 @@ func handleOAuthAuthorize(store *oauthCodeStore) http.HandlerFunc {
 		challengeMethod := q.Get("code_challenge_method")
 		clientID := q.Get("client_id")
 
-		if q.Get("response_type") != "code" || redirectURI == "" || codeChallenge == "" {
+		if q.Get("response_type") != "code" || redirectURI == "" || codeChallenge == "" || clientID == "" {
 			writeJSON(w, http.StatusBadRequest, map[string]string{
 				"error":             "invalid_request",
-				"error_description": "response_type=code, redirect_uri and code_challenge are required",
+				"error_description": "response_type=code, client_id, redirect_uri and code_challenge are required",
 			})
 			return
 		}
@@ -108,6 +156,40 @@ func handleOAuthAuthorize(store *oauthCodeStore) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{
 				"error":             "invalid_request",
 				"error_description": "only S256 code_challenge_method is supported",
+			})
+			return
+		}
+
+		// Validate client_id against registered clients.
+		client, ok := clientStore.get(clientID)
+		if !ok {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error":             "unauthorized_client",
+				"error_description": "unknown client_id; register via POST /oauth/register first",
+			})
+			return
+		}
+
+		// Validate redirect_uri against the registered allowlist.
+		if !isAllowedRedirectURI(redirectURI, client.RedirectURIs) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error":             "invalid_redirect_uri",
+				"error_description": "redirect_uri does not match registered redirect URIs",
+			})
+			return
+		}
+
+		// Require explicit user consent via TTY prompt.
+		// Without this, any local process can silently mint tokens (see #21).
+		result := mcp.RequestApproval(mcp.ApprovalRequest{
+			Operation: "OAuth Authorization Request",
+			Details:   fmt.Sprintf("Client %q requests vault access\n  Redirect URI: %s", clientID, redirectURI),
+			Timeout:   60 * time.Second,
+		})
+		if !result.Approved {
+			writeJSON(w, http.StatusForbidden, map[string]string{
+				"error":             "access_denied",
+				"error_description": "Authorization denied by user",
 			})
 			return
 		}
@@ -140,9 +222,10 @@ func handleOAuthAuthorize(store *oauthCodeStore) http.HandlerFunc {
 }
 
 // handleOAuthToken implements the authorization code grant (RFC 6749 §4.1.3)
-// with PKCE verification (RFC 7636). On success it returns the vault bearer
-// token so the MCP client can authenticate subsequent requests normally.
-func handleOAuthToken(store *oauthCodeStore, bearerToken string) http.HandlerFunc {
+// with PKCE verification (RFC 7636). On success it mints a fresh scoped MCP
+// token via the TokenRegistry instead of returning the global legacy bearer
+// token. The scoped token has a 24-hour TTL.
+func handleOAuthToken(store *oauthCodeStore, registry *mcp.TokenRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
@@ -150,6 +233,11 @@ func handleOAuthToken(store *oauthCodeStore, bearerToken string) http.HandlerFun
 		}
 		if r.FormValue("grant_type") != "authorization_code" {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unsupported_grant_type"})
+			return
+		}
+
+		if registry == nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
 			return
 		}
 
@@ -163,10 +251,25 @@ func handleOAuthToken(store *oauthCodeStore, bearerToken string) http.HandlerFun
 			return
 		}
 
+		// Mint a fresh scoped token instead of returning the legacy bearer token.
+		// This ensures every OAuth-issued token is independently revocable and
+		// auditable — the global legacy token is never exposed to OAuth clients.
+		label := fmt.Sprintf("oauth-%s", pending.clientID[:8])
+		tok, rawToken, err := registry.Create(label, []string{"*"}, "oauth", 24*time.Hour)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "server_error"})
+			return
+		}
+
+		expiresIn := 0
+		if tok.ExpiresAt != nil {
+			expiresIn = int(time.Until(*tok.ExpiresAt).Seconds())
+		}
+
 		writeJSON(w, http.StatusOK, map[string]any{
-			"access_token": bearerToken,
+			"access_token": rawToken,
 			"token_type":   "Bearer",
-			"expires_in":   0,
+			"expires_in":   expiresIn,
 		})
 	}
 }
@@ -178,4 +281,16 @@ func verifyS256(codeVerifier, codeChallenge string) bool {
 	h := sha256.Sum256([]byte(codeVerifier))
 	computed := base64.RawURLEncoding.EncodeToString(h[:])
 	return subtle.ConstantTimeCompare([]byte(computed), []byte(codeChallenge)) == 1
+}
+
+// isAllowedRedirectURI checks whether redirectURI exactly matches one of the
+// allowed URIs (trailing-slash normalization applied).
+func isAllowedRedirectURI(redirectURI string, allowedURIs []string) bool {
+	normalized := strings.TrimSuffix(redirectURI, "/")
+	for _, allowed := range allowedURIs {
+		if strings.TrimSuffix(allowed, "/") == normalized {
+			return true
+		}
+	}
+	return false
 }
