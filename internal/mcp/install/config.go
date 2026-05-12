@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -91,6 +92,125 @@ func (y YAMLConfigRW) Write(path string, data map[string]any) error {
 	return nil
 }
 
+// TOMLConfigRW reads and writes TOML config files using a simple line-based
+// parser that handles the section structure needed for MCP server configuration
+// (e.g. [mcp_servers.openpass]).
+type TOMLConfigRW struct{}
+
+// Read reads a TOML config file. Only top-level string key-value pairs and
+// section blocks are parsed; inline tables and arrays are returned as raw strings.
+func (t TOMLConfigRW) Read(path string) (map[string]any, error) {
+	data, err := os.ReadFile(path) // #nosec G304
+	if err != nil {
+		if os.IsNotExist(err) {
+			return make(map[string]any), nil
+		}
+		return nil, fmt.Errorf("read TOML config %q: %w", path, err)
+	}
+	return parseTOML(string(data)), nil
+}
+
+// Write writes data to a TOML config file with 0o600 permissions.
+// The data map is expected to contain nested maps representing sections.
+func (t TOMLConfigRW) Write(path string, data map[string]any) error {
+	out := renderTOML(data, 0)
+	if err := os.WriteFile(path, []byte(out), 0o600); err != nil {
+		return fmt.Errorf("write TOML config %q: %w", path, err)
+	}
+	return nil
+}
+
+// parseTOML parses a TOML string into a nested map. It handles top-level keys
+// and [section] / [section.subsection] headers.
+func parseTOML(input string) map[string]any {
+	result := make(map[string]any)
+	current := result
+	var sectionPath []string
+
+	for _, line := range strings.Split(input, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		// Section header: [section] or [section.sub]
+		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			sectionPath = strings.Split(trimmed[1:len(trimmed)-1], ".")
+			current = result
+			for _, part := range sectionPath {
+				part = strings.TrimSpace(part)
+				if m, ok := current[part].(map[string]any); ok {
+					current = m
+				} else {
+					m := make(map[string]any)
+					current[part] = m
+					current = m
+				}
+			}
+			continue
+		}
+
+		// Key = value
+		if idx := strings.Index(trimmed, "="); idx > 0 {
+			key := strings.TrimSpace(trimmed[:idx])
+			value := strings.TrimSpace(trimmed[idx+1:])
+			current[key] = parseTOMLValue(value)
+		}
+	}
+
+	return result
+}
+
+// parseTOMLValue parses a TOML value string into a Go value.
+func parseTOMLValue(value string) any {
+	if value == "" {
+		return ""
+	}
+	switch {
+	case value == "true":
+		return true
+	case value == "false":
+		return false
+	case strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`):
+		return value[1 : len(value)-1]
+	case strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'"):
+		return value[1 : len(value)-1]
+	case strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]"):
+		// Inline array - return as raw string for simplicity
+		return value
+	default:
+		// Try number
+		return value
+	}
+}
+
+// renderTOML renders a nested Go map as TOML. depth controls indentation (0 for top-level).
+func renderTOML(data map[string]any, depth int) string {
+	var sb strings.Builder
+	prefix := strings.Repeat("  ", depth)
+
+	for k, v := range data {
+		switch val := v.(type) {
+		case map[string]any:
+			if depth == 0 {
+				sb.WriteString(fmt.Sprintf("\n[%s]\n", k))
+			} else {
+				sb.WriteString(fmt.Sprintf("%s[%s]\n", prefix, k))
+			}
+			sb.WriteString(renderTOML(val, depth+1))
+		case string:
+			sb.WriteString(fmt.Sprintf("%s%s = %q\n", prefix, k, val))
+		case bool:
+			sb.WriteString(fmt.Sprintf("%s%s = %v\n", prefix, k, val))
+		case int, int64, float64:
+			sb.WriteString(fmt.Sprintf("%s%s = %v\n", prefix, k, val))
+		default:
+			sb.WriteString(fmt.Sprintf("%s%s = %q\n", prefix, k, fmt.Sprintf("%v", val)))
+		}
+	}
+	return sb.String()
+}
+
 // GetReaderWriter returns the appropriate reader/writer for the given format.
 func GetReaderWriter(format ConfigFormat) (ConfigReaderWriter, error) {
 	switch format {
@@ -98,6 +218,8 @@ func GetReaderWriter(format ConfigFormat) (ConfigReaderWriter, error) {
 		return JSONConfigRW{}, nil
 	case FormatYAML:
 		return YAMLConfigRW{}, nil
+	case FormatTOML:
+		return TOMLConfigRW{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported config format %q", format)
 	}

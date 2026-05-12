@@ -20,6 +20,8 @@ Supported agents:
   - openclaw    (OpenClaw)
   - claude-code (Claude Code)
   - hermes      (Hermes)
+  - codex       (OpenAI Codex CLI)
+  - opencode    (OpenCode)
 
 The command detects if the agent is installed, finds its MCP config file,
 and injects the OpenPass server configuration. When using HTTP mode, a

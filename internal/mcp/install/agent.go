@@ -16,6 +16,8 @@ const (
 	AgentOpenClaw   AgentType = "openclaw"
 	AgentClaudeCode AgentType = "claude-code"
 	AgentHermes     AgentType = "hermes"
+	AgentCodex      AgentType = "codex"
+	AgentOpenCode   AgentType = "opencode"
 )
 
 // ConfigFormat determines the serialization format for an agent's config file.
@@ -24,6 +26,7 @@ type ConfigFormat string
 const (
 	FormatJSON ConfigFormat = "json"
 	FormatYAML ConfigFormat = "yaml"
+	FormatTOML ConfigFormat = "toml"
 )
 
 // AgentDefinition holds metadata for a supported agent.
@@ -61,9 +64,8 @@ var (
 			Type:        AgentClaudeCode,
 			DisplayName: "Claude Code",
 			ConfigPaths: []string{
-				"~/.config/claude-code/settings.json",
-				"~/.claude-code/settings.json",
-				"~/Library/Application Support/Claude/claude_desktop_config.json",
+				"~/.claude/settings.json",
+				"~/.claude/settings.local.json",
 			},
 			BinaryNames: []string{"claude", "claude-code"},
 			Format:      FormatJSON,
@@ -82,6 +84,29 @@ var (
 			BinaryNames: []string{"hermes"},
 			Format:      FormatYAML,
 			RootKey:     "mcp_servers",
+			ServerKey:   "openpass",
+		},
+		AgentCodex: {
+			Type:        AgentCodex,
+			DisplayName: "Codex",
+			ConfigPaths: []string{
+				"~/.codex/config.toml",
+			},
+			BinaryNames: []string{"codex"},
+			Format:      FormatTOML,
+			RootKey:     "mcp_servers",
+			ServerKey:   "openpass",
+		},
+		AgentOpenCode: {
+			Type:        AgentOpenCode,
+			DisplayName: "OpenCode",
+			ConfigPaths: []string{
+				"~/.config/opencode/opencode.json",
+				"opencode.json",
+			},
+			BinaryNames: []string{"opencode"},
+			Format:      FormatJSON,
+			RootKey:     "mcpServers",
 			ServerKey:   "openpass",
 		},
 	}
@@ -113,7 +138,7 @@ func SupportedAgents() []AgentType {
 func GetAgentDefinition(agentType AgentType) (AgentDefinition, error) {
 	def, ok := agentDefs[agentType]
 	if !ok {
-		return AgentDefinition{}, fmt.Errorf("unsupported agent %q (valid: openclaw, claude-code, hermes)", agentType)
+		return AgentDefinition{}, fmt.Errorf("unsupported agent %q (valid: openclaw, claude-code, hermes, codex, opencode)", agentType)
 	}
 	return def, nil
 }
@@ -146,6 +171,10 @@ func normalizeAgentName(name string) string {
 		return string(AgentOpenClaw)
 	case "hermes":
 		return string(AgentHermes)
+	case "codex":
+		return string(AgentCodex)
+	case "opencode":
+		return string(AgentOpenCode)
 	default:
 		return lower
 	}
