@@ -223,10 +223,12 @@ func checkVaultPermissions(vaultDir string, _ Options) Result {
 	}
 	r.Fixable = true
 	r.Fix = func() error {
-		if err := os.Chmod(filepath.Join(vaultDir, "entries"), 0o700); err != nil { //#nosec G302 -- directory needs execute bit
+		// #nosec G302 -- directory needs execute bit
+		if err := os.Chmod(filepath.Join(vaultDir, "entries"), 0o700); err != nil {
 			return fmt.Errorf("chmod entries: %w", err)
 		}
-		if err := os.Chmod(filepath.Join(vaultDir, "identity.age"), 0o600); err != nil { //#nosec G302 -- identity file intentionally restricted
+		// #nosec G302 -- identity file intentionally restricted
+		if err := os.Chmod(filepath.Join(vaultDir, "identity.age"), 0o600); err != nil {
 			return fmt.Errorf("chmod identity.age: %w", err)
 		}
 		return nil
@@ -347,7 +349,8 @@ func checkGitignoreProtects(vaultDir string, _ Options) Result {
 	r.Fix = func() error {
 		gitignorePath := filepath.Join(vaultDir, ".gitignore")
 		var existing []string
-		if data, err := os.ReadFile(gitignorePath); err == nil { //#nosec G304 -- vaultDir is controlled
+		// #nosec G304 -- vaultDir is controlled
+		if data, err := os.ReadFile(gitignorePath); err == nil {
 			existing = strings.Split(strings.TrimSpace(string(data)), "\n")
 		}
 		required := []string{"identity.age", "mcp-token", "mcp-tokens.json"}

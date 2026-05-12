@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -32,6 +33,9 @@ var testScryptWorkFactor atomic.Int32
 // is passed to scrypt-based functions.
 func SetTestScryptWorkFactor(wf int) (restore func()) {
 	prev := testScryptWorkFactor.Load()
+	if wf > math.MaxInt32 || wf < 0 {
+		panic(fmt.Sprintf("scrypt work factor %d overflows int32", wf))
+	}
 	testScryptWorkFactor.Store(int32(wf))
 	return func() { testScryptWorkFactor.Store(prev) }
 }
