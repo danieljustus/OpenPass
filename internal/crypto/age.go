@@ -154,10 +154,7 @@ func EncryptWithPassphrase(plaintext []byte, passphrase []byte, workFactor int) 
 	if err != nil {
 		return nil, fmt.Errorf("create scrypt recipient: %w", err)
 	}
-	if workFactor <= 0 {
-		workFactor = DefaultScryptWorkFactor
-	}
-	recipient.SetWorkFactor(workFactor)
+	recipient.SetWorkFactor(resolveWorkFactor(workFactor))
 
 	var buf bytes.Buffer
 	w, err := age.Encrypt(&buf, recipient)

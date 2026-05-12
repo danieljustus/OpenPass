@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/pflag"
 
 	clipboardapp "github.com/danieljustus/OpenPass/internal/clipboard"
+	vaultcrypto "github.com/danieljustus/OpenPass/internal/crypto"
 	"github.com/danieljustus/OpenPass/internal/mcp"
 	"github.com/danieljustus/OpenPass/internal/mcp/serverbootstrap"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
@@ -21,7 +22,9 @@ import (
 
 func TestMain(m *testing.M) {
 	_ = os.Unsetenv("OPENPASS_MCP_TOKEN")
+	restoreScryptWorkFactor := vaultcrypto.SetTestScryptWorkFactor(12)
 	code := m.Run()
+	restoreScryptWorkFactor()
 	os.Exit(code)
 }
 

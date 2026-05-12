@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"filippo.io/age"
@@ -20,6 +21,32 @@ import (
 // DefaultScryptWorkFactor is the default scrypt work factor used when no explicit
 // value is provided. Higher values increase KDF cost exponentially (N = 1<<workFactor).
 const DefaultScryptWorkFactor = 18
+
+// testScryptWorkFactor is an atomic override for tests. When non-zero, it is used
+// as the default work factor instead of DefaultScryptWorkFactor. This avoids the
+// test slowdown from full-cost scrypt KDF while keeping production paths unaffected.
+var testScryptWorkFactor atomic.Int32
+
+// SetTestScryptWorkFactor sets the scrypt work factor for tests. Returns a restore
+// function that resets to the previous value. Only effective when workFactor <= 0
+// is passed to scrypt-based functions.
+func SetTestScryptWorkFactor(wf int) (restore func()) {
+	prev := testScryptWorkFactor.Load()
+	testScryptWorkFactor.Store(int32(wf))
+	return func() { testScryptWorkFactor.Store(prev) }
+}
+
+// resolveWorkFactor returns the effective work factor: if wf > 0 it is used directly;
+// otherwise the test override is checked, falling back to DefaultScryptWorkFactor.
+func resolveWorkFactor(wf int) int {
+	if wf > 0 {
+		return wf
+	}
+	if twf := int(testScryptWorkFactor.Load()); twf > 0 {
+		return twf
+	}
+	return DefaultScryptWorkFactor
+}
 
 // BenchmarkScryptWorkFactor measures scrypt KDF timing on the current hardware
 // by trying progressively higher work factors until the key derivation exceeds
@@ -98,10 +125,7 @@ func SaveIdentity(id *age.X25519Identity, path string, passphrase []byte, workFa
 	if err != nil {
 		return fmt.Errorf("create scrypt recipient: %w", err)
 	}
-	if workFactor <= 0 {
-		workFactor = DefaultScryptWorkFactor
-	}
-	recipient.SetWorkFactor(workFactor)
+	recipient.SetWorkFactor(resolveWorkFactor(workFactor))
 
 	var buf bytes.Buffer
 	w, err := age.Encrypt(&buf, recipient)
