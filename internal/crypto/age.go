@@ -149,7 +149,9 @@ func EncryptWithPassphrase(plaintext []byte, passphrase []byte, workFactor int) 
 		return nil, errors.New("passphrase is empty")
 	}
 
-	recipient, err := age.NewScryptRecipient(string(passphrase))
+	// Use unsafe.String to alias the byte slice without a heap copy.
+	// This way Wipe(passphrase) actually clears the only copy of the secret.
+	recipient, err := age.NewScryptRecipient(unsafe.String(unsafe.SliceData(passphrase), len(passphrase)))
 	Wipe(passphrase)
 	if err != nil {
 		return nil, fmt.Errorf("create scrypt recipient: %w", err)
@@ -184,7 +186,7 @@ func DecryptWithPassphrase(ciphertext []byte, passphrase []byte) ([]byte, error)
 		return nil, errors.New("passphrase is empty")
 	}
 
-	identity, err := age.NewScryptIdentity(string(passphrase))
+	identity, err := age.NewScryptIdentity(unsafe.String(unsafe.SliceData(passphrase), len(passphrase)))
 	Wipe(passphrase)
 	if err != nil {
 		return nil, fmt.Errorf("create scrypt identity: %w", err)

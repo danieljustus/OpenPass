@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"filippo.io/age"
 	"golang.org/x/crypto/scrypt"
@@ -124,7 +125,7 @@ func SaveIdentity(id *age.X25519Identity, path string, passphrase []byte, workFa
 		return err
 	}
 
-	recipient, err := age.NewScryptRecipient(string(passphrase))
+	recipient, err := age.NewScryptRecipient(unsafe.String(unsafe.SliceData(passphrase), len(passphrase)))
 	Wipe(passphrase)
 	if err != nil {
 		return fmt.Errorf("create scrypt recipient: %w", err)
@@ -168,7 +169,7 @@ func LoadIdentity(path string, passphrase []byte) (*age.X25519Identity, error) {
 		return nil, fmt.Errorf("read file: %w", err)
 	}
 
-	identity, err := age.NewScryptIdentity(string(passphrase))
+	identity, err := age.NewScryptIdentity(unsafe.String(unsafe.SliceData(passphrase), len(passphrase)))
 	Wipe(passphrase)
 	if err != nil {
 		return nil, fmt.Errorf("create scrypt identity: %w", err)
