@@ -36,7 +36,10 @@ func (s *RecipientsStep) Init() tea.Cmd { return textarea.Blink }
 func (s *RecipientsStep) Update(msg tea.Msg) (Step, tea.Cmd) {
 	if km, ok := msg.(tea.KeyMsg); ok {
 		switch km.String() {
-		case "ctrl+s":
+		case "ctrl+s", keyEnter:
+			if km.String() == keyEnter && !s.inputEmptyOrBlank() {
+				break // let textarea handle Enter for newline
+			}
 			if len(s.lineErrors) > 0 {
 				s.err = "fix invalid recipients before saving"
 				return s, nil
@@ -58,6 +61,11 @@ func (s *RecipientsStep) Update(msg tea.Msg) (Step, tea.Cmd) {
 	s.err = ""
 	s.validateLive()
 	return s, cmd
+}
+
+func (s *RecipientsStep) inputEmptyOrBlank() bool {
+	val := strings.TrimSpace(s.input.Value())
+	return val == ""
 }
 
 func (s *RecipientsStep) validateLive() {
@@ -95,7 +103,7 @@ func (s *RecipientsStep) View() string {
 	if s.err == "" && len(s.lineErrors) == 0 {
 		lines = append(lines,
 			"",
-			helpStyle.Render("Ctrl+S to save · Esc to skip"),
+			helpStyle.Render("Enter (empty line) or Ctrl+S to save · Esc to skip"),
 		)
 	}
 	return strings.Join(lines, "\n")

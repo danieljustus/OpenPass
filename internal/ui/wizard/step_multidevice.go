@@ -8,11 +8,11 @@ import (
 
 // MultiDeviceStep is a hint-only step (no side-effects).
 type MultiDeviceStep struct {
-	selected int // 0=yes, 1=no
+	selected int // 0=yes, 1=no (default)
 	done     bool
 }
 
-func NewMultiDeviceStep() *MultiDeviceStep { return &MultiDeviceStep{} }
+func NewMultiDeviceStep() *MultiDeviceStep { return &MultiDeviceStep{selected: 1} }
 
 func (s *MultiDeviceStep) Title() string { return "Multi-Device" }
 func (s *MultiDeviceStep) ShouldShow(st WizardState) bool {

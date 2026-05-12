@@ -14,11 +14,12 @@ const minPassphraseLen = 12
 
 // PassphraseStep collects and confirms the vault passphrase.
 type PassphraseStep struct {
-	pass    textinput.Model
-	confirm textinput.Model
-	focused int // 0=pass, 1=confirm
-	err     string
-	done    bool
+	pass          textinput.Model
+	confirm       textinput.Model
+	focused       int // 0=pass, 1=confirm
+	err           string
+	done          bool
+	generatedHint bool
 }
 
 func NewPassphraseStep() *PassphraseStep {
@@ -51,19 +52,23 @@ func (s *PassphraseStep) Update(msg tea.Msg) (Step, tea.Cmd) {
 			}
 			s.pass.SetValue(phrase)
 			s.confirm.SetValue(phrase)
-			s.pass.Focus()
-			s.focused = 0
+			s.focused = 1
+			s.focusActive()
 			s.err = ""
+			s.generatedHint = true
 			return s, nil
 		case "tab", "down":
 			s.focused = (s.focused + 1) % 2
 			s.focusActive()
+			s.generatedHint = false
 			return s, nil
 		case "shift+tab", "up":
 			s.focused = (s.focused + 1) % 2
 			s.focusActive()
+			s.generatedHint = false
 			return s, nil
 		case keyEnter:
+			s.generatedHint = false
 			if s.focused == 0 {
 				// Move to confirm field.
 				s.focused = 1
@@ -104,6 +109,8 @@ func (s *PassphraseStep) View() string {
 	}
 	if s.err != "" {
 		lines = append(lines, "", errorStyle.Render("✗ "+s.err))
+	} else if s.generatedHint {
+		lines = append(lines, "", successStyle.Render("Generated — press Enter twice to confirm"))
 	} else {
 		lines = append(lines, "", helpStyle.Render("Tab to switch fields · Enter to confirm · G to generate"))
 	}

@@ -110,12 +110,8 @@ func TestPassphraseStep_DicewareGeneration(t *testing.T) {
 		t.Fatal("View() returned empty string after generation")
 	}
 
-	expectedHelp := "Tab to switch fields · Enter to confirm · G to generate"
-	if !strings.Contains(view, expectedHelp) {
-		t.Errorf("View() should contain help text %q, got:\n%s", expectedHelp, view)
-	}
-
-	if !strings.Contains(view, "G to generate") {
-		t.Errorf("View() should contain 'G to generate', got:\n%s", view)
+	expectedHint := "Generated — press Enter twice to confirm"
+	if !strings.Contains(view, expectedHint) {
+		t.Errorf("View() should contain hint %q, got:\n%s", expectedHint, view)
 	}
 }

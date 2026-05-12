@@ -2,6 +2,8 @@ package wizard
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -71,7 +73,33 @@ func (s *VaultPathStep) validate() error {
 	if pathutil.HasTraversal(v) {
 		return fmt.Errorf("invalid path (traversal detected)")
 	}
-	// Non-empty directory without config.yaml is suspicious but not an error.
-	// The vault init will handle it.
+	if !filepath.IsAbs(v) {
+		abs, err := filepath.Abs(v)
+		if err != nil {
+			return fmt.Errorf("cannot resolve path: %w", err)
+		}
+		v = abs
+	}
+	dir := v
+	if fi, err := os.Stat(dir); err == nil && !fi.IsDir() {
+		dir = filepath.Dir(dir)
+	}
+	if err := ensureWritable(dir); err != nil {
+		return fmt.Errorf("path not writable: %w", err)
+	}
+	return nil
+}
+
+func ensureWritable(dir string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(dir, ".openpass-write-test-*")
+	if err != nil {
+		return err
+	}
+	name := f.Name()
+	f.Close()
+	os.Remove(name)
 	return nil
 }

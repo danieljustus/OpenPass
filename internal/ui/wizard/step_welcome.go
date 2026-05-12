@@ -2,6 +2,7 @@ package wizard
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -19,6 +20,7 @@ type WelcomeStep struct {
 	resumeStep   string
 	resumeTarget string
 	resumeState  *WizardState
+	resumeAge    time.Duration
 }
 
 func NewWelcomeStep(vaultDir string, noResume bool) *WelcomeStep {
@@ -45,10 +47,24 @@ func (s *WelcomeStep) checkResume() {
 	s.resumeFound = true
 	s.resumeStep = lastStep
 	s.resumeState = state
+	s.resumeAge = age
 	if state.ExistingVault {
 		s.resumeTarget = lastStep
 	} else {
 		s.resumeTarget = "Passphrase"
+	}
+}
+
+func formatAge(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%d min", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%d hr", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%d days", int(d.Hours()/24))
 	}
 }
 
@@ -85,14 +101,15 @@ func (s *WelcomeStep) Update(msg tea.Msg) (Step, tea.Cmd) {
 
 func (s *WelcomeStep) View() string {
 	if s.resumeFound {
+		ageStr := formatAge(s.resumeAge)
 		body := fmt.Sprintf(
 			"%s\n\n%s\n\n%s",
 			titleStyle.Render("Resume Previous Setup"),
-			fmt.Sprintf("A partially completed setup was found (step: %s).", focusedStyle.Render(s.resumeStep)),
+			fmt.Sprintf("A partially completed setup was found (%s ago, step: %s).", dimStyle.Render(ageStr), focusedStyle.Render(s.resumeStep)),
 			fmt.Sprintf("Resume from %s?  %s  %s",
 				focusedStyle.Render(s.resumeStep),
 				focusedStyle.Render("[y]es"),
-				helpStyle.Render("[N]o — start fresh"),
+				helpStyle.Render("[N]o — start fresh (deletes saved progress)"),
 			),
 		)
 		if !s.resumeState.ExistingVault {

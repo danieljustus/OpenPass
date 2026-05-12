@@ -3,7 +3,6 @@ package wizard
 import (
 	"bytes"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -84,7 +83,7 @@ func TestStatePersist_SaveExcludesPassphrase(t *testing.T) {
 		t.Fatalf("SaveResumeState() error = %v", err)
 	}
 
-	raw, err := os.ReadFile(filepath.Join(vaultDir, resumeFileName))
+	raw, err := os.ReadFile(resumeFilePath(vaultDir))
 	if err != nil {
 		t.Fatalf("os.ReadFile() error = %v", err)
 	}

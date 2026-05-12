@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -18,21 +19,34 @@ type resumeMsg struct {
 	stepTitle string
 }
 
+type applyProgressMsg struct {
+	step int
+}
+
+type applyDoneMsg struct {
+	err error
+}
+
 func stepDoneCmd() tea.Cmd {
 	return func() tea.Msg { return stepDone{} }
 }
 
 // WizardModel is the top-level Bubbletea model for the setup wizard.
 type WizardModel struct {
-	steps    []Step
-	current  int
-	state    WizardState
-	width    int
-	height   int
-	quitting bool
-	canceled bool
-	applyErr error
-	noResume bool
+	steps       []Step
+	current     int
+	state       WizardState
+	width       int
+	height      int
+	quitting    bool
+	canceled    bool
+	applyErr    error
+	noResume    bool
+	totalSteps  int
+	applying    bool
+	applyStep   string
+	applyErrs   []string
+	spinner     spinner.Model
 }
 
 // NewWizardModel constructs the model with all steps for a given vault dir.
@@ -59,13 +73,25 @@ func NewWizardModel(vaultDir string, keepOnError bool, noResume bool) *WizardMod
 		NewBackupStep(),
 		NewProfileStep(),
 		NewSummaryStep(&state),
-		// NextStepsStep is added dynamically after successful Apply.
+	}
+
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
+
+	total := 0
+	for _, s := range steps {
+		if s.ShouldShow(state) {
+			total++
+		}
 	}
 
 	return &WizardModel{
-		steps:    steps,
-		state:    state,
-		noResume: noResume,
+		steps:      steps,
+		state:      state,
+		noResume:   noResume,
+		totalSteps: total,
+		spinner:    sp,
 	}
 }
 
@@ -89,9 +115,9 @@ func Run(vaultDir string, keepOnError bool, noResume bool) error {
 
 func (m WizardModel) Init() tea.Cmd {
 	if len(m.steps) > 0 {
-		return m.steps[0].Init()
+		return tea.Batch(m.steps[0].Init(), m.spinner.Tick)
 	}
-	return nil
+	return m.spinner.Tick
 }
 
 func (m WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -104,13 +130,18 @@ func (m WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":
+			if m.applying {
+				return m, nil
+			}
 			m.canceled = true
 			m.quitting = true
 			return m, tea.Quit
 		}
 
 	case stepDone:
-		return m.handleStepDone()
+		if !m.applying {
+			return m.handleStepDone()
+		}
 
 	case resumeMsg:
 		m.state = msg.state
@@ -122,9 +153,25 @@ func (m WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m.handleStepDone()
+
+	case applyProgressMsg:
+		return m.handleApplyProgress(msg.step)
+
+	case applyDoneMsg:
+		return m.handleApplyDone(msg.err)
+
+	case spinner.TickMsg:
+		if m.applying {
+			var cmd tea.Cmd
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
+		}
 	}
 
-	// Delegate to current step.
+	if m.applying {
+		return m, nil
+	}
+
 	if m.current < len(m.steps) {
 		updated, cmd := m.steps[m.current].Update(msg)
 		m.steps[m.current] = updated
@@ -177,17 +224,10 @@ func (m WizardModel) handleStepDone() (tea.Model, tea.Cmd) {
 func (m WizardModel) handleSummaryStep(s *SummaryStep) (tea.Model, tea.Cmd) {
 	switch s.Decision() {
 	case 0: // Apply
-		// Update the summary step's state pointer (already set, but refresh).
-		err := Apply(&m.state)
-		m.applyErr = err
-		// If multi-device with git sync, insert the pairing QR step.
-		if m.state.MultiDevice && m.state.SyncMode == syncGit {
-			m.steps = append(m.steps, NewPairingQRStep(&m.state))
-		}
-		// Append the next-steps screen.
-		m.steps = append(m.steps, NewNextStepsStep(&m.state))
+		m.applying = true
+		m.applyStep = "Validating..."
+		return m, tea.Batch(m.spinner.Tick, func() tea.Msg { return applyProgressMsg{step: 0} })
 	case 1: // Back
-		// Go back two steps (skip current summary).
 		if m.current > 0 {
 			m.current--
 			m.advanceToPrevVisible()
@@ -197,6 +237,95 @@ func (m WizardModel) handleSummaryStep(s *SummaryStep) (tea.Model, tea.Cmd) {
 		m.canceled = true
 		return m, tea.Quit
 	}
+	return m.advanceToNextVisible()
+}
+
+var applySteps = []struct {
+	label string
+	fn    func(*WizardState, *[]string) error
+}{
+	{"Initializing vault...", func(s *WizardState, e *[]string) error {
+		return preFlightCheck(s)
+	}},
+	{"Initializing vault...", func(s *WizardState, e *[]string) error {
+		if s.ExistingVault {
+			return nil
+		}
+		return applyVaultInit(s, e)
+	}},
+	{"Configuring git...", func(s *WizardState, e *[]string) error {
+		applyGit(s, e)
+		return nil
+	}},
+	{"Adding recipients...", func(s *WizardState, e *[]string) error {
+		applyRecipients(s, e)
+		return nil
+	}},
+	{"Saving profile...", func(s *WizardState, e *[]string) error {
+		applyProfile(s, e)
+		return nil
+	}},
+	{"Installing MCP agents...", func(s *WizardState, e *[]string) error {
+		applyAgents(s, e)
+		return nil
+	}},
+}
+
+func (m WizardModel) handleApplyProgress(step int) (tea.Model, tea.Cmd) {
+	if step >= len(applySteps) {
+		return m.handleApplyFinalize()
+	}
+
+	s := applySteps[step]
+	m.applyStep = s.label
+
+	err := s.fn(&m.state, &m.applyErrs)
+
+	// Pre-flight failure is fatal.
+	if step == 0 && err != nil {
+		m.applying = false
+		m.applyErr = err
+		return m, nil
+	}
+
+	// Wipe passphrase after vault init (step 1).
+	if step == 1 {
+		for i := range m.state.Passphrase {
+			m.state.Passphrase[i] = 0
+		}
+		m.state.Passphrase = nil
+	}
+
+	return m, tea.Batch(m.spinner.Tick, func() tea.Msg {
+		return applyProgressMsg{step: step + 1}
+	})
+}
+
+func (m WizardModel) handleApplyFinalize() (tea.Model, tea.Cmd) {
+	m.state.ApplyErrors = m.applyErrs
+
+	if len(m.applyErrs) > 0 && !m.state.KeepOnError && !m.state.ExistingVault {
+		rollbackInit(&m.state)
+	}
+
+	if len(m.applyErrs) > 0 {
+		m.applyErr = fmt.Errorf("apply completed with errors — run `openpass doctor` for details")
+	}
+
+	_ = DeleteResumeFile(m.state.VaultDir)
+
+	if m.state.MultiDevice && m.state.SyncMode == syncGit {
+		m.steps = append(m.steps, NewPairingQRStep(&m.state))
+	}
+	m.steps = append(m.steps, NewNextStepsStep(&m.state))
+
+	m.applying = false
+	return m.advanceToNextVisible()
+}
+
+func (m WizardModel) handleApplyDone(err error) (tea.Model, tea.Cmd) {
+	m.applying = false
+	m.applyErr = err
 	return m.advanceToNextVisible()
 }
 
@@ -230,20 +359,24 @@ func (m WizardModel) View() string {
 		return ""
 	}
 
-	step := m.steps[m.current]
-	visible := m.visibleSteps()
-	pos := m.visiblePos()
-
 	headerStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("240"))
 
-	header := headerStyle.Render(fmt.Sprintf("OpenPass Setup  Step %d/%d — %s", pos+1, len(visible), step.Title()))
-	content := step.View()
+	sep := strings.Repeat("─", max(m.width, 40))
 	footer := helpStyle.Render("Esc to quit")
 
-	// Determine separator.
-	sep := strings.Repeat("─", max(m.width, 40))
+	if m.applying {
+		header := headerStyle.Render(fmt.Sprintf("OpenPass Setup  Step %d/%d — %s", m.totalSteps, m.totalSteps, m.applyStep))
+		content := "  " + m.spinner.View() + " " + m.applyStep
+		return strings.Join([]string{header, sep, "", content, "", sep, footer}, "\n")
+	}
+
+	step := m.steps[m.current]
+	pos := m.visiblePos()
+
+	header := headerStyle.Render(fmt.Sprintf("OpenPass Setup  Step %d/%d — %s", pos+1, m.totalSteps, step.Title()))
+	content := step.View()
 
 	return strings.Join([]string{header, sep, "", content, "", sep, footer}, "\n")
 }

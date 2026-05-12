@@ -1,6 +1,7 @@
 package wizard
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,7 +32,16 @@ type resumeState struct {
 }
 
 func resumeFilePath(vaultDir string) string {
+	if dir, err := os.UserCacheDir(); err == nil {
+		hash := sha256.Sum256([]byte(vaultDir))
+		suffix := fmt.Sprintf("%x", hash[:8])
+		return filepath.Join(dir, "openpass", "wizard", suffix+".yaml")
+	}
 	return filepath.Join(vaultDir, resumeFileName)
+}
+
+func ensureResumeDir(path string) error {
+	return os.MkdirAll(filepath.Dir(path), 0o700)
 }
 
 func SaveResumeState(vaultDir string, state *WizardState, lastStep string) error {
@@ -56,11 +66,17 @@ func SaveResumeState(vaultDir string, state *WizardState, lastStep string) error
 		return fmt.Errorf("marshal resume state: %w", err)
 	}
 
-	return fileutil.AtomicWriteFile(resumeFilePath(vaultDir), data, 0o600)
+	path := resumeFilePath(vaultDir)
+	if err := ensureResumeDir(path); err != nil {
+		return fmt.Errorf("create resume dir: %w", err)
+	}
+
+	return fileutil.AtomicWriteFile(path, data, 0o600)
 }
 
 func LoadResumeState(vaultDir string) (*WizardState, string, error) {
-	data, err := os.ReadFile(resumeFilePath(vaultDir))
+	path := resumeFilePath(vaultDir)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, "", fmt.Errorf("read resume state: %w", err)
 	}
@@ -97,9 +113,52 @@ func ResumeFileAge(vaultDir string) (time.Duration, error) {
 }
 
 func DeleteResumeFile(vaultDir string) error {
-	err := os.Remove(resumeFilePath(vaultDir))
+	path := resumeFilePath(vaultDir)
+	err := os.Remove(path)
 	if os.IsNotExist(err) {
 		return nil
 	}
 	return err
+}
+
+func resumeFileExists(vaultDir string) bool {
+	_, err := os.Stat(resumeFilePath(vaultDir))
+	return !os.IsNotExist(err)
+}
+
+func legacyResumePath(vaultDir string) string {
+	return filepath.Join(vaultDir, resumeFileName)
+}
+
+func MigrateLegacyResumeFile(vaultDir string) {
+	legacy := legacyResumePath(vaultDir)
+	current := resumeFilePath(vaultDir)
+	if legacy == current {
+		return
+	}
+	if _, err := os.Stat(legacy); os.IsNotExist(err) {
+		return
+	}
+	if resumeFileExists(vaultDir) {
+		os.Remove(legacy)
+		return
+	}
+	if err := ensureResumeDir(current); err != nil {
+		return
+	}
+	data, err := os.ReadFile(legacy)
+	if err != nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(current), 0o700); err != nil {
+		return
+	}
+	if err := fileutil.AtomicWriteFile(current, data, 0o600); err != nil {
+		return
+	}
+	os.Remove(legacy)
+}
+
+func resumeFilePathForTest(vaultDir string) string {
+	return filepath.Join(vaultDir, resumeFileName)
 }

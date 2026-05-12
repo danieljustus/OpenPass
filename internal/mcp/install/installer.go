@@ -138,6 +138,8 @@ func PreviewConfig(data map[string]any, format ConfigFormat) (string, error) {
 			return "", err
 		}
 		return string(out), nil
+	case FormatTOML:
+		return renderTOML(data, 0), nil
 	default:
 		return "", fmt.Errorf("unsupported format %q", format)
 	}

@@ -89,17 +89,29 @@ func (s *SummaryStep) View() string {
 	lines = append(lines, row("Profile", st.ProfileName))
 	lines = append(lines, "")
 
-	opts := []string{
-		focusedStyle.Render("Apply"),
-		"Go back",
-		errorStyle.Render("Cancel"),
-	}
+	opts := []string{"Apply", "Go back", "Cancel"}
 	for i, opt := range opts {
 		cursor := "  "
+		var styled string
 		if i == s.choice {
 			cursor = "▸ "
+			switch i {
+			case 0:
+				styled = focusedStyle.Render(opt)
+			case 2:
+				styled = errorStyle.Render(opt)
+			default:
+				styled = focusedStyle.Render(opt)
+			}
+		} else {
+			switch i {
+			case 2:
+				styled = errorStyle.Render(opt)
+			default:
+				styled = opt
+			}
 		}
-		lines = append(lines, cursor+opt)
+		lines = append(lines, cursor+styled)
 	}
 	lines = append(lines, "", helpStyle.Render("↑/↓ select · Enter to confirm"))
 	return strings.Join(lines, "\n")
