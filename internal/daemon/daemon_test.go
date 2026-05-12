@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"encoding/xml"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -59,6 +60,9 @@ func TestValidateInstallOptions_MaliciousBind(t *testing.T) {
 }
 
 func TestValidateInstallOptions_ValidValues(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on Windows: uses Unix-style absolute paths")
+	}
 	opts := InstallOpts{
 		BinaryPath: "/usr/local/bin/openpass",
 		VaultDir:   "/home/user/.openpass",
