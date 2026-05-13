@@ -576,6 +576,306 @@ func TestRunChecks_ManifestIntegrity_NoIdentity(t *testing.T) {
 	}
 }
 
+func TestRunChecks_AutoTypeBackend_Runs(t *testing.T) {
+	dir := t.TempDir()
+	results := health.RunChecks(dir, health.Options{Only: []string{"tooling.autotype.backend"}, NoNetwork: true})
+	if len(results) == 0 {
+		t.Fatal("expected auto-type backend check result")
+	}
+	r := results[0]
+	if r.ID != "tooling.autotype.backend" {
+		t.Errorf("expected tooling.autotype.backend, got %s", r.ID)
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		if r.Status != health.StatusOK && r.Status != health.StatusWarn {
+			t.Errorf("expected ok or warn on darwin, got %s", r.Status)
+		}
+	case "linux":
+		if r.Status != health.StatusOK && r.Status != health.StatusWarn {
+			t.Errorf("expected ok or warn on linux, got %s", r.Status)
+		}
+	default:
+		if r.Status != health.StatusOK {
+			t.Errorf("expected ok on %s, got %s: %s", runtime.GOOS, r.Status, r.Message)
+		}
+	}
+}
+
+func TestRunChecks_ClipboardBackend_Runs(t *testing.T) {
+	dir := t.TempDir()
+	results := health.RunChecks(dir, health.Options{Only: []string{"tooling.clipboard.backend"}, NoNetwork: true})
+	if len(results) == 0 {
+		t.Fatal("expected clipboard backend check result")
+	}
+	r := results[0]
+	if r.ID != "tooling.clipboard.backend" {
+		t.Errorf("expected tooling.clipboard.backend, got %s", r.ID)
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		if r.Status != health.StatusOK && r.Status != health.StatusWarn {
+			t.Errorf("expected ok or warn on darwin, got %s", r.Status)
+		}
+	case "linux":
+		if r.Status != health.StatusOK && r.Status != health.StatusWarn {
+			t.Errorf("expected ok or warn on linux, got %s", r.Status)
+		}
+	default:
+		if r.Status != health.StatusOK {
+			t.Errorf("expected ok on %s, got %s: %s", runtime.GOOS, r.Status, r.Message)
+		}
+	}
+}
+
+func TestRunChecks_DaemonStatus_Runs(t *testing.T) {
+	dir := t.TempDir()
+	results := health.RunChecks(dir, health.Options{Only: []string{"daemon.status"}, NoNetwork: true})
+	if len(results) == 0 {
+		t.Fatal("expected daemon status check result")
+	}
+	r := results[0]
+	if r.ID != "daemon.status" {
+		t.Errorf("expected daemon.status, got %s", r.ID)
+	}
+	switch runtime.GOOS {
+	case "darwin", "linux":
+		if r.Status == health.StatusFail {
+			t.Errorf("unexpected fail for daemon.status: %s", r.Message)
+		}
+	default:
+		if r.Status != health.StatusOK {
+			t.Errorf("expected ok on %s, got %s: %s", runtime.GOOS, r.Status, r.Message)
+		}
+	}
+}
+
+func TestRunChecks_SecureUI_Runs(t *testing.T) {
+	dir := t.TempDir()
+	results := health.RunChecks(dir, health.Options{Only: []string{"tooling.secureui"}, NoNetwork: true})
+	if len(results) == 0 {
+		t.Fatal("expected secure UI check result")
+	}
+	r := results[0]
+	if r.ID != "tooling.secureui" {
+		t.Errorf("expected tooling.secureui, got %s", r.ID)
+	}
+	switch runtime.GOOS {
+	case "darwin", "linux":
+		if r.Status != health.StatusOK && r.Status != health.StatusWarn {
+			t.Errorf("expected ok or warn on %s, got %s", runtime.GOOS, r.Status)
+		}
+	default:
+		if r.Status != health.StatusOK {
+			t.Errorf("expected ok on %s, got %s: %s", runtime.GOOS, r.Status, r.Message)
+		}
+	}
+}
+
+func TestRunChecks_PreCommitHooks_Runs(t *testing.T) {
+	dir := t.TempDir()
+	results := health.RunChecks(dir, health.Options{Only: []string{"tooling.precommit"}, NoNetwork: true})
+	if len(results) == 0 {
+		t.Fatal("expected pre-commit hooks check result")
+	}
+	r := results[0]
+	if r.ID != "tooling.precommit" {
+		t.Errorf("expected tooling.precommit, got %s", r.ID)
+	}
+	// Uses os.Getwd(), not vaultDir — verify it runs without panicking on any OS.
+}
+
+func TestRunChecks_SessionKeyring_Run(t *testing.T) {
+	dir := t.TempDir()
+	results := health.RunChecks(dir, health.Options{Only: []string{"session.keyring"}, NoNetwork: true})
+	if len(results) == 0 {
+		t.Fatal("expected session keyring check result")
+	}
+	r := results[0]
+	if r.ID != "session.keyring" {
+		t.Errorf("expected session.keyring, got %s", r.ID)
+	}
+	// Timed-out operations return StatusWarn in headless CI envs.
+	if r.Status == health.StatusFail {
+		t.Errorf("unexpected fail for session.keyring: %s", r.Message)
+	}
+}
+
+func TestRunChecks_MCPTokens_Runs(t *testing.T) {
+	dir := t.TempDir()
+	results := health.RunChecks(dir, health.Options{Only: []string{"mcp.tokens"}, NoNetwork: true})
+	if len(results) == 0 {
+		t.Fatal("expected MCP tokens check result")
+	}
+	r := results[0]
+	if r.ID != "mcp.tokens" {
+		t.Errorf("expected mcp.tokens, got %s", r.ID)
+	}
+	if r.Status == health.StatusFail {
+		t.Errorf("unexpected fail for mcp.tokens: %s", r.Message)
+	}
+}
+
+func TestRunChecks_RecipientsRecovery_NoRecipients(t *testing.T) {
+	dir := t.TempDir()
+	results := health.RunChecks(dir, health.Options{Only: []string{"recipients.recovery"}, NoNetwork: true})
+	if len(results) == 0 {
+		t.Fatal("expected recipients recovery check result")
+	}
+	r := results[0]
+	if r.ID != "recipients.recovery" {
+		t.Errorf("expected recipients.recovery, got %s", r.ID)
+	}
+	if r.Status == health.StatusFail {
+		t.Errorf("unexpected fail for recipients.recovery: %s", r.Message)
+	}
+}
+
+func TestRunChecks_DynamicSecretEngines_Runs(t *testing.T) {
+	dir := t.TempDir()
+	results := health.RunChecks(dir, health.Options{Only: []string{"mcp.dynamic.engines"}, NoNetwork: true})
+	if len(results) == 0 {
+		t.Fatal("expected dynamic secret engines check result")
+	}
+	r := results[0]
+	if r.ID != "mcp.dynamic.engines" {
+		t.Errorf("expected mcp.dynamic.engines, got %s", r.ID)
+	}
+	if r.Status == health.StatusFail {
+		t.Errorf("unexpected fail for mcp.dynamic.engines: %s", r.Message)
+	}
+}
+
+func TestRunChecks_MCPAgents_Runs(t *testing.T) {
+	dir := t.TempDir()
+	results := health.RunChecks(dir, health.Options{Only: []string{"mcp.agents"}, NoNetwork: true})
+	if len(results) == 0 {
+		t.Fatal("expected MCP agents check result")
+	}
+	r := results[0]
+	if r.ID != "mcp.agents" {
+		t.Errorf("expected mcp.agents, got %s", r.ID)
+	}
+	if r.Status == health.StatusFail {
+		t.Errorf("unexpected fail for mcp.agents: %s", r.Message)
+	}
+}
+
+func TestRunChecks_KDFModern_NoVault(t *testing.T) {
+	dir := t.TempDir()
+	results := health.RunChecks(dir, health.Options{Only: []string{"crypto.kdf.modern"}, NoNetwork: true})
+	if len(results) == 0 {
+		t.Fatal("expected KDF modernity check result")
+	}
+	r := results[0]
+	if r.ID != "crypto.kdf.modern" {
+		t.Errorf("expected crypto.kdf.modern, got %s", r.ID)
+	}
+	if r.Status != health.StatusWarn {
+		t.Errorf("expected warn without vault config, got %s: %s", r.Status, r.Message)
+	}
+}
+
+func TestRunChecks_Quick_SkipsSlow(t *testing.T) {
+	dir := t.TempDir()
+	results := health.RunChecks(dir, health.Options{Quick: true, NoNetwork: true})
+	byID := map[string]health.Result{}
+	for _, r := range results {
+		byID[r.ID] = r
+	}
+	if _, found := byID["crypto.scrypt.benchmark"]; found {
+		t.Error("expected crypto.scrypt.benchmark to be skipped with --quick")
+	}
+	if _, found := byID["vault.initialized"]; !found {
+		t.Error("expected vault.initialized check when --quick")
+	}
+}
+
+func TestRunChecks_Exclude_FiltersOutCheck(t *testing.T) {
+	dir := t.TempDir()
+	results := health.RunChecks(dir, health.Options{Exclude: []string{"vault.size"}, NoNetwork: true})
+	for _, r := range results {
+		if r.ID == "vault.size" {
+			t.Error("expected vault.size to be excluded")
+		}
+	}
+	var found bool
+	for _, r := range results {
+		if r.ID == "vault.initialized" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected other checks to remain after exclusion")
+	}
+}
+
+func TestRunChecks_Only_FiltersToSingleCheck(t *testing.T) {
+	dir := t.TempDir()
+	results := health.RunChecks(dir, health.Options{Only: []string{"vault.initialized"}, NoNetwork: true})
+	if len(results) != 1 {
+		t.Fatalf("expected exactly 1 result with Only filter, got %d", len(results))
+	}
+	if results[0].ID != "vault.initialized" {
+		t.Errorf("expected vault.initialized, got %s", results[0].ID)
+	}
+}
+
+func TestRunChecks_OnlyAndExcludeConflict(t *testing.T) {
+	dir := t.TempDir()
+	results := health.RunChecks(dir, health.Options{
+		Only:      []string{"vault.initialized", "vault.size"},
+		Exclude:   []string{"vault.size"},
+		NoNetwork: true,
+	})
+	for _, r := range results {
+		if r.ID == "vault.size" {
+			t.Error("expected vault.size to be excluded even with Only")
+		}
+	}
+}
+
+func TestRunChecks_PassphraseRotation_WithConfig(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	cfg := fmt.Sprintf("vault:\n  last_rotated: %s\n", time.Now().Add(-30*24*time.Hour).Format(time.RFC3339))
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	results := health.RunChecks(dir, health.Options{Only: []string{"auth.passphrase.rotation"}, NoNetwork: true})
+	if len(results) == 0 {
+		t.Fatal("expected passphrase rotation check result")
+	}
+	r := results[0]
+	if r.ID != "auth.passphrase.rotation" {
+		t.Errorf("expected auth.passphrase.rotation, got %s", r.ID)
+	}
+	if r.Status == health.StatusFail {
+		t.Errorf("unexpected fail: %s", r.Message)
+	}
+}
+
+func TestRunChecks_AuthMethod_TouchIDConfig(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	cfg := "auth_method: touchid\n"
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	results := health.RunChecks(dir, health.Options{Only: []string{"auth.method"}, NoNetwork: true})
+	if len(results) == 0 {
+		t.Fatal("expected auth method check result")
+	}
+	r := results[0]
+	if r.ID != "auth.method" {
+		t.Errorf("expected auth.method, got %s", r.ID)
+	}
+	if r.Status == health.StatusFail {
+		t.Errorf("unexpected fail: %s", r.Message)
+	}
+}
+
 func TestRunChecks_ManifestIntegrity_AllOK(t *testing.T) {
 	dir := t.TempDir()
 
@@ -625,5 +925,67 @@ func TestRunChecks_ManifestIntegrity_AllOK(t *testing.T) {
 	}
 	if !strings.Contains(r.Message, "verified") {
 		t.Errorf("expected 'verified' in message, got: %s", r.Message)
+	}
+}
+
+func TestRunChecks_UpdateCheck_DevBuild(t *testing.T) {
+	dir := t.TempDir()
+	results := health.RunChecks(dir, health.Options{Version: "", NoNetwork: false})
+	byID := map[string]health.Result{}
+	for _, r := range results {
+		byID[r.ID] = r
+	}
+	r, found := byID["update.available"]
+	if !found {
+		t.Fatal("expected update.available check")
+	}
+	if r.Status == health.StatusFail {
+		t.Errorf("unexpected fail for update.available: %s", r.Message)
+	}
+}
+
+func TestRunChecks_Recipients_WithRecipientsFile(t *testing.T) {
+	dir := t.TempDir()
+	recipientsDir := filepath.Join(dir, "recipients")
+	if err := os.MkdirAll(recipientsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	identity, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	recFile := filepath.Join(recipientsDir, "default")
+	if err := os.WriteFile(recFile, []byte(identity.Recipient().String()+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	results := health.RunChecks(dir, health.Options{Only: []string{"recipients.count"}, NoNetwork: true})
+	if len(results) == 0 {
+		t.Fatal("expected recipients count check result")
+	}
+	r := results[0]
+	if r.ID != "recipients.count" {
+		t.Errorf("expected recipients.count, got %s", r.ID)
+	}
+	if r.Status == health.StatusFail {
+		t.Errorf("unexpected fail for recipients.count: %s", r.Message)
+	}
+}
+
+func TestRunChecks_PassphraseRotation_NoRotation(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte("vault:\n  scrypt_work_factor: 12\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	results := health.RunChecks(dir, health.Options{Only: []string{"auth.passphrase.rotation"}, NoNetwork: true})
+	if len(results) == 0 {
+		t.Fatal("expected passphrase rotation check result")
+	}
+	r := results[0]
+	if r.ID != "auth.passphrase.rotation" {
+		t.Errorf("expected auth.passphrase.rotation, got %s", r.ID)
+	}
+	if r.Status != health.StatusWarn {
+		t.Errorf("expected warn for no rotation, got %s: %s", r.Status, r.Message)
 	}
 }

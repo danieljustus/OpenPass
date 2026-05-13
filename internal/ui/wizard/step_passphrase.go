@@ -107,11 +107,12 @@ func (s *PassphraseStep) View() string {
 		"Confirm",
 		s.confirm.View(),
 	}
-	if s.err != "" {
+	switch {
+	case s.err != "":
 		lines = append(lines, "", errorStyle.Render("✗ "+s.err))
-	} else if s.generatedHint {
+	case s.generatedHint:
 		lines = append(lines, "", successStyle.Render("Generated — press Enter twice to confirm"))
-	} else {
+	default:
 		lines = append(lines, "", helpStyle.Render("Tab to switch fields · Enter to confirm · G to generate"))
 	}
 	return strings.Join(lines, "\n")

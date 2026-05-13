@@ -140,7 +140,7 @@ func MigrateLegacyResumeFile(vaultDir string) {
 		return
 	}
 	if resumeFileExists(vaultDir) {
-		os.Remove(legacy)
+		_ = os.Remove(legacy)
 		return
 	}
 	if err := ensureResumeDir(current); err != nil {
@@ -156,9 +156,5 @@ func MigrateLegacyResumeFile(vaultDir string) {
 	if err := fileutil.AtomicWriteFile(current, data, 0o600); err != nil {
 		return
 	}
-	os.Remove(legacy)
-}
-
-func resumeFilePathForTest(vaultDir string) string {
-	return filepath.Join(vaultDir, resumeFileName)
+	_ = os.Remove(legacy)
 }

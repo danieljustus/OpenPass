@@ -28,6 +28,11 @@ import (
 	"github.com/danieljustus/OpenPass/internal/vault"
 )
 
+const (
+	osDarwin = "darwin"
+	osLinux  = "linux"
+)
+
 // Status represents the outcome of a single check.
 type Status string
 
@@ -917,7 +922,7 @@ func checkPassphraseRotation(vaultDir string, _ Options) Result {
 func checkAutoTypeBackend(_ string, _ Options) Result {
 	r := Result{ID: "tooling.autotype.backend", Name: "Auto-type backend"}
 	switch runtime.GOOS {
-	case "darwin":
+	case osDarwin:
 		if _, err := exec.LookPath("osascript"); err != nil {
 			r.Status = StatusWarn
 			r.Message = "osascript not found — autotype unavailable on macOS"
@@ -926,7 +931,7 @@ func checkAutoTypeBackend(_ string, _ Options) Result {
 			r.Status = StatusOK
 			r.Message = "osascript available"
 		}
-	case "linux":
+	case osLinux:
 		if _, err := exec.LookPath("xdotool"); err != nil {
 			r.Status = StatusWarn
 			r.Message = "xdotool not found — autotype unavailable on X11"
@@ -947,7 +952,7 @@ func checkAutoTypeBackend(_ string, _ Options) Result {
 func checkClipboardBackend(_ string, _ Options) Result {
 	r := Result{ID: "tooling.clipboard.backend", Name: "Clipboard backend"}
 	switch runtime.GOOS {
-	case "darwin":
+	case osDarwin:
 		if _, err := exec.LookPath("pbcopy"); err != nil {
 			r.Status = StatusWarn
 			r.Message = "pbcopy not found — clipboard unavailable"
@@ -955,7 +960,7 @@ func checkClipboardBackend(_ string, _ Options) Result {
 			r.Status = StatusOK
 			r.Message = "pbcopy available"
 		}
-	case "linux":
+	case osLinux:
 		for _, name := range []string{"xclip", "wl-copy"} {
 			if _, err := exec.LookPath(name); err == nil {
 				r.Status = StatusOK
@@ -985,9 +990,9 @@ func checkDaemonStatus(_ string, _ Options) Result {
 	}
 	var svcPath string
 	switch runtime.GOOS {
-	case "darwin":
+	case osDarwin:
 		svcPath = filepath.Join(home, "Library", "LaunchAgents", "com.openpass.mcp.plist")
-	case "linux":
+	case osLinux:
 		svcPath = filepath.Join(home, ".config", "systemd", "user", "openpass-mcp.service")
 	default:
 		r.Status = StatusOK
@@ -1048,7 +1053,7 @@ func checkMCPServer(vaultDir string, _ Options) Result {
 		r.Hint = "start the server with `openpass serve --port " + strconv.Itoa(port) + "`"
 		return r
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		r.Status = StatusWarn
 		r.Message = fmt.Sprintf("MCP server returned HTTP %d", resp.StatusCode)
@@ -1130,7 +1135,7 @@ func checkMCPAgents(vaultDir string, _ Options) Result {
 func checkSecureUI(_ string, _ Options) Result {
 	r := Result{ID: "tooling.secureui", Name: "Secure input UI"}
 	switch runtime.GOOS {
-	case "darwin":
+	case osDarwin:
 		if _, err := exec.LookPath("osascript"); err != nil {
 			r.Status = StatusWarn
 			r.Message = "osascript not found — secure input dialogs unavailable"
@@ -1138,7 +1143,7 @@ func checkSecureUI(_ string, _ Options) Result {
 			r.Status = StatusOK
 			r.Message = "osascript available (GUI dialogs)"
 		}
-	case "linux":
+	case osLinux:
 		var found string
 		for _, name := range []string{"zenity", "kdialog"} {
 			if _, err := exec.LookPath(name); err == nil {
@@ -1172,14 +1177,14 @@ func checkPreCommitHooks(_ string, _ Options) Result {
 		return r
 	}
 	preCommitPath := filepath.Join(cwd, ".pre-commit-config.yaml")
-	if _, err := os.Stat(preCommitPath); os.IsNotExist(err) {
+	if _, statErr := os.Stat(preCommitPath); os.IsNotExist(statErr) {
 		r.Status = StatusOK
 		r.Message = "no .pre-commit-config.yaml (not a dev environment)"
 		return r
 	}
 	gitDir := filepath.Join(cwd, ".git")
 	hooksDir := filepath.Join(gitDir, "hooks")
-	if _, err := os.Stat(hooksDir); os.IsNotExist(err) {
+	if _, statErr := os.Stat(hooksDir); os.IsNotExist(statErr) {
 		r.Status = StatusWarn
 		r.Message = ".pre-commit-config.yaml exists but not a git repository"
 		return r
@@ -1212,19 +1217,53 @@ func checkPreCommitHooks(_ string, _ Options) Result {
 func checkSessionKeyring(vaultDir string, _ Options) Result {
 	r := Result{ID: "session.keyring", Name: "Session keyring roundtrip"}
 	testData := "openpass-doctor-test"
-	if err := session.SavePassphrase(vaultDir, []byte(testData), 10*time.Second); err != nil {
+
+	saveDone := make(chan error, 1)
+	go func() {
+		saveDone <- session.SavePassphrase(vaultDir, []byte(testData), 10*time.Second)
+	}()
+	select {
+	case err := <-saveDone:
+		if err != nil {
+			r.Status = StatusWarn
+			r.Message = "cannot write to keyring: " + err.Error()
+			r.Hint = "check OS keyring availability (macOS Keychain, GNOME Keyring, etc.)"
+			return r
+		}
+	case <-time.After(5 * time.Second):
 		r.Status = StatusWarn
-		r.Message = "cannot write to keyring: " + err.Error()
-		r.Hint = "check OS keyring availability (macOS Keychain, GNOME Keyring, etc.)"
+		r.Message = "save to keyring timed out — keyring unavailable in this environment"
 		return r
 	}
-	loaded, err := session.LoadPassphrase(vaultDir)
-	if err != nil {
-		r.Status = StatusFail
-		r.Message = "keyring roundtrip failed: " + err.Error()
+
+	loadDone := make(chan struct {
+		data []byte
+		err  error
+	}, 1)
+	go func() {
+		data, err := session.LoadPassphrase(vaultDir)
+		loadDone <- struct {
+			data []byte
+			err  error
+		}{data, err}
+	}()
+	var loaded []byte
+	select {
+	case res := <-loadDone:
+		if res.err != nil {
+			r.Status = StatusFail
+			r.Message = "keyring roundtrip failed: " + res.err.Error()
+			_ = session.ClearSession(vaultDir)
+			return r
+		}
+		loaded = res.data
+	case <-time.After(5 * time.Second):
+		r.Status = StatusWarn
+		r.Message = "load from keyring timed out — keyring unavailable in this environment"
 		_ = session.ClearSession(vaultDir)
 		return r
 	}
+
 	if string(loaded) != testData {
 		r.Status = StatusFail
 		r.Message = "keyring returned corrupted data"

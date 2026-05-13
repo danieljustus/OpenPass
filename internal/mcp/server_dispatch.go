@@ -32,7 +32,6 @@ func toolActionType(toolName string) string {
 		return "find"
 	case "generate_password", "generate_totp", "generate_template":
 		return "generate"
-		return "generate"
 	case "copy_to_clipboard", "autotype":
 		return "read"
 	case "request_share":

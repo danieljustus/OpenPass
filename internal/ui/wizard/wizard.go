@@ -422,16 +422,6 @@ func (m WizardModel) View() string {
 	return strings.Join([]string{header, sep, "", content, "", sep, footer}, "\n")
 }
 
-func (m *WizardModel) visibleSteps() []Step {
-	var result []Step
-	for _, s := range m.steps {
-		if s.ShouldShow(m.state) {
-			result = append(result, s)
-		}
-	}
-	return result
-}
-
 func (m *WizardModel) visiblePos() int {
 	pos := 0
 	for i := 0; i < m.current; i++ {
