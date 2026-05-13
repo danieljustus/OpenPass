@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -172,9 +171,13 @@ func buildAddCredentialPrompt(args map[string]string) []promptMessage {
 	var sb strings.Builder
 	sb.WriteString("Add a new credential to the OpenPass vault.\n\n")
 	if service != "" {
-		fmt.Fprintf(&sb, "Service: %s\n", service)
+		sb.WriteString("Service: ")
+		sb.WriteString(EmbedAsData("service_name", service))
+		sb.WriteString(" (data)\n")
 	}
-	fmt.Fprintf(&sb, "Suggested vault path: %s\n\n", suggested)
+	sb.WriteString("Suggested vault path: ")
+	sb.WriteString(EmbedAsData("vault_path", suggested))
+	sb.WriteString(" (data)\n\n")
 	sb.WriteString("Workflow:\n")
 	sb.WriteString("1. Confirm the entry path with me (suggested above).\n")
 	sb.WriteString("2. For every sensitive field (password / token / api_key / secret / private_key):\n")
@@ -190,11 +193,19 @@ func buildRotateCredentialPrompt(args map[string]string) []promptMessage {
 	path := argOr(args, "path", "<path>")
 	length := argOr(args, "length", "32")
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "Rotate the credential at OpenPass path %q.\n\n", path)
+	sb.WriteString("Rotate the credential at OpenPass path ")
+	sb.WriteString(EmbedAsData("vault_path", path))
+	sb.WriteString(" (data).\n\n")
 	sb.WriteString("Workflow:\n")
-	fmt.Fprintf(&sb, "1. Call `get_entry_metadata` for %q to confirm it exists and note the current version.\n", path)
-	fmt.Fprintf(&sb, "2. Call `generate_password` with length=%s (and symbols=true unless the target service rejects symbols).\n", length)
-	fmt.Fprintf(&sb, "3. Call `set_entry_field` to store the new password at %s.password.\n", path)
+	sb.WriteString("1. Call `get_entry_metadata` for ")
+	sb.WriteString(EmbedAsData("vault_path", path))
+	sb.WriteString(" (data) to confirm it exists and note the current version.\n")
+	sb.WriteString("2. Call `generate_password` with length=")
+	sb.WriteString(EmbedAsData("length", length))
+	sb.WriteString(" (data) (and symbols=true unless the target service rejects symbols).\n")
+	sb.WriteString("3. Call `set_entry_field` to store the new password at ")
+	sb.WriteString(EmbedAsData("vault_path", path))
+	sb.WriteString(" (data).password.\n")
 	sb.WriteString("4. Tell me which remote service needs the password updated and offer to help (e.g. open the service's password-change URL, prepare an `execute_with_secret` command if there is an API).\n")
 	sb.WriteString("5. Do NOT print the new password in chat. Reference it as <path>.password from now on.")
 	return []promptMessage{{Role: "user", Text: sb.String()}}
@@ -206,13 +217,19 @@ func buildFindAndUsePrompt(args map[string]string) []promptMessage {
 	var sb strings.Builder
 	sb.WriteString("Find an OpenPass credential and use it without printing the secret.\n\n")
 	if query != "" {
-		fmt.Fprintf(&sb, "Search query: %s\n", query)
+		sb.WriteString("Search query: ")
+		sb.WriteString(EmbedAsData("search_query", query))
+		sb.WriteString(" (data)\n")
 	}
 	if task != "" {
-		fmt.Fprintf(&sb, "Intended task: %s\n", task)
+		sb.WriteString("Intended task: ")
+		sb.WriteString(EmbedAsData("task", task))
+		sb.WriteString(" (data)\n")
 	}
 	sb.WriteString("\nWorkflow:\n")
-	fmt.Fprintf(&sb, "1. Call `find_entries` with query=%q.\n", query)
+	sb.WriteString("1. Call `find_entries` with query=")
+	sb.WriteString(EmbedAsData("search_query", query))
+	sb.WriteString(" (data).\n")
 	sb.WriteString("2. If zero matches: suggest creating the entry with `/openpass:add-credential` or call `request_credential` directly.\n")
 	sb.WriteString("3. If one match: pick the right consumption tool based on the task:\n")
 	sb.WriteString("   - Web login / GUI app → `autotype` or `copy_to_clipboard`.\n")
@@ -228,12 +245,30 @@ func buildShareCredentialPrompt(args map[string]string) []promptMessage {
 	ttl := argOr(args, "ttl", "1h")
 	field := argOr(args, "secret_field", "")
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "Share OpenPass credential %q with agent %q.\n\n", path, toAgent)
+	sb.WriteString("Share OpenPass credential ")
+	sb.WriteString(EmbedAsData("vault_path", path))
+	sb.WriteString(" (data) with agent ")
+	sb.WriteString(EmbedAsData("target_agent", toAgent))
+	sb.WriteString(" (data).\n\n")
 	sb.WriteString("Workflow:\n")
 	if field != "" {
-		fmt.Fprintf(&sb, "1. Call `request_share` with to_agent=%q, secret_path=%q, secret_field=%q, ttl=%q.\n", toAgent, path, field, ttl)
+		sb.WriteString("1. Call `request_share` with to_agent=")
+		sb.WriteString(EmbedAsData("target_agent", toAgent))
+		sb.WriteString(" (data), secret_path=")
+		sb.WriteString(EmbedAsData("vault_path", path))
+		sb.WriteString(" (data), secret_field=")
+		sb.WriteString(EmbedAsData("field_name", field))
+		sb.WriteString(" (data), ttl=")
+		sb.WriteString(EmbedAsData("ttl", ttl))
+		sb.WriteString(" (data).\n")
 	} else {
-		fmt.Fprintf(&sb, "1. Call `request_share` with to_agent=%q, secret_path=%q, ttl=%q.\n", toAgent, path, ttl)
+		sb.WriteString("1. Call `request_share` with to_agent=")
+		sb.WriteString(EmbedAsData("target_agent", toAgent))
+		sb.WriteString(" (data), secret_path=")
+		sb.WriteString(EmbedAsData("vault_path", path))
+		sb.WriteString(" (data), ttl=")
+		sb.WriteString(EmbedAsData("ttl", ttl))
+		sb.WriteString(" (data).\n")
 	}
 	sb.WriteString("2. Show the returned grant_id and remind me that the share is PENDING until a human approves it.\n")
 	sb.WriteString("3. Tell me to run `approve_share` with the grant_id when ready (this can also be triggered from another agent session — the approval is per-grant, not per-agent).\n")
