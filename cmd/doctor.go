@@ -7,21 +7,21 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/health"
+	cliout "github.com/danieljustus/OpenPass/internal/ui/cliout"
 )
 
 var (
-	doctorJSON        bool
-	doctorNoNetwork   bool
-	doctorStrict      bool
-	doctorOnly        []string
-	doctorExclude     []string
-	doctorFix         bool
-	doctorFixDryRun   bool
-	doctorQuick       bool
+	doctorJSON      bool
+	doctorNoNetwork bool
+	doctorStrict    bool
+	doctorOnly      []string
+	doctorExclude   []string
+	doctorFix       bool
+	doctorFixDryRun bool
+	doctorQuick     bool
 )
 
 var doctorCmd = &cobra.Command{
@@ -94,31 +94,17 @@ Use --no-network to skip checks that require network access (git remote reachabi
 }
 
 func outputDoctorText(cmd *cobra.Command, vaultDir string, results []health.Result) error {
-	isTTY := term.IsTerminal(int(os.Stdout.Fd()))
-	noColor := os.Getenv("NO_COLOR") != ""
-	useColor := isTTY && !noColor
-
-	colorize := func(code, s string) string {
-		if !useColor {
-			return s
-		}
-		return code + s + "\033[0m"
-	}
-
 	cmd.Printf("OpenPass Doctor — Vault: %s\n\n", vaultDir)
 
 	for _, r := range results {
-		var symbol, colorCode string
+		var symbol string
 		switch r.Status {
 		case health.StatusOK:
 			symbol = " ✓ "
-			colorCode = "\033[32m" // green
 		case health.StatusWarn:
 			symbol = " ⚠ "
-			colorCode = "\033[33m" // yellow
 		case health.StatusFail:
 			symbol = " ✗ "
-			colorCode = "\033[31m" // red
 		}
 
 		fixedTag := ""
@@ -129,11 +115,19 @@ func outputDoctorText(cmd *cobra.Command, vaultDir string, results []health.Resu
 		if r.Fixable && r.Status != health.StatusOK {
 			fixableTag = " (fixable — run with --fix)"
 		}
-		line := fmt.Sprintf("%-3s %-40s %s%s%s", symbol, r.Name, r.Message, fixedTag, fixableTag)
-		cmd.Println(colorize(colorCode, line))
+		formatted := fmt.Sprintf("%-3s %-40s %s%s%s", symbol, r.Name, r.Message, fixedTag, fixableTag)
+
+		switch r.Status {
+		case health.StatusOK:
+			cmd.Println(cliout.ColorizeSuccess(formatted))
+		case health.StatusWarn:
+			cmd.Println(cliout.ColorizeWarn(formatted))
+		case health.StatusFail:
+			cmd.Println(cliout.ColorizeError(formatted))
+		}
 		if r.Hint != "" {
 			indent := strings.Repeat(" ", 4)
-			cmd.Println(colorize("\033[2m", indent+"→ "+r.Hint))
+			cmd.Println(cliout.ColorizeDim(indent + "→ " + r.Hint))
 		}
 	}
 
@@ -141,10 +135,10 @@ func outputDoctorText(cmd *cobra.Command, vaultDir string, results []health.Resu
 	total := ok + warn + fail
 	cmd.Printf("\nScore: %d/%d OK", ok, total)
 	if warn > 0 {
-		cmd.Printf(" · %s", colorize("\033[33m", fmt.Sprintf("%d warning(s)", warn)))
+		cmd.Printf(" · %s", cliout.ColorizeWarn(fmt.Sprintf("%d warning(s)", warn)))
 	}
 	if fail > 0 {
-		cmd.Printf(" · %s", colorize("\033[31m", fmt.Sprintf("%d failed", fail)))
+		cmd.Printf(" · %s", cliout.ColorizeError(fmt.Sprintf("%d failed", fail)))
 	}
 	cmd.Println()
 	return nil

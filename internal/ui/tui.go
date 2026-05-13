@@ -19,6 +19,7 @@ import (
 
 	clipboardapp "github.com/danieljustus/OpenPass/internal/clipboard"
 	vaultcrypto "github.com/danieljustus/OpenPass/internal/crypto"
+	theme "github.com/danieljustus/OpenPass/internal/ui/theme"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 	vaultsvc "github.com/danieljustus/OpenPass/internal/vaultsvc"
 )
@@ -120,20 +121,11 @@ var (
 
 	borderStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("240"))
+			BorderForeground(theme.ColorMuted)
 
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("212"))
-
-	selectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("229")).
-			Background(lipgloss.Color("62")).
-			Bold(true)
-
-	mutedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	errorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
-	keyStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Bold(true)
+	borderFocusStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(theme.ColorFocused)
 )
 
 // NewTUIModel creates a Bubble Tea model backed by the provided vault service.
@@ -289,8 +281,12 @@ func (m TUIModel) View() string {
 	leftWidth := max(24, m.width/3)
 	rightWidth := max(32, m.width-leftWidth-8)
 
-	left := borderStyle.Width(leftWidth).Height(contentHeight).Render(m.leftView(leftWidth, contentHeight))
-	right := borderStyle.Width(rightWidth).Height(contentHeight).Render(m.rightView(rightWidth, contentHeight))
+	bs := borderStyle
+	if m.mode == modeFilter || m.mode == modeTagFilter {
+		bs = borderFocusStyle
+	}
+	left := bs.Width(leftWidth).Height(contentHeight).Render(m.leftView(leftWidth, contentHeight))
+	right := bs.Width(rightWidth).Height(contentHeight).Render(m.rightView(rightWidth, contentHeight))
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 
 	footer := m.statusView()
@@ -557,9 +553,13 @@ func (m TUIModel) copySelectedPassword() tea.Cmd {
 
 func (m TUIModel) leftView(width, height int) string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Entries"))
+	pos := ""
+	if len(m.filtered) > 0 {
+		pos = fmt.Sprintf(" [%d/%d]", m.selected+1, len(m.filtered))
+	}
+	b.WriteString(theme.TitleStyle.Render("Entries" + pos))
 	b.WriteString(" ")
-	b.WriteString(mutedStyle.Render(fmt.Sprintf("[sort: %s]", m.sortLabel())))
+	b.WriteString(theme.MutedStyle.Render(fmt.Sprintf("[sort: %s]", m.sortLabel())))
 	b.WriteString("\n")
 	if m.mode == modeFilter {
 		b.WriteString(m.filterInput.View())
@@ -568,18 +568,18 @@ func (m TUIModel) leftView(width, height int) string {
 		tags := m.availableTags()
 		if len(tags) > 0 {
 			b.WriteString("\n")
-			b.WriteString(mutedStyle.Render("tags: " + strings.Join(tags, " ")))
+			b.WriteString(theme.MutedStyle.Render("tags: " + strings.Join(tags, " ")))
 		}
 	} else if q := strings.TrimSpace(m.filterInput.Value()); q != "" {
-		b.WriteString(mutedStyle.Render("Filter: " + q))
+		b.WriteString(theme.MutedStyle.Render("Filter: " + q))
 		if m.filterTag != "" {
 			b.WriteString(" ")
-			b.WriteString(mutedStyle.Render(fmt.Sprintf("[tag:%s]", m.filterTag)))
+			b.WriteString(theme.MutedStyle.Render(fmt.Sprintf("[tag:%s]", m.filterTag)))
 		}
 	} else if m.filterTag != "" {
-		b.WriteString(mutedStyle.Render(fmt.Sprintf("Tag: %s", m.filterTag)))
+		b.WriteString(theme.MutedStyle.Render(fmt.Sprintf("Tag: %s", m.filterTag)))
 	} else {
-		b.WriteString(mutedStyle.Render("/ filter · t tag · s sort"))
+		b.WriteString(theme.MutedStyle.Render("/ filter · t tag · s sort"))
 	}
 	b.WriteString("\n\n")
 
@@ -588,7 +588,7 @@ func (m TUIModel) leftView(width, height int) string {
 		return b.String()
 	}
 	if len(m.filtered) == 0 {
-		b.WriteString(mutedStyle.Render("No entries"))
+		b.WriteString(theme.MutedStyle.Render("No entries"))
 		return b.String()
 	}
 
@@ -602,7 +602,7 @@ func (m TUIModel) leftView(width, height int) string {
 	for i := start; i < end; i++ {
 		line := truncate(m.filtered[i], width-4)
 		if i == m.selected {
-			line = selectedStyle.Width(width - 4).Render(line)
+			line = theme.SelectedStyle.Width(width - 4).Render(line)
 		}
 		b.WriteString(line)
 		b.WriteString("\n")
@@ -613,16 +613,16 @@ func (m TUIModel) leftView(width, height int) string {
 func (m TUIModel) rightView(width, height int) string {
 	path := m.selectedPath()
 	if path == "" {
-		return titleStyle.Render("Details") + "\n\n" + mutedStyle.Render("Select an entry")
+		return theme.TitleStyle.Render("Details") + "\n\n" + theme.MutedStyle.Render("Select an entry")
 	}
 	if m.entry == nil || m.entryFor != path {
-		return titleStyle.Render(path) + "\n\n" + mutedStyle.Render("Loading details...")
+		return theme.TitleStyle.Render(path) + "\n\n" + theme.MutedStyle.Render("Loading details...")
 	}
 
 	var b strings.Builder
-	b.WriteString(titleStyle.Render(path))
+	b.WriteString(theme.TitleStyle.Render(path))
 	b.WriteString("\n")
-	b.WriteString(mutedStyle.Render("Updated: " + m.entry.Metadata.Updated.Format("2006-01-02 15:04")))
+	b.WriteString(theme.MutedStyle.Render("Updated: " + m.entry.Metadata.Updated.Format("2006-01-02 15:04")))
 	b.WriteString("\n\n")
 
 	keys := make([]string, 0, len(m.entry.Data))
@@ -634,14 +634,14 @@ func (m TUIModel) rightView(width, height int) string {
 	maxRows := max(1, height-6)
 	for i, key := range keys {
 		if i >= maxRows {
-			b.WriteString(mutedStyle.Render("..."))
+			b.WriteString(theme.MutedStyle.Render("..."))
 			break
 		}
 		value := fmt.Sprint(m.entry.Data[key])
 		if !m.revealed && isSensitiveField(key) {
 			value = redactedValue
 		}
-		line := fmt.Sprintf("%s: %s", keyStyle.Render(key), value)
+		line := fmt.Sprintf("%s: %s", theme.KeyStyle.Render(key), value)
 		b.WriteString(truncate(line, width-4))
 		b.WriteString("\n")
 	}
@@ -652,15 +652,15 @@ func (m TUIModel) rightView(width, height int) string {
 func (m TUIModel) statusView() string {
 	status := m.status
 	if m.err != nil {
-		status = errorStyle.Render(m.err.Error())
+		status = theme.ErrorStyle.Render(m.err.Error())
 	}
-	keys := "↑/↓ select · Enter copy password · r reveal · e edit · d delete · g generate · s sort · t tag · ? help · q quit"
-	return mutedStyle.Render(keys) + "\n" + status
+	keys := "↑/↓ select · Enter copy · r reveal · e edit · d delete · g gen · s sort · t tag · / filter · esc clear · ? help · q quit"
+	return theme.MutedStyle.Render(keys) + "\n" + status
 }
 
 func (m TUIModel) helpView() string {
 	return strings.Join([]string{
-		titleStyle.Render("Help"),
+		theme.TitleStyle.Render("Help"),
 		"↑/↓ or k/j: move selection",
 		"/: fuzzy filter entries",
 		"s: cycle sort (name/updated, asc/desc)",
@@ -679,7 +679,7 @@ func (m TUIModel) confirmView() string {
 	if m.mode == modeConfirmEdit {
 		verb = "edit"
 	}
-	return errorStyle.Render(fmt.Sprintf("Confirm %s %s?", verb, m.selectedPath())) + "  " + mutedStyle.Render("y/N")
+	return theme.ErrorStyle.Render(fmt.Sprintf("Confirm %s %s?", verb, m.selectedPath())) + "  " + theme.MutedStyle.Render("y/N")
 }
 
 func loadEntriesCmd(svc vaultsvc.Service) tea.Cmd {

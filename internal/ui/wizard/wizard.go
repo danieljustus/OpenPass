@@ -33,20 +33,21 @@ func stepDoneCmd() tea.Cmd {
 
 // WizardModel is the top-level Bubbletea model for the setup wizard.
 type WizardModel struct {
-	steps       []Step
-	current     int
-	state       WizardState
-	width       int
-	height      int
-	quitting    bool
-	canceled    bool
-	applyErr    error
-	noResume    bool
-	totalSteps  int
-	applying    bool
-	applyStep   string
-	applyErrs   []string
-	spinner     spinner.Model
+	steps            []Step
+	current          int
+	state            WizardState
+	width            int
+	height           int
+	quitting         bool
+	canceled         bool
+	confirmingCancel bool
+	applyErr         error
+	noResume         bool
+	totalSteps       int
+	applying         bool
+	applyStep        string
+	applyErrs        []string
+	spinner          spinner.Model
 }
 
 // NewWizardModel constructs the model with all steps for a given vault dir.
@@ -128,15 +129,7 @@ func (m WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "esc":
-			if m.applying {
-				return m, nil
-			}
-			m.canceled = true
-			m.quitting = true
-			return m, tea.Quit
-		}
+		return m.handleKeyMsg(msg)
 
 	case stepDone:
 		if !m.applying {
@@ -166,6 +159,48 @@ func (m WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.spinner, cmd = m.spinner.Update(msg)
 			return m, cmd
 		}
+	}
+
+	if m.applying {
+		return m, nil
+	}
+
+	if m.current < len(m.steps) {
+		updated, cmd := m.steps[m.current].Update(msg)
+		m.steps[m.current] = updated
+		return m, cmd
+	}
+	return m, nil
+}
+
+func (m WizardModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.confirmingCancel {
+		switch msg.String() {
+		case "y", "Y":
+			m.canceled = true
+			m.quitting = true
+			return m, tea.Quit
+		case "n", "N", keyEsc:
+			m.confirmingCancel = false
+			return m, nil
+		}
+		return m, nil
+	}
+
+	switch msg.String() {
+	case "ctrl+c":
+		if m.applying {
+			return m, nil
+		}
+		m.canceled = true
+		m.quitting = true
+		return m, tea.Quit
+	case keyEsc:
+		if m.applying {
+			return m, nil
+		}
+		m.confirmingCancel = true
+		return m, nil
 	}
 
 	if m.applying {
@@ -364,7 +399,7 @@ func (m WizardModel) View() string {
 		Foreground(lipgloss.Color("240"))
 
 	sep := strings.Repeat("─", max(m.width, 40))
-	footer := helpStyle.Render("Esc to quit")
+	footer := helpStyle.Render("Esc to cancel · Ctrl+C to quit")
 
 	if m.applying {
 		header := headerStyle.Render(fmt.Sprintf("OpenPass Setup  Step %d/%d — %s", m.totalSteps, m.totalSteps, m.applyStep))
@@ -372,10 +407,16 @@ func (m WizardModel) View() string {
 		return strings.Join([]string{header, sep, "", content, "", sep, footer}, "\n")
 	}
 
+	if m.confirmingCancel {
+		content := warnStyle.Render("Cancel setup? All progress will be lost.") + "\n" + helpStyle.Render("y/N")
+		return strings.Join([]string{"", content, "", sep, footer}, "\n")
+	}
+
 	step := m.steps[m.current]
 	pos := m.visiblePos()
 
-	header := headerStyle.Render(fmt.Sprintf("OpenPass Setup  Step %d/%d — %s", pos+1, m.totalSteps, step.Title()))
+	header := headerStyle.Render(fmt.Sprintf("OpenPass Setup  Step %d/%d%s — %s",
+		pos+1, m.totalSteps, progressBar(pos, m.totalSteps), step.Title()))
 	content := step.View()
 
 	return strings.Join([]string{header, sep, "", content, "", sep, footer}, "\n")
@@ -399,6 +440,19 @@ func (m *WizardModel) visiblePos() int {
 		}
 	}
 	return pos
+}
+
+func progressBar(pos, total int) string {
+	if total <= 1 {
+		return ""
+	}
+	const barWidth = 12
+	filled := ((pos + 1) * barWidth) / total
+	if filled > barWidth {
+		filled = barWidth
+	}
+	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
+	return fmt.Sprintf(" %s", bar)
 }
 
 func max(a, b int) int {
