@@ -88,12 +88,41 @@ func TestColorWithCodes(t *testing.T) {
 	}
 }
 
-func TestColorize_TTYBehavior(t *testing.T) {
+func TestColorizeFunctions(t *testing.T) {
 	os.Unsetenv("NO_COLOR")
-	// Direct call to colorize is the only way to test color formatting
-	// without a real TTY; this documents the format.
-	got := red + "msg" + reset
-	if !strings.Contains(got, "\033[") {
-		t.Errorf("colorize format missing ANSI prefix, got %q", got)
+	// When stderr is piped (as in tests), color is suppressed.
+	// Verify the functions return text correctly in either case.
+	cases := []struct {
+		name string
+		fn   func(string) string
+	}{
+		{"ColorizeError", ColorizeError},
+		{"ColorizeWarn", ColorizeWarn},
+		{"ColorizeSuccess", ColorizeSuccess},
+		{"ColorizeDim", ColorizeDim},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.fn("hello")
+			if !strings.Contains(got, "hello") {
+				t.Errorf("%s = %q, want to contain 'hello'", tc.name, got)
+			}
+		})
+	}
+}
+
+func TestColorizeFunctionsNoColor(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	got := ColorizeError("secret")
+	if strings.Contains(got, "\033[") {
+		t.Errorf("ColorizeError with NO_COLOR should not contain ANSI, got %q", got)
+	}
+	got = ColorizeWarn("secret")
+	if strings.Contains(got, "\033[") {
+		t.Errorf("ColorizeWarn with NO_COLOR should not contain ANSI, got %q", got)
+	}
+	got = ColorizeSuccess("secret")
+	if strings.Contains(got, "\033[") {
+		t.Errorf("ColorizeSuccess with NO_COLOR should not contain ANSI, got %q", got)
 	}
 }

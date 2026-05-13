@@ -2,7 +2,6 @@ package wizard
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // Step is the interface each wizard screen must implement.
@@ -81,14 +80,4 @@ const (
 	keyUp          = "up"
 	syncGit        = "git"
 	defaultProfile = "default"
-)
-
-var (
-	titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
-	focusedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Bold(true)
-	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
-	helpStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	dimStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	warnStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
-	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("82"))
 )

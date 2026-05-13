@@ -37,10 +37,14 @@ func (s *NextStepsStep) View() string {
 		"",
 		"Quick-start commands:",
 		"",
-		"  " + focusedStyle.Render("openpass add <name>") + "         add your first entry",
-		"  " + focusedStyle.Render("openpass get <name>") + "         retrieve a password",
-		"  " + focusedStyle.Render("openpass doctor") + "             health check",
-		"  " + focusedStyle.Render("openpass --help") + "             show all commands",
+		"  " + focusedStyle.Render("openpass add <name>") + "           add your first entry",
+		"  " + focusedStyle.Render("openpass get <name>") + "           retrieve a password",
+		"  " + focusedStyle.Render("openpass tui") + "                  browse entries in terminal UI",
+		"  " + focusedStyle.Render("openpass autotype") + "             auto-type passwords into forms",
+		"  " + focusedStyle.Render("openpass doctor") + "               health check",
+		"  " + focusedStyle.Render("openpass mcp-config") + "           configure MCP agent integrations",
+		"  " + focusedStyle.Render("openpass auth set <method>") + "    change auth method",
+		"  " + focusedStyle.Render("openpass --help") + "               show all commands",
 	}
 
 	if st.SyncMode == syncGit && st.MultiDevice {
