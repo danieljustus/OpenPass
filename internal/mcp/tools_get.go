@@ -78,19 +78,6 @@ func (s *Server) handleGet(ctx context.Context, req CallToolRequest) (*CallToolR
 	s.logAudit(ctx, "get", path, true)
 	metrics.RecordVaultOperation("read", "success")
 
-	includeValue := req.GetBool("include_value", false)
-
-	if includeValue {
-		if s.agent != nil && s.agent.RedactFields != nil && len(s.agent.RedactFields) > 0 {
-			entry = redactEntry(entry, s.agent.RedactFields)
-		}
-		result, marshalErr := json.Marshal(entry)
-		if marshalErr != nil {
-			return nil, marshalErr
-		}
-		return NewToolResultText(string(result)), nil
-	}
-
 	response := buildSecretMetadataResponse(entry, path)
 	result, marshalErr := json.Marshal(response)
 	if marshalErr != nil {

@@ -86,14 +86,26 @@ func TestHandleGet_WithValue(t *testing.T) {
 		t.Fatalf("handleGet() returned error: %s", result.Text)
 	}
 
-	var entry vault.Entry
-	if err := json.Unmarshal([]byte(result.Text), &entry); err != nil {
+	var response map[string]any
+	if err := json.Unmarshal([]byte(result.Text), &response); err != nil {
 		t.Fatalf("parse result: %v", err)
 	}
-	if entry.Data["password"] != "testpass123" {
-		t.Errorf("password = %v, want testpass123", entry.Data["password"])
+	// include_value is deprecated — handleGet now always returns metadata only.
+	// The password value should NOT appear in the response.
+	if response["password"] != nil {
+		t.Error("password value should not appear in metadata response")
+	}
+	if response["has_value"] != true {
+		t.Error("has_value should be true")
+	}
+	fields, _ := response["fields"].([]any)
+	if !hasItem(fields, "password") {
+		t.Error(`fields should contain "password"`)
 	}
 }
+
+// TestHandleGet_WithoutMetadata tests without the include_value flag.
+// This is the default behavior — always returns metadata.
 
 func TestHandleGet_OutsideScope(t *testing.T) {
 	vaultDir, identity := mockVault(t)
@@ -195,17 +207,28 @@ func TestHandleGet_WithMetadata(t *testing.T) {
 		t.Fatalf("handleGet() returned error: %s", result.Text)
 	}
 
-	var entry vault.Entry
-	if err := json.Unmarshal([]byte(result.Text), &entry); err != nil {
+	var response map[string]any
+	if err := json.Unmarshal([]byte(result.Text), &response); err != nil {
 		t.Fatalf("parse result: %v", err)
 	}
-
-	if entry.Data["password"] != "testpass123" {
-		t.Errorf("password = %v, want testpass123", entry.Data["password"])
+	// handleGet always returns metadata only.
+	// include_value is ignored.
+	if response["password"] != nil {
+		t.Error("password value should not appear in metadata response")
 	}
-
-	if entry.Metadata.Version != 1 {
-		t.Errorf("version = %d, want 1", entry.Metadata.Version)
+	if response["has_value"] != true {
+		t.Error("has_value should be true")
+	}
+	fields, _ := response["fields"].([]any)
+	if !hasItem(fields, "password") {
+		t.Error(`fields should contain "password"`)
+	}
+	meta, _ := response["meta"].(map[string]any)
+	if meta == nil {
+		t.Fatal("meta should be present")
+	}
+	if v, _ := meta["version"].(float64); v != 1 {
+		t.Errorf("version = %v, want 1", v)
 	}
 }
 
@@ -579,4 +602,13 @@ func TestHandleGetMetadata_VersionIncrementedAfterUpdate(t *testing.T) {
 	if updatedVersion <= initialVersion {
 		t.Errorf("version should increment after update: initial=%v, updated=%v", initialVersion, updatedVersion)
 	}
+}
+
+func hasItem(slice []any, target string) bool {
+	for _, s := range slice {
+		if s == target {
+			return true
+		}
+	}
+	return false
 }
