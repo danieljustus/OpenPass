@@ -206,7 +206,7 @@ func TestWrapRenderRoundtrip(t *testing.T) {
 		t.Run(fmt.Sprintf("len=%d", len(input)), func(t *testing.T) {
 			u := Wrap(input, Provenance{Source: "test"})
 			rf := u.Render(Terminal)
-		if rf.String() != input {
+			if rf.String() != input {
 				t.Fatalf("Render() = %q, want %q", rf.String(), input)
 			}
 		})

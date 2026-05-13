@@ -205,13 +205,13 @@ func Load(path string) (*Config, error) {
 			if profile.CanUseClipboard != nil {
 				current.CanUseClipboard = *profile.CanUseClipboard
 			}
-		if profile.CanUseAutotype != nil {
-			current.CanUseAutotype = *profile.CanUseAutotype
-		}
-		if profile.CanReadValues != nil {
-			current.CanReadValues = *profile.CanReadValues
-		}
-		if profile.RequireApproval != nil {
+			if profile.CanUseAutotype != nil {
+				current.CanUseAutotype = *profile.CanUseAutotype
+			}
+			if profile.CanReadValues != nil {
+				current.CanReadValues = *profile.CanReadValues
+			}
+			if profile.RequireApproval != nil {
 				current.RequireApproval = *profile.RequireApproval
 			}
 			if profile.ApprovalTimeout != nil {
