@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -11,9 +12,6 @@ var globalChokepoint = &RenderChokepoint{}
 // RenderChokepoint is the central output sanitization point for MCP responses.
 // All tool responses should pass through this chokepoint before being sent
 // to the MCP client to prevent prompt injection via vault content.
-//
-// Phase A creates this as a stub. Phase C activates it by wiring it into
-// callToolResultPayload and all response paths.
 type RenderChokepoint struct{}
 
 // NewRenderChokepoint creates a new RenderChokepoint instance.
@@ -22,16 +20,14 @@ func NewRenderChokepoint() *RenderChokepoint {
 }
 
 // SanitizeForMCP sanitizes text for safe inclusion in MCP responses.
-//
-// Current sanitization:
-//   - Strips ANSI escape sequences
-//   - Strips control characters (0x00-0x08, 0x0b, 0x0c, 0x0e-0x1f, 0x7f)
-//   - Neutralizes XML-like tags to prevent MCP response structure injection
-//   - Strips OSC-8 hyperlink sequences
-//
-// This will be expanded in Phase C with secret masking and taint-aware
-// field handling.
+// Strips ANSI escape sequences, control characters, OSC-8 hyperlinks,
+// and neutralizes XML structure injection (e.g. </data>).
 func (rc *RenderChokepoint) SanitizeForMCP(text string) string {
+	return sanitizeMCPText(text)
+}
+
+// sanitizeMCPText is the core MCP text sanitizer.
+func sanitizeMCPText(text string) string {
 	var out strings.Builder
 	out.Grow(len(text))
 
@@ -96,4 +92,13 @@ func (rc *RenderChokepoint) SanitizeForMCP(text string) string {
 	}
 
 	return out.String()
+}
+
+// EmbedAsData wraps untrusted content in a <data> block with the given
+// label. The content is sanitized: ANSI/control sequences are stripped,
+// </data> is neutralized to prevent tag injection. This ensures the
+// wrapped text is treated as inert data by the LLM.
+func EmbedAsData(label, untrusted string) string {
+	safe := sanitizeMCPText(untrusted)
+	return fmt.Sprintf("<data label=%q>%s</data>", label, safe)
 }

@@ -99,8 +99,20 @@ func TestHandleGet_WithValue(t *testing.T) {
 		t.Error("has_value should be true")
 	}
 	fields, _ := response["fields"].([]any)
-	if !hasItem(fields, "password") {
-		t.Error(`fields should contain "password"`)
+	if !hasField(fields, "password") {
+		t.Error(`fields should contain field "password"`)
+	}
+	if len(fields) > 0 {
+		f := fields[0].(map[string]any)
+		if f["name"] == nil {
+			t.Error("field should have 'name'")
+		}
+		if f["handle"] == nil {
+			t.Error("field should have 'handle'")
+		}
+		if f["kind"] == nil {
+			t.Error("field should have 'kind'")
+		}
 	}
 }
 
@@ -220,8 +232,20 @@ func TestHandleGet_WithMetadata(t *testing.T) {
 		t.Error("has_value should be true")
 	}
 	fields, _ := response["fields"].([]any)
-	if !hasItem(fields, "password") {
-		t.Error(`fields should contain "password"`)
+	if !hasField(fields, "password") {
+		t.Error(`fields should contain field "password"`)
+	}
+	if len(fields) > 0 {
+		f := fields[0].(map[string]any)
+		if f["name"] == nil {
+			t.Error("field should have 'name'")
+		}
+		if f["handle"] == nil {
+			t.Error("field should have 'handle'")
+		}
+		if f["kind"] == nil {
+			t.Error("field should have 'kind'")
+		}
 	}
 	meta, _ := response["meta"].(map[string]any)
 	if meta == nil {
@@ -604,10 +628,12 @@ func TestHandleGetMetadata_VersionIncrementedAfterUpdate(t *testing.T) {
 	}
 }
 
-func hasItem(slice []any, target string) bool {
+func hasField(slice []any, targetName string) bool {
 	for _, s := range slice {
-		if s == target {
-			return true
+		if m, ok := s.(map[string]any); ok {
+			if name, _ := m["name"].(string); name == targetName {
+				return true
+			}
 		}
 	}
 	return false

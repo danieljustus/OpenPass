@@ -214,6 +214,10 @@ func (s *Server) canUseAutotype() bool {
 	return s != nil && s.agent != nil && s.agent.CanUseAutotype
 }
 
+func (s *Server) canReadValues() bool {
+	return s != nil && s.agent != nil && s.agent.CanReadValues
+}
+
 func (s *Server) requiresApproval() bool {
 	if s == nil || s.agent == nil {
 		return false

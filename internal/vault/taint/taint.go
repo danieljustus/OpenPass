@@ -10,6 +10,19 @@ import (
 	"fmt"
 )
 
+// SecretHandle is a handle that can be displayed to the user containing the
+// path to a secret in the vault in the "op://path/field" format.
+// It implements fmt.Stringer and is safe for display because it only contains
+// the path, not the secret value.
+type SecretHandle struct {
+	Path  string
+	Field string
+}
+
+func (h SecretHandle) String() string {
+	return fmt.Sprintf("op://%s/%s", h.Path, h.Field)
+}
+
 // ErrUntrustedFormat is returned when an Untrusted value is used in an
 // unsafe context. Call .Render() or .UnsafeRawForStorage() explicitly.
 var ErrUntrustedFormat = errors.New("taint: use of Untrusted in format argument")

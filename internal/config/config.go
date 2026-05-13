@@ -70,6 +70,7 @@ type AgentProfile struct {
 	CanManageConfig     bool                `yaml:"canManageConfig,omitempty"`
 	CanUseClipboard     bool                `yaml:"canUseClipboard,omitempty"`
 	CanUseAutotype      bool                `yaml:"canUseAutotype,omitempty"`
+	CanReadValues       bool                `yaml:"canReadValues,omitempty"`
 	RequireApproval     bool                `yaml:"requireApproval"`
 	ApprovalTimeout     time.Duration       `yaml:"approvalTimeout,omitempty"`
 	AllowedTools        []string            `yaml:"allowed_tools,omitempty"`
@@ -86,6 +87,7 @@ type fileAgentProfile struct {
 	CanManageConfig     *bool               `yaml:"canManageConfig,omitempty"`
 	CanUseClipboard     *bool               `yaml:"canUseClipboard,omitempty"`
 	CanUseAutotype      *bool               `yaml:"canUseAutotype,omitempty"`
+	CanReadValues       *bool               `yaml:"canReadValues,omitempty"`
 	RequireApproval     *bool               `yaml:"requireApproval,omitempty"`
 	ApprovalMode        *string             `yaml:"approvalMode,omitempty"`
 	AllowedPaths        []string            `yaml:"allowedPaths,omitempty"`
@@ -203,10 +205,13 @@ func Load(path string) (*Config, error) {
 			if profile.CanUseClipboard != nil {
 				current.CanUseClipboard = *profile.CanUseClipboard
 			}
-			if profile.CanUseAutotype != nil {
-				current.CanUseAutotype = *profile.CanUseAutotype
-			}
-			if profile.RequireApproval != nil {
+		if profile.CanUseAutotype != nil {
+			current.CanUseAutotype = *profile.CanUseAutotype
+		}
+		if profile.CanReadValues != nil {
+			current.CanReadValues = *profile.CanReadValues
+		}
+		if profile.RequireApproval != nil {
 				current.RequireApproval = *profile.RequireApproval
 			}
 			if profile.ApprovalTimeout != nil {
@@ -474,6 +479,7 @@ func buildFileAgents(agents map[string]AgentProfile) map[string]fileAgentProfile
 		canManageConfig := profile.CanManageConfig
 		canUseClipboard := profile.CanUseClipboard
 		canUseAutotype := profile.CanUseAutotype
+		canReadValues := profile.CanReadValues
 		requireApproval := profile.RequireApproval
 		fap := fileAgentProfile{
 			AllowedPaths:    allowed,
@@ -482,6 +488,7 @@ func buildFileAgents(agents map[string]AgentProfile) map[string]fileAgentProfile
 			CanManageConfig: &canManageConfig,
 			CanUseClipboard: &canUseClipboard,
 			CanUseAutotype:  &canUseAutotype,
+			CanReadValues:   &canReadValues,
 			RequireApproval: &requireApproval,
 		}
 		if profile.ApprovalMode != "" {

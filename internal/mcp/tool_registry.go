@@ -326,11 +326,12 @@ func callToolResultPayload(result *CallToolResult) map[string]any {
 	if result == nil {
 		result = NewToolResultText("")
 	}
+	sanitized := globalChokepoint.SanitizeForMCP(result.Text)
 	return map[string]any{
 		"content": []map[string]any{
 			{
 				"type": "text",
-				"text": result.Text,
+				"text": sanitized,
 			},
 		},
 		"isError": result.IsError,
