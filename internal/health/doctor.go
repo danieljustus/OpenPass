@@ -34,6 +34,9 @@ import (
 const (
 	osDarwin = "darwin"
 	osLinux  = "linux"
+
+	msgSessionNeeded  = "no active session — run `openpass unlock` first"
+	hintSessionNeeded = "run `openpass unlock` to decrypt entries for password strength analysis"
 )
 
 // Status represents the outcome of a single check.
@@ -850,7 +853,7 @@ func checkManifestIntegrity(vaultDir string, _ Options) Result {
 	identity := vault.CurrentSearchIdentity()
 	if identity == nil {
 		r.Status = StatusWarn
-		r.Message = "no active session — run `openpass unlock` first"
+		r.Message = msgSessionNeeded
 		r.Hint = "run `openpass unlock` to decrypt your identity for manifest verification"
 		return r
 	}
@@ -1289,8 +1292,8 @@ func checkPasswordStrength(vaultDir string, _ Options) Result {
 	identity := vault.CurrentSearchIdentity()
 	if identity == nil {
 		r.Status = StatusWarn
-		r.Message = "no active session — run `openpass unlock` first"
-		r.Hint = "run `openpass unlock` to decrypt entries for password strength analysis"
+		r.Message = msgSessionNeeded
+		r.Hint = hintSessionNeeded
 		return r
 	}
 
@@ -1345,7 +1348,7 @@ func checkPasswordReuse(vaultDir string, _ Options) Result {
 	identity := vault.CurrentSearchIdentity()
 	if identity == nil {
 		r.Status = StatusWarn
-		r.Message = "no active session — run `openpass unlock` first"
+		r.Message = msgSessionNeeded
 		r.Hint = "run `openpass unlock` to decrypt entries for password reuse analysis"
 		return r
 	}
