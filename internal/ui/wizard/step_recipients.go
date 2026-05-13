@@ -50,7 +50,7 @@ func (s *RecipientsStep) Update(msg tea.Msg) (Step, tea.Cmd) {
 			}
 			s.done = true
 			return s, stepDoneCmd()
-		case "esc":
+		case keyEsc:
 			s.skip = true
 			s.done = true
 			return s, stepDoneCmd()

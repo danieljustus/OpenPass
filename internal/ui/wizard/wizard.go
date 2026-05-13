@@ -129,34 +129,7 @@ func (m WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		if m.confirmingCancel {
-			switch msg.String() {
-			case "y", "Y":
-				m.canceled = true
-				m.quitting = true
-				return m, tea.Quit
-			case "n", "N", "esc":
-				m.confirmingCancel = false
-				return m, nil
-			}
-			return m, nil
-		}
-
-		switch msg.String() {
-		case "ctrl+c":
-			if m.applying {
-				return m, nil
-			}
-			m.canceled = true
-			m.quitting = true
-			return m, tea.Quit
-		case "esc":
-			if m.applying {
-				return m, nil
-			}
-			m.confirmingCancel = true
-			return m, nil
-		}
+		return m.handleKeyMsg(msg)
 
 	case stepDone:
 		if !m.applying {
@@ -186,6 +159,48 @@ func (m WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.spinner, cmd = m.spinner.Update(msg)
 			return m, cmd
 		}
+	}
+
+	if m.applying {
+		return m, nil
+	}
+
+	if m.current < len(m.steps) {
+		updated, cmd := m.steps[m.current].Update(msg)
+		m.steps[m.current] = updated
+		return m, cmd
+	}
+	return m, nil
+}
+
+func (m WizardModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.confirmingCancel {
+		switch msg.String() {
+		case "y", "Y":
+			m.canceled = true
+			m.quitting = true
+			return m, tea.Quit
+		case "n", "N", keyEsc:
+			m.confirmingCancel = false
+			return m, nil
+		}
+		return m, nil
+	}
+
+	switch msg.String() {
+	case "ctrl+c":
+		if m.applying {
+			return m, nil
+		}
+		m.canceled = true
+		m.quitting = true
+		return m, tea.Quit
+	case keyEsc:
+		if m.applying {
+			return m, nil
+		}
+		m.confirmingCancel = true
+		return m, nil
 	}
 
 	if m.applying {

@@ -78,6 +78,7 @@ const (
 	keyEnter       = "enter"
 	keyDown        = "down"
 	keyUp          = "up"
+	keyEsc         = "esc"
 	syncGit        = "git"
 	defaultProfile = "default"
 )
