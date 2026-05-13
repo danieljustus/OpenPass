@@ -599,8 +599,12 @@ func testPlatformCheck(t *testing.T, checkID, name string) {
 	}
 }
 
-func TestRunChecks_AutoTypeBackend_Runs(t *testing.T) { testPlatformCheck(t, "tooling.autotype.backend", "auto-type backend") }
-func TestRunChecks_ClipboardBackend_Runs(t *testing.T) { testPlatformCheck(t, "tooling.clipboard.backend", "clipboard backend") }
+func TestRunChecks_AutoTypeBackend_Runs(t *testing.T) {
+	testPlatformCheck(t, "tooling.autotype.backend", "auto-type backend")
+}
+func TestRunChecks_ClipboardBackend_Runs(t *testing.T) {
+	testPlatformCheck(t, "tooling.clipboard.backend", "clipboard backend")
+}
 
 func TestRunChecks_DaemonStatus_Runs(t *testing.T) {
 	dir := t.TempDir()
