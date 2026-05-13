@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -31,6 +34,9 @@ import (
 const (
 	osDarwin = "darwin"
 	osLinux  = "linux"
+
+	msgSessionNeeded  = "no active session — run `openpass unlock` first"
+	hintSessionNeeded = "run `openpass unlock` to decrypt entries for password strength analysis"
 )
 
 // Status represents the outcome of a single check.
@@ -126,6 +132,8 @@ var allChecks = []checkDef{
 	{fn: checkSecureUI},
 	{fn: checkPreCommitHooks},
 	{fn: checkSessionKeyring},
+	{fn: checkPasswordStrength, tags: []string{"slow"}},
+	{fn: checkPasswordReuse, tags: []string{"slow"}},
 }
 
 // RunChecks runs all doctor checks against vaultDir and returns the results.
@@ -845,7 +853,7 @@ func checkManifestIntegrity(vaultDir string, _ Options) Result {
 	identity := vault.CurrentSearchIdentity()
 	if identity == nil {
 		r.Status = StatusWarn
-		r.Message = "no active session — run `openpass unlock` first"
+		r.Message = msgSessionNeeded
 		r.Hint = "run `openpass unlock` to decrypt your identity for manifest verification"
 		return r
 	}
@@ -1274,4 +1282,143 @@ func checkSessionKeyring(vaultDir string, _ Options) Result {
 	r.Status = StatusOK
 	r.Message = "keyring encrypt/decrypt roundtrip OK"
 	return r
+}
+
+// --- DOC-22: Password strength check ---
+
+func checkPasswordStrength(vaultDir string, _ Options) Result {
+	r := Result{ID: "password.strength", Name: "Weak password detection"}
+
+	identity := vault.CurrentSearchIdentity()
+	if identity == nil {
+		r.Status = StatusWarn
+		r.Message = msgSessionNeeded
+		r.Hint = hintSessionNeeded
+		return r
+	}
+
+	paths, err := vault.List(vaultDir, "")
+	if err != nil {
+		r.Status = StatusWarn
+		r.Message = "cannot list entries: " + err.Error()
+		return r
+	}
+
+	var weakCount int
+	var examplePaths []string
+	for _, path := range paths {
+		entry, err := vault.ReadEntry(vaultDir, path, identity)
+		if err != nil {
+			continue
+		}
+		pwd, ok := entry.GetField("password")
+		if !ok {
+			continue
+		}
+		pwdStr, ok := pwd.(string)
+		if !ok || pwdStr == "" {
+			continue
+		}
+		s := vaultcrypto.AssessPasswordStrength(pwdStr)
+		if s.Weak {
+			weakCount++
+			if len(examplePaths) < 5 {
+				examplePaths = append(examplePaths, path)
+			}
+		}
+	}
+
+	if weakCount > 0 {
+		examples := strings.Join(examplePaths, ", ")
+		r.Status = StatusWarn
+		r.Message = fmt.Sprintf("%d entries with weak passwords", weakCount)
+		r.Hint = fmt.Sprintf("review and strengthen: %s", examples)
+	} else {
+		r.Status = StatusOK
+		r.Message = "all entries meet password strength requirements"
+	}
+	return r
+}
+
+// --- DOC-23: Password reuse check ---
+
+func checkPasswordReuse(vaultDir string, _ Options) Result {
+	r := Result{ID: "password.reuse", Name: "Password reuse detection"}
+
+	identity := vault.CurrentSearchIdentity()
+	if identity == nil {
+		r.Status = StatusWarn
+		r.Message = msgSessionNeeded
+		r.Hint = "run `openpass unlock` to decrypt entries for password reuse analysis"
+		return r
+	}
+
+	paths, err := vault.List(vaultDir, "")
+	if err != nil {
+		r.Status = StatusWarn
+		r.Message = "cannot list entries: " + err.Error()
+		return r
+	}
+
+	hashToPaths := make(map[string][]string)
+	for _, path := range paths {
+		entry, err := vault.ReadEntry(vaultDir, path, identity)
+		if err != nil {
+			continue
+		}
+		pwd, ok := entry.GetField("password")
+		if !ok {
+			continue
+		}
+		pwdStr, ok := pwd.(string)
+		if !ok || pwdStr == "" {
+			continue
+		}
+		h := sha256.Sum256([]byte(pwdStr))
+		hashHex := hex.EncodeToString(h[:])
+		hashToPaths[hashHex] = append(hashToPaths[hashHex], path)
+	}
+
+	var reusedGroups [][]string
+	for _, ec := range hashToPaths {
+		if len(ec) > 1 {
+			reusedGroups = append(reusedGroups, ec)
+		}
+	}
+
+	if len(reusedGroups) > 0 {
+		sort.Slice(reusedGroups, func(i, j int) bool {
+			return len(reusedGroups[i]) > len(reusedGroups[j])
+		})
+		r.Status = StatusWarn
+		if len(reusedGroups) == 1 {
+			sort.Strings(reusedGroups[0])
+			r.Message = fmt.Sprintf("%d entries share the same password", len(reusedGroups[0]))
+			r.Hint = fmt.Sprintf("entries: %s", strings.Join(reusedGroups[0], ", "))
+		} else {
+			r.Message = fmt.Sprintf("%d sets of entries with shared passwords", len(reusedGroups))
+			if len(reusedGroups) > 3 {
+				r.Hint = fmt.Sprintf("top groups: %s", formatReuseGroups(reusedGroups[:3]))
+			} else {
+				r.Hint = formatReuseGroups(reusedGroups)
+			}
+		}
+	} else {
+		r.Status = StatusOK
+		r.Message = "no reused passwords detected"
+	}
+	return r
+}
+
+func formatReuseGroups(groups [][]string) string {
+	var parts []string
+	for _, g := range groups {
+		sort.Strings(g)
+		entries := strings.Join(g, ", ")
+		if len(g) > 5 {
+			entries = strings.Join(g[:5], ", ") + fmt.Sprintf(", ... (%d total)", len(g))
+		}
+		parts = append(parts, fmt.Sprintf("%d entries: %s", len(g), entries))
+	}
+	return strings.Join(parts, "; ")
 }
