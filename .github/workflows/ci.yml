@@ -102,7 +102,7 @@ jobs:
 
       - name: Upload gosec SARIF report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gosec-sarif
           path: gosec.sarif
@@ -171,7 +171,7 @@ jobs:
 
       - name: Upload coverage artifact
         if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: coverage.html
@@ -248,7 +248,7 @@ jobs:
           echo "Built: $output_name"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: openpass-${{ matrix.goos }}-${{ matrix.goarch }}
           path: openpass-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.extension }}
