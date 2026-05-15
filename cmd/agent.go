@@ -30,13 +30,12 @@ var agentSetupCmd = &cobra.Command{
 	Use:   "setup <name>",
 	Short: "Create an agent profile interactively",
 	Long: `Run an interactive wizard to create a new agent profile with:
-  • Agent type selection (Claude Desktop, Cursor, Codex CLI, Custom)
   • Security tier (read-only, standard, admin)
   • Vault path glob restriction
   • Approval mode (prompt or deny)
 
 The wizard creates a profile in config.yaml, a scoped token in the registry,
-a token file, and outputs the MCP client configuration snippet.`,
+a token file, and outputs a ready-to-paste stdio MCP client configuration snippet.`,
 	Args: cobra.ExactArgs(1),
 	Annotations: map[string]string{
 		requiresVaultAnnotation: "false",
@@ -47,13 +46,12 @@ a token file, and outputs the MCP client configuration snippet.`,
 		}
 
 		name := args[0]
-		if strings.TrimSpace(name) == "" {
-			return fmt.Errorf("agent name must not be empty")
+		if err := validateAgentName(name); err != nil {
+			return err
 		}
 
 		reader := bufio.NewReader(os.Stdin)
 
-		agentType := promptAgentType(reader)
 		tier := promptSecurityTier(reader)
 		glob := promptVaultPathGlob(reader)
 		approvalMode := promptApprovalMode(reader)
@@ -84,41 +82,10 @@ a token file, and outputs the MCP client configuration snippet.`,
 		fmt.Fprintf(os.Stderr, "Token:    %s\n", tokenFilePath)
 		fmt.Fprintf(os.Stderr, "Token ID: %s\n\n", tokenID)
 
-		outputAgentMCPSnippet(name, agentType, rawToken)
+		outputAgentMCPSnippet(name, rawToken)
 
 		return nil
 	},
-}
-
-func promptAgentType(reader *bufio.Reader) string {
-	for {
-		fmt.Fprint(os.Stderr, "Select agent type:\n")
-		fmt.Fprint(os.Stderr, "1) Claude Desktop (stdio + http)\n")
-		fmt.Fprint(os.Stderr, "2) Cursor (stdio)\n")
-		fmt.Fprint(os.Stderr, "3) Codex CLI (stdio)\n")
-		fmt.Fprint(os.Stderr, "4) Custom\n")
-		fmt.Fprint(os.Stderr, "Choice [1-4]: ")
-
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
-			continue
-		}
-		input = strings.TrimSpace(input)
-
-		switch input {
-		case "1":
-			return "Claude Desktop"
-		case "2":
-			return "Cursor"
-		case "3":
-			return "Codex CLI"
-		case "4":
-			return "Custom"
-		default:
-			fmt.Fprint(os.Stderr, "Invalid choice. Please enter a number between 1 and 4.\n\n")
-		}
-	}
 }
 
 func promptSecurityTier(reader *bufio.Reader) string {
@@ -194,6 +161,19 @@ func promptApprovalMode(reader *bufio.Reader) string {
 	}
 }
 
+func validateAgentName(name string) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("agent name must not be empty")
+	}
+	if strings.Contains(name, "/") || strings.Contains(name, "\\") || name == "." || name == ".." {
+		return fmt.Errorf("invalid agent name")
+	}
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("invalid agent name")
+	}
+	return nil
+}
+
 func buildProfile(name, tier, glob, approvalMode string, requireApproval bool) configpkg.AgentProfile {
 	profile := configpkg.AgentProfile{
 		Name:         name,
@@ -210,6 +190,9 @@ func buildProfile(name, tier, glob, approvalMode string, requireApproval bool) c
 }
 
 func saveAgentConfig(vaultDir, name string, profile configpkg.AgentProfile) error {
+	if err := validateAgentName(name); err != nil {
+		return err
+	}
 	configPath := filepath.Join(vaultDir, "config.yaml")
 	cfg, err := configpkg.Load(configPath)
 	if err != nil {
@@ -231,6 +214,9 @@ func saveAgentConfig(vaultDir, name string, profile configpkg.AgentProfile) erro
 }
 
 func createAgentToken(vaultDir, name string) (string, string, error) {
+	if err := validateAgentName(name); err != nil {
+		return "", "", err
+	}
 	regPath := mcp.TokenRegistryFilePath(vaultDir)
 	reg := mcp.NewTokenRegistry(regPath)
 	if err := reg.Load(); err != nil {
@@ -250,6 +236,9 @@ func createAgentToken(vaultDir, name string) (string, string, error) {
 }
 
 func writeAgentTokenFile(vaultDir, name, rawToken string) (string, error) {
+	if err := validateAgentName(name); err != nil {
+		return "", err
+	}
 	tokenDir := filepath.Join(vaultDir, "mcp-tokens")
 	if err := os.MkdirAll(tokenDir, 0o700); err != nil {
 		return "", fmt.Errorf("create token directory: %w", err)
@@ -263,24 +252,12 @@ func writeAgentTokenFile(vaultDir, name, rawToken string) (string, error) {
 	return tokenPath, nil
 }
 
-func outputAgentMCPSnippet(name, agentType, rawToken string) {
+func outputAgentMCPSnippet(name, rawToken string) {
 	args := []string{"serve", "--stdio", "--agent", name}
-
-	var label string
-	switch agentType {
-	case "Claude Desktop":
-		label = "openpass"
-	case "Cursor":
-		label = "openpass"
-	case "Codex CLI":
-		label = "openpass"
-	default:
-		label = "openpass"
-	}
 
 	config := map[string]any{
 		"mcpServers": map[string]any{
-			label: map[string]any{
+			"openpass": map[string]any{
 				"command": "openpass",
 				"args":    args,
 				"env": map[string]string{
@@ -290,7 +267,7 @@ func outputAgentMCPSnippet(name, agentType, rawToken string) {
 		},
 	}
 
-	fmt.Fprint(os.Stderr, "MCP Config for "+agentType+":\n")
+	fmt.Fprint(os.Stderr, "MCP config (generic stdio):\n")
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(config); err != nil {

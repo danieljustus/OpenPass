@@ -71,7 +71,6 @@ type AgentProfile struct {
 	CanUseClipboard     bool                `yaml:"canUseClipboard,omitempty"`
 	CanUseAutotype      bool                `yaml:"canUseAutotype,omitempty"`
 	CanReadValues       bool                `yaml:"canReadValues,omitempty"`
-	ExposeValueTools    bool                `yaml:"exposeValueTools,omitempty"`
 	RequireApproval     bool                `yaml:"requireApproval"`
 	ApprovalTimeout     time.Duration       `yaml:"approvalTimeout,omitempty"`
 	AllowedTools        []string            `yaml:"allowed_tools,omitempty"`
@@ -89,7 +88,6 @@ type fileAgentProfile struct {
 	CanUseClipboard     *bool               `yaml:"canUseClipboard,omitempty"`
 	CanUseAutotype      *bool               `yaml:"canUseAutotype,omitempty"`
 	CanReadValues       *bool               `yaml:"canReadValues,omitempty"`
-	ExposeValueTools    *bool               `yaml:"exposeValueTools,omitempty"`
 	RequireApproval     *bool               `yaml:"requireApproval,omitempty"`
 	ApprovalMode        *string             `yaml:"approvalMode,omitempty"`
 	AllowedPaths        []string            `yaml:"allowedPaths,omitempty"`
@@ -212,9 +210,6 @@ func Load(path string) (*Config, error) {
 			}
 			if profile.CanReadValues != nil {
 				current.CanReadValues = *profile.CanReadValues
-			}
-			if profile.ExposeValueTools != nil {
-				current.ExposeValueTools = *profile.ExposeValueTools
 			}
 			if profile.RequireApproval != nil {
 				current.RequireApproval = *profile.RequireApproval
@@ -485,18 +480,16 @@ func buildFileAgents(agents map[string]AgentProfile) map[string]fileAgentProfile
 		canUseClipboard := profile.CanUseClipboard
 		canUseAutotype := profile.CanUseAutotype
 		canReadValues := profile.CanReadValues
-		exposeValueTools := profile.ExposeValueTools
 		requireApproval := profile.RequireApproval
 		fap := fileAgentProfile{
-			AllowedPaths:     allowed,
-			CanWrite:         &canWrite,
-			CanRunCommands:   &canRunCommands,
-			CanManageConfig:  &canManageConfig,
-			CanUseClipboard:  &canUseClipboard,
-			CanUseAutotype:   &canUseAutotype,
-			CanReadValues:    &canReadValues,
-			ExposeValueTools: &exposeValueTools,
-			RequireApproval:  &requireApproval,
+			AllowedPaths:    allowed,
+			CanWrite:        &canWrite,
+			CanRunCommands:  &canRunCommands,
+			CanManageConfig: &canManageConfig,
+			CanUseClipboard: &canUseClipboard,
+			CanUseAutotype:  &canUseAutotype,
+			CanReadValues:   &canReadValues,
+			RequireApproval: &requireApproval,
 		}
 		if profile.ApprovalMode != "" {
 			am := profile.ApprovalMode
