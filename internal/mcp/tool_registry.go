@@ -324,10 +324,15 @@ func toolsListPayload(s *Server) []map[string]any {
 	definitions := availableToolDefinitions(s)
 	tools := make([]map[string]any, 0, len(definitions))
 	for _, def := range definitions {
+		inputSchema := def.InputSchema
+		if def.Name == "get_entry" && s != nil && s.agent != nil && !s.agent.ExposeValueTools {
+			inputSchema = withoutSchemaProperty(def.InputSchema, "include_value")
+		}
+
 		payload := map[string]any{
 			"name":        def.Name,
 			"description": def.Description,
-			"inputSchema": def.InputSchema,
+			"inputSchema": inputSchema,
 		}
 		if def.Deprecated {
 			payload["deprecated"] = true
@@ -338,6 +343,33 @@ func toolsListPayload(s *Server) []map[string]any {
 		tools = append(tools, payload)
 	}
 	return tools
+}
+
+func withoutSchemaProperty(schema map[string]any, property string) map[string]any {
+	if schema == nil {
+		return nil
+	}
+
+	cloned := make(map[string]any, len(schema))
+	for key, value := range schema {
+		cloned[key] = value
+	}
+
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return cloned
+	}
+
+	clonedProperties := make(map[string]any, len(properties))
+	for key, value := range properties {
+		if key == property {
+			continue
+		}
+		clonedProperties[key] = value
+	}
+	cloned["properties"] = clonedProperties
+
+	return cloned
 }
 
 func callToolResultPayload(result *CallToolResult) map[string]any {

@@ -33,6 +33,19 @@ func TestToolsList_FiltersGetEntryValue_WhenExposeValueToolsFalse(t *testing.T) 
 	if !names["list_entries"] {
 		t.Error("list_entries should still be in tools/list")
 	}
+
+	getEntry := findToolByName(t, tools, "get_entry")
+	inputSchema, ok := getEntry["inputSchema"].(map[string]any)
+	if !ok {
+		t.Fatal("get_entry inputSchema has unexpected type")
+	}
+	properties, ok := inputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("get_entry properties have unexpected type")
+	}
+	if _, ok := properties["include_value"]; ok {
+		t.Error("get_entry schema should hide include_value when ExposeValueTools=false")
+	}
 }
 
 func TestToolsList_ShowsGetEntryValue_WhenExposeValueToolsTrue(t *testing.T) {
@@ -52,6 +65,19 @@ func TestToolsList_ShowsGetEntryValue_WhenExposeValueToolsTrue(t *testing.T) {
 
 	if !names["get_entry_value"] {
 		t.Error("get_entry_value should be in tools/list when ExposeValueTools=true")
+	}
+
+	getEntry := findToolByName(t, tools, "get_entry")
+	inputSchema, ok := getEntry["inputSchema"].(map[string]any)
+	if !ok {
+		t.Fatal("get_entry inputSchema has unexpected type")
+	}
+	properties, ok := inputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("get_entry properties have unexpected type")
+	}
+	if _, ok := properties["include_value"]; !ok {
+		t.Error("get_entry schema should include include_value when ExposeValueTools=true")
 	}
 }
 
@@ -93,4 +119,17 @@ func TestAvailableToolDefinitions_FiltersGetEntryValue_WhenExposeValueToolsFalse
 	if !names["get_entry"] {
 		t.Error("get_entry should still be available when ExposeValueTools=false")
 	}
+}
+
+func findToolByName(t *testing.T, tools []map[string]any, name string) map[string]any {
+	t.Helper()
+
+	for _, tool := range tools {
+		if tool["name"] == name {
+			return tool
+		}
+	}
+
+	t.Fatalf("tool %q not found", name)
+	return nil
 }

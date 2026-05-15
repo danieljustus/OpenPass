@@ -200,7 +200,7 @@ func Load(path string) (*Config, error) {
 			}
 
 			// Backward compat: default ExposeValueTools to true when neither tier nor explicit value
-			if profile.Tier == nil || *profile.Tier == "" {
+			if (profile.Tier == nil || *profile.Tier == "") && profile.ExposeValueTools == nil {
 				current.ExposeValueTools = true
 			}
 
