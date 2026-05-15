@@ -22,8 +22,8 @@ type mockResponseWriter struct {
 }
 
 func (m *mockResponseWriter) Header() http.Header         { return m.header }
-func (m *mockResponseWriter) Write(b []byte) (int, error)  { return m.body.Write(b) }
-func (m *mockResponseWriter) WriteHeader(s int)            { m.status = s }
+func (m *mockResponseWriter) Write(b []byte) (int, error) { return m.body.Write(b) }
+func (m *mockResponseWriter) WriteHeader(s int)           { m.status = s }
 
 func challengeForVerifier(verifier string) string {
 	h := sha256.Sum256([]byte(verifier))

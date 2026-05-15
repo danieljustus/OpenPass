@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ func TestOAuthClientStore_LoadSaveRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client store file not created: %v", err)
 	}
-	if info.Mode().Perm() != 0o600 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Errorf("file permissions = %o, want 0o600", info.Mode().Perm())
 	}
 
@@ -128,8 +129,8 @@ func TestOAuthClientStore_FileFormat(t *testing.T) {
 	}
 
 	var file struct {
-		Version int                            `json:"version"`
-		Clients map[string]*registeredClient   `json:"clients"`
+		Version int                          `json:"version"`
+		Clients map[string]*registeredClient `json:"clients"`
 	}
 	if err := json.Unmarshal(data, &file); err != nil {
 		t.Fatalf("Unmarshal: %v", err)

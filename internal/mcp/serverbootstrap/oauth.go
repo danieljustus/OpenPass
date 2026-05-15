@@ -45,8 +45,8 @@ type registeredClient struct {
 	ClientID     string     `json:"client_id"`
 	RedirectURIs []string   `json:"redirect_uris"`
 	CreatedAt    time.Time  `json:"created_at"`
-	TTL          *int64     `json:"ttl_seconds,omitempty"`   // optional TTL in seconds
-	ExpiresAt    *time.Time `json:"expires_at,omitempty"`    // computed expiration time
+	TTL          *int64     `json:"ttl_seconds,omitempty"` // optional TTL in seconds
+	ExpiresAt    *time.Time `json:"expires_at,omitempty"`  // computed expiration time
 }
 
 // newOAuthClientStore creates an in-memory-only client store.

@@ -27,37 +27,37 @@ type TokenRegistryFile struct {
 
 // TokenRegistryEntry is a single entry in the on-disk token registry.
 type TokenRegistryEntry struct {
-	ID                string     `json:"id"`
-	Label             string     `json:"label,omitempty"`
-	Hash              string     `json:"hash"`
-	Prefix            string     `json:"prefix"`
-	AllowedTools      []string   `json:"allowed_tools"`
-	AgentName         string     `json:"agent_name,omitempty"`
-	CreatedAt         time.Time  `json:"created_at"`
-	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
-	LastUsedAt        *time.Time `json:"last_used_at,omitempty"`
-	Revoked           bool       `json:"revoked"`
-	RevokedAt         *time.Time `json:"revoked_at,omitempty"`
-	RefreshTokenHash  string     `json:"refresh_token_hash,omitempty"`
-	RefreshExpiresAt  *time.Time `json:"refresh_expires_at,omitempty"`
+	ID               string     `json:"id"`
+	Label            string     `json:"label,omitempty"`
+	Hash             string     `json:"hash"`
+	Prefix           string     `json:"prefix"`
+	AllowedTools     []string   `json:"allowed_tools"`
+	AgentName        string     `json:"agent_name,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	ExpiresAt        *time.Time `json:"expires_at,omitempty"`
+	LastUsedAt       *time.Time `json:"last_used_at,omitempty"`
+	Revoked          bool       `json:"revoked"`
+	RevokedAt        *time.Time `json:"revoked_at,omitempty"`
+	RefreshTokenHash string     `json:"refresh_token_hash,omitempty"`
+	RefreshExpiresAt *time.Time `json:"refresh_expires_at,omitempty"`
 }
 
 // ScopedToken is the in-memory representation of a scoped token with its
 // associated metadata. It is safe for concurrent access.
 type ScopedToken struct {
-	ID                string     `json:"id"`
-	Label             string     `json:"label,omitempty"`
-	Hash              string     `json:"hash"`
-	Prefix            string     `json:"prefix"`
-	AllowedTools      []string   `json:"allowed_tools"`
-	AgentName         string     `json:"agent_name,omitempty"`
-	CreatedAt         time.Time  `json:"created_at"`
-	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
-	LastUsedAt        *time.Time `json:"last_used_at,omitempty"`
-	Revoked           bool       `json:"revoked"`
-	RevokedAt         *time.Time `json:"revoked_at,omitempty"`
-	RefreshTokenHash  string     `json:"refresh_token_hash,omitempty"`
-	RefreshExpiresAt  *time.Time `json:"refresh_expires_at,omitempty"`
+	ID               string     `json:"id"`
+	Label            string     `json:"label,omitempty"`
+	Hash             string     `json:"hash"`
+	Prefix           string     `json:"prefix"`
+	AllowedTools     []string   `json:"allowed_tools"`
+	AgentName        string     `json:"agent_name,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	ExpiresAt        *time.Time `json:"expires_at,omitempty"`
+	LastUsedAt       *time.Time `json:"last_used_at,omitempty"`
+	Revoked          bool       `json:"revoked"`
+	RevokedAt        *time.Time `json:"revoked_at,omitempty"`
+	RefreshTokenHash string     `json:"refresh_token_hash,omitempty"`
+	RefreshExpiresAt *time.Time `json:"refresh_expires_at,omitempty"`
 
 	mu sync.Mutex
 }

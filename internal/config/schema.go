@@ -218,23 +218,23 @@ type fileOAuthConfig struct {
 // fileMCPConfig is the file-based MCP configuration with pointer fields
 // for optional YAML unmarshaling.
 type fileMCPConfig struct {
-	Port                *int           `yaml:"port,omitempty"`
-	Bind                *string        `yaml:"bind,omitempty"`
-	Stdio               *bool          `yaml:"stdio,omitempty"`
-	ApprovalRequired    *bool          `yaml:"approval_required,omitempty"` // deprecated, parsed but ignored
-	HTTPTokenFile       *string        `yaml:"httpTokenFile,omitempty"`
-	OTLPEndpoint        *string        `yaml:"otlp_endpoint,omitempty"`
-	ReadHeaderTimeout   *time.Duration `yaml:"read_header_timeout,omitempty"`
-	ReadTimeout         *time.Duration `yaml:"read_timeout,omitempty"`
-	WriteTimeout        *time.Duration `yaml:"write_timeout,omitempty"`
-	ShutdownTimeout     *time.Duration `yaml:"shutdown_timeout,omitempty"`
-	ApprovalTimeout     *time.Duration `yaml:"approval_timeout,omitempty"`
-	RateLimit           *int           `yaml:"rate_limit,omitempty"`
-	TrustedProxyIPs     []string       `yaml:"trusted_proxy_ips,omitempty"`
-	MetricsAuthRequired *bool          `yaml:"metrics_auth_required,omitempty"`
-	TLSCertFile         *string        `yaml:"tls_cert_file,omitempty"`
-	TLSKeyFile          *string        `yaml:"tls_key_file,omitempty"`
-	AllowInsecureBind   *bool          `yaml:"allow_insecure_bind,omitempty"`
+	Port                *int             `yaml:"port,omitempty"`
+	Bind                *string          `yaml:"bind,omitempty"`
+	Stdio               *bool            `yaml:"stdio,omitempty"`
+	ApprovalRequired    *bool            `yaml:"approval_required,omitempty"` // deprecated, parsed but ignored
+	HTTPTokenFile       *string          `yaml:"httpTokenFile,omitempty"`
+	OTLPEndpoint        *string          `yaml:"otlp_endpoint,omitempty"`
+	ReadHeaderTimeout   *time.Duration   `yaml:"read_header_timeout,omitempty"`
+	ReadTimeout         *time.Duration   `yaml:"read_timeout,omitempty"`
+	WriteTimeout        *time.Duration   `yaml:"write_timeout,omitempty"`
+	ShutdownTimeout     *time.Duration   `yaml:"shutdown_timeout,omitempty"`
+	ApprovalTimeout     *time.Duration   `yaml:"approval_timeout,omitempty"`
+	RateLimit           *int             `yaml:"rate_limit,omitempty"`
+	TrustedProxyIPs     []string         `yaml:"trusted_proxy_ips,omitempty"`
+	MetricsAuthRequired *bool            `yaml:"metrics_auth_required,omitempty"`
+	TLSCertFile         *string          `yaml:"tls_cert_file,omitempty"`
+	TLSKeyFile          *string          `yaml:"tls_key_file,omitempty"`
+	AllowInsecureBind   *bool            `yaml:"allow_insecure_bind,omitempty"`
 	OAuth               *fileOAuthConfig `yaml:"oauth,omitempty"`
 }
 
