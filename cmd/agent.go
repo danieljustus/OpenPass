@@ -165,10 +165,7 @@ func validateAgentName(name string) error {
 	if strings.TrimSpace(name) == "" {
 		return fmt.Errorf("agent name must not be empty")
 	}
-	if strings.Contains(name, "/") || strings.Contains(name, "\\") || name == "." || name == ".." {
-		return fmt.Errorf("invalid agent name")
-	}
-	if strings.Contains(name, "..") {
+	if strings.Contains(name, "/") || strings.Contains(name, "\\") || name == "." || strings.Contains(name, "..") {
 		return fmt.Errorf("invalid agent name")
 	}
 	return nil
