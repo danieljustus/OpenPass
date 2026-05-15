@@ -3,6 +3,8 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+
+	"github.com/danieljustus/OpenPass/internal/config"
 )
 
 type toolHandler func(*Server, context.Context, CallToolRequest) (*CallToolResult, error)
@@ -288,9 +290,25 @@ func availableToolDefinitions(s *Server) []toolDefinition {
 		if def.Available != nil && !def.Available(s) {
 			continue
 		}
+		if s != nil && isToolBlockedByAgent(s.agent, def.Name) {
+			continue
+		}
 		available = append(available, def)
 	}
 	return available
+}
+
+// isToolBlockedByAgent returns true when the tool should be hidden/unavailable
+// based on the agent's profile capabilities. This is used both at list-time
+// (availableToolDefinitions) and at call-time (executeTool) for defense-in-depth.
+func isToolBlockedByAgent(agent *config.AgentProfile, toolName string) bool {
+	if agent == nil {
+		return false
+	}
+	if !agent.ExposeValueTools && toolName == "get_entry_value" {
+		return true
+	}
+	return false
 }
 
 func findToolDefinition(name string) (toolDefinition, bool) {

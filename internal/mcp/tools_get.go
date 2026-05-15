@@ -70,6 +70,16 @@ func (s *Server) handleGet(ctx context.Context, req CallToolRequest) (*CallToolR
 		return nil, fmt.Errorf("access denied: path %q outside allowed scope", path)
 	}
 
+	// Strip include_value when agent profile blocks value exposure
+	if s.agent != nil && !s.agent.ExposeValueTools {
+		if includeVal, ok := req.Arguments["include_value"]; ok {
+			if includeBool, ok := includeVal.(bool); ok && includeBool {
+				delete(req.Arguments, "include_value")
+				s.logAudit(ctx, "get_value_stripped", path, false)
+			}
+		}
+	}
+
 	svc := vaultsvc.New(slog.Default(), s.vault)
 	_, span := metrics.StartSpan(ctx, "vault.GetEntry")
 	entry, err := svc.GetEntry(path)
