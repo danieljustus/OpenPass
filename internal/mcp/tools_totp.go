@@ -104,7 +104,10 @@ func (s *Server) totpClipboard(ctx context.Context, path string, code *crypto.TO
 		"destination": "clipboard",
 		"expires_in":  autoClearDuration,
 	}
-	resultJSON, _ := json.Marshal(result)
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		return NewToolResultError(fmt.Sprintf("failed to create response: %v", err)), nil
+	}
 	return NewToolResultText(string(resultJSON)), nil
 }
 

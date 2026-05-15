@@ -36,11 +36,11 @@ func writeTOTPEntry(t *testing.T, vaultDir string, identity *age.X25519Identity)
 func TestHandleGenerateTOTP_ReturnSuccess(t *testing.T) {
 	vaultDir, identity := mockVault(t)
 	srv := newTestServerWithVault(t, config.AgentProfile{
-		Name:         "test",
-		AllowedPaths: []string{"*"},
-		CanWrite:     false,
+		Name:          "test",
+		AllowedPaths:  []string{"*"},
+		CanWrite:      false,
 		CanReadValues: true,
-		ApprovalMode: "none",
+		ApprovalMode:  "none",
 	}, "stdio", vaultDir)
 	srv.vault.Identity = identity
 	writeTOTPEntry(t, vaultDir, identity)
