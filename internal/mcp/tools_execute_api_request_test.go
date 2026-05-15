@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -700,7 +701,7 @@ func TestHandleExecuteAPIRequest_HeadersValidation(t *testing.T) {
 
 			writeTemplateOverride(t, vaultDir, "headers-validation", fmt.Sprintf(`base_url: %s
 auth_type: bearer
-entry_ref: headers-validation
+entry_ref: op:///headers-validation
 allowed_endpoints:
   - /*
 allowed_methods:
@@ -753,7 +754,7 @@ func TestHandleExecuteAPIRequest_EndpointDotSegmentsRejected(t *testing.T) {
 
 			writeTemplateOverride(t, vaultDir, "dot-segments", `base_url: https://example.com
 auth_type: bearer
-entry_ref: dot-segments
+entry_ref: op:///dot-segments
 allowed_endpoints:
   - /v1/*
 allowed_methods:
@@ -843,7 +844,7 @@ func TestHandleExecuteAPIRequest_ResponseBodyTruncated(t *testing.T) {
 
 	writeTemplateOverride(t, vaultDir, "large-response", fmt.Sprintf(`base_url: %s
 auth_type: bearer
-entry_ref: large-response
+entry_ref: op:///large-response
 allowed_endpoints:
   - /*
 allowed_methods:
@@ -1045,9 +1046,10 @@ func TestNormalizeEndpoint(t *testing.T) {
 		want      string
 		wantError bool
 	}{
-		{name: "clean endpoint", endpoint: "/v1//chat/completions", want: "/v1/chat/completions"},
+		{name: "double slashes normalized", endpoint: "/v1//chat/completions", want: "/v1/chat/completions"},
 		{name: "dot segment rejected", endpoint: "/v1/../admin", wantError: true},
 		{name: "encoded dot segment rejected", endpoint: "/v1/%2e%2e/admin", wantError: true},
+		{name: "invalid encoding rejected", endpoint: "/path/%ZZ", wantError: true},
 		{name: "must start with slash", endpoint: "v1/chat", wantError: true},
 	}
 
@@ -1082,6 +1084,8 @@ func TestParseTimeoutSeconds(t *testing.T) {
 		{name: "maximum clamped", input: 9999, want: maxAPITimeoutSeconds},
 		{name: "string integer", input: "45", want: 45},
 		{name: "non-integer rejected", input: 1.5, wantError: true},
+		{name: "nan rejected", input: math.NaN(), wantError: true},
+		{name: "infinity rejected", input: math.Inf(1), wantError: true},
 		{name: "invalid type rejected", input: map[string]any{}, wantError: true},
 	}
 
