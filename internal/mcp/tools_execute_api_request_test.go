@@ -569,7 +569,7 @@ func TestHandleExecuteAPIRequest_RunDenied(t *testing.T) {
 func TestHandleExecuteAPIRequest_ResponseSanitized(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"result": "my-super-secret-token-value"}`))
+		_, _ = w.Write([]byte(`{"result": "my-super-secret-token-value", "pat": "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}`))
 	}))
 	defer ts.Close()
 
@@ -614,7 +614,65 @@ allowed_methods:
 	}
 	body, _ := output["body"].(string)
 	if strings.Contains(body, "my-super-secret-token-value") {
-		t.Errorf("body contains secret value: %q", body)
+		t.Errorf("body contains vault-known secret value: %q", body)
+	}
+	if strings.Contains(body, "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") {
+		t.Errorf("body contains pattern-based secret (GitHub PAT): %q", body)
+	}
+}
+
+func TestHandleExecuteAPIRequest_PatternSanitized(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"openai_key": "sk-abcdefghijklmnopqrst-abcdefghij", "aws_key": "AKIAIOSFODNN7EXAMPLE"}`))
+	}))
+	defer ts.Close()
+
+	vaultDir, identity := mockVaultWithEntry(t, "pattern-test", map[string]any{
+		"credential": "irrelevant-token",
+	})
+	srv := newTestServerWithVault(t, config.AgentProfile{
+		Name:           "test",
+		AllowedPaths:   []string{"*"},
+		CanRunCommands: true,
+		ApprovalMode:   "none",
+	}, "stdio", vaultDir)
+	srv.vault.Identity = identity
+
+	writeTemplateOverride(t, vaultDir, "pattern-test", fmt.Sprintf(`base_url: %s
+auth_type: bearer
+entry_ref: pattern-test
+allowed_endpoints:
+  - /*
+allowed_methods:
+  - GET
+`, ts.URL))
+
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"template": "pattern-test",
+			"endpoint": "/test",
+			"method":   "GET",
+		},
+	}
+	result, err := srv.handleExecuteAPIRequest(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleExecuteAPIRequest() error = %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("handleExecuteAPIRequest() returned error: %s", result.Text)
+	}
+
+	var output map[string]any
+	if err := json.Unmarshal([]byte(result.Text), &output); err != nil {
+		t.Fatalf("parse result: %v", err)
+	}
+	body, _ := output["body"].(string)
+	if strings.Contains(body, "sk-abcdefghijklmnopqrst-abcdefghij") {
+		t.Errorf("body contains OpenAI API key pattern: %q", body)
+	}
+	if strings.Contains(body, "AKIAIOSFODNN7EXAMPLE") {
+		t.Errorf("body contains AWS key pattern: %q", body)
 	}
 }
 
