@@ -115,10 +115,12 @@ linters:
       - path: '(.+)_test\.go'
         linters:
           - gocritic
-      # Vendored third-party code under editors/node_modules
-      - path: 'editors/node_modules/.+'
+      # Vendored third-party Go code under editors/node_modules
+      - path: 'editors/node_modules/flatted/.+'
         linters:
-          - all
+          - gocyclo
+          - prealloc
+          - revive
 
 formatters:
   enable:

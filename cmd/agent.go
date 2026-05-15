@@ -56,9 +56,9 @@ a token file, and outputs the MCP client configuration snippet.`,
 		agentType := promptAgentType(reader)
 		tier := promptSecurityTier(reader)
 		glob := promptVaultPathGlob(reader)
-		approvalMode, requireApproval := promptApprovalMode(reader)
+		approvalMode := promptApprovalMode(reader)
 
-		profile := buildProfile(name, tier, glob, approvalMode, requireApproval)
+		profile := buildProfile(name, tier, glob, approvalMode, true)
 		vaultDir := getVaultDir()
 
 		if err := saveAgentConfig(vaultDir, name, profile); err != nil {
@@ -166,7 +166,7 @@ func promptVaultPathGlob(reader *bufio.Reader) string {
 	return input
 }
 
-func promptApprovalMode(reader *bufio.Reader) (string, bool) {
+func promptApprovalMode(reader *bufio.Reader) string {
 	for {
 		fmt.Fprint(os.Stderr, "\nApproval mode:\n")
 		fmt.Fprint(os.Stderr, "1) prompt — ask for each sensitive operation\n")
@@ -180,14 +180,14 @@ func promptApprovalMode(reader *bufio.Reader) (string, bool) {
 		}
 		input = strings.TrimSpace(input)
 		if input == "" {
-			return "prompt", true
+			return "prompt"
 		}
 
 		switch input {
 		case "1":
-			return "prompt", true
+			return "prompt"
 		case "2":
-			return "deny", true
+			return "deny"
 		default:
 			fmt.Fprint(os.Stderr, "Invalid choice. Please enter 1 or 2.\n")
 		}
@@ -293,7 +293,9 @@ func outputAgentMCPSnippet(name, agentType, rawToken string) {
 	fmt.Fprint(os.Stderr, "MCP Config for "+agentType+":\n")
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	_ = enc.Encode(config)
+	if err := enc.Encode(config); err != nil {
+		fmt.Fprintf(os.Stderr, "Error encoding config: %v\n", err)
+	}
 }
 
 func init() {
