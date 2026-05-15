@@ -7,14 +7,24 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
+	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/danieljustus/OpenPass/internal/mcp/apitemplates"
 	"github.com/danieljustus/OpenPass/internal/metrics"
 	"github.com/danieljustus/OpenPass/internal/vaultsvc"
+)
+
+const (
+	defaultAPITimeoutSeconds = 30
+	minAPITimeoutSeconds     = 1
+	maxAPITimeoutSeconds     = 300
+	maxAPIResponseBodyBytes  = 100 * 1024
 )
 
 // handleExecuteAPIRequest executes an HTTP API request using a named template.
@@ -43,7 +53,18 @@ func (s *Server) handleExecuteAPIRequest(ctx context.Context, req CallToolReques
 
 	method := req.GetString("method", "GET")
 	bodyStr := req.GetString("body", "")
-	timeoutSec := int(req.GetFloat("timeout", 30))
+	timeoutSec, timeoutErr := parseTimeoutSeconds(req.Arguments["timeout"])
+	if timeoutErr != nil {
+		s.logAudit(ctx, "execute_api_request", "<invalid:timeout>", false)
+		return NewToolResultError(timeoutErr.Error()), nil
+	}
+	method = strings.ToUpper(method)
+
+	normalizedEndpoint, endpointErr := normalizeEndpoint(endpoint)
+	if endpointErr != nil {
+		s.logAudit(ctx, "execute_api_request", "<invalid:endpoint>", false)
+		return NewToolResultError(fmt.Sprintf("invalid endpoint %q: %v", endpoint, endpointErr)), nil
+	}
 
 	// Load template
 	vaultDir := ""
@@ -57,9 +78,9 @@ func (s *Server) handleExecuteAPIRequest(ctx context.Context, req CallToolReques
 	}
 
 	// Validate endpoint against allowed patterns
-	if !matchAnyGlob(endpoint, tmpl.AllowedEndpoints) {
+	if !matchAnyGlob(normalizedEndpoint, tmpl.AllowedEndpoints) {
 		s.logAudit(ctx, "execute_api_request", fmt.Sprintf("<endpoint-denied:%s>", tmpl.Name), false)
-		return NewToolResultError(fmt.Sprintf("endpoint not allowed: %s", endpoint)), nil
+		return NewToolResultError(fmt.Sprintf("endpoint not allowed: %s", normalizedEndpoint)), nil
 	}
 
 	// Validate method against allowed methods
@@ -77,15 +98,25 @@ func (s *Server) handleExecuteAPIRequest(ctx context.Context, req CallToolReques
 	}
 
 	// Load vault entry for credentials
+	entryPath, parseErr := parseTemplateEntryRef(tmpl.EntryRef)
+	if parseErr != nil {
+		s.logAudit(ctx, "execute_api_request", fmt.Sprintf("<template-error:%s>", tmpl.Name), false)
+		return NewToolResultError(fmt.Sprintf("invalid entry_ref for %q: %v", tmpl.Name, parseErr)), nil
+	}
+	if !s.checkScope(entryPath) {
+		s.logAudit(ctx, "execute_api_request", fmt.Sprintf("<scope-denied:%s>", tmpl.Name), false)
+		metrics.RecordAuthDenial("scope_denied", s.agent.Name)
+		return nil, fmt.Errorf("access denied: template entry path %q outside allowed scope", entryPath)
+	}
 	svc := vaultsvc.New(slog.Default(), s.vault)
-	entry, entryErr := svc.GetEntry(tmpl.EntryRef)
+	entry, entryErr := svc.GetEntry(entryPath)
 	if entryErr != nil {
 		s.logAudit(ctx, "execute_api_request", fmt.Sprintf("<vault-error:%s>", tmpl.Name), false)
 		return NewToolResultError(fmt.Sprintf("cannot load credentials for %q: %v", tmpl.Name, entryErr)), nil
 	}
 
 	// Build the request
-	requestURL := tmpl.BaseURL + endpoint
+	requestURL := tmpl.BaseURL + normalizedEndpoint
 	var requestBody io.Reader
 	if bodyStr != "" {
 		requestBody = strings.NewReader(bodyStr)
@@ -106,15 +137,14 @@ func (s *Server) handleExecuteAPIRequest(ctx context.Context, req CallToolReques
 	if headersRaw, ok := req.Arguments["headers"]; ok {
 		headersMap, ok := headersRaw.(map[string]any)
 		if !ok {
-			s.logAudit(ctx, "execute_api_request", fmt.Sprintf("<invalid-headers:%s>", tmpl.Name), false)
-			return NewToolResultError("invalid headers: must be an object with string values"), nil
+			s.logAudit(ctx, "execute_api_request", "<invalid:headers-not-object>", false)
+			return NewToolResultError("argument \"headers\" must be an object"), nil
 		}
-
 		for k, v := range headersMap {
 			vStr, ok := v.(string)
 			if !ok {
-				s.logAudit(ctx, "execute_api_request", fmt.Sprintf("<invalid-headers:%s>", tmpl.Name), false)
-				return NewToolResultError(fmt.Sprintf("invalid headers: value for %q must be a string", k)), nil
+				s.logAudit(ctx, "execute_api_request", "<invalid:header-value-not-string>", false)
+				return NewToolResultError(fmt.Sprintf("headers[%q] must be a string", k)), nil
 			}
 			httpReq.Header.Set(k, vStr)
 		}
@@ -139,15 +169,15 @@ func (s *Server) handleExecuteAPIRequest(ctx context.Context, req CallToolReques
 	resp, respErr := client.Do(httpReq)
 	if respErr != nil {
 		s.logAudit(ctx, "execute_api_request", fmt.Sprintf("template=%s, endpoint=%s, method=%s, status=error",
-			tmpl.Name, endpoint, method), false)
+			tmpl.Name, normalizedEndpoint, method), false)
 		return NewToolResultError(fmt.Sprintf("request failed: %v", respErr)), nil
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	respBody, readErr := io.ReadAll(resp.Body)
+	respBody, bodyTruncated, readErr := readLimitedBody(resp.Body, maxAPIResponseBodyBytes)
 	if readErr != nil {
 		s.logAudit(ctx, "execute_api_request", fmt.Sprintf("template=%s, endpoint=%s, method=%s, status=error",
-			tmpl.Name, endpoint, method), false)
+			tmpl.Name, normalizedEndpoint, method), false)
 		return NewToolResultError(fmt.Sprintf("cannot read response: %v", readErr)), nil
 	}
 
@@ -177,20 +207,121 @@ func (s *Server) handleExecuteAPIRequest(ctx context.Context, req CallToolReques
 
 	// Audit log: template + endpoint + method + status code only
 	auditMsg := fmt.Sprintf("template=%s, endpoint=%s, method=%s, status=%d",
-		tmpl.Name, endpoint, method, resp.StatusCode)
+		tmpl.Name, normalizedEndpoint, method, resp.StatusCode)
 	s.logAudit(ctx, "execute_api_request", auditMsg, resp.StatusCode < 400)
 
 	resultJSON, err := json.Marshal(map[string]any{
-		"status_code":  resp.StatusCode,
-		"headers":      safeHeaders,
-		"body":         sanitizedBody,
-		"content_type": contentType,
+		"status_code":    resp.StatusCode,
+		"headers":        safeHeaders,
+		"body":           sanitizedBody,
+		"body_truncated": bodyTruncated,
+		"content_type":   contentType,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("marshal response: %w", err)
 	}
 
 	return NewToolResultText(string(resultJSON)), nil
+}
+
+func parseTemplateEntryRef(entryRef string) (string, error) {
+	ref := strings.TrimSpace(entryRef)
+	if ref == "" {
+		return "", fmt.Errorf("entry_ref is required")
+	}
+	if strings.HasPrefix(ref, "op://") {
+		entryPath, field, err := parseOpRef(ref)
+		if err != nil {
+			return "", err
+		}
+		if field != "" {
+			return "", fmt.Errorf("entry_ref must reference an entry, not a field")
+		}
+		return entryPath, nil
+	}
+	return ref, nil
+}
+
+func normalizeEndpoint(endpoint string) (string, error) {
+	trimmed := strings.TrimSpace(endpoint)
+	if trimmed == "" {
+		return "", fmt.Errorf("endpoint is required")
+	}
+	if !strings.HasPrefix(trimmed, "/") {
+		return "", fmt.Errorf("endpoint must start with '/'")
+	}
+	decoded, err := url.PathUnescape(trimmed)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL encoding")
+	}
+	if hasDotSegment(trimmed) || hasDotSegment(decoded) {
+		return "", fmt.Errorf("dot-segments are not allowed")
+	}
+	return path.Clean(trimmed), nil
+}
+
+func hasDotSegment(p string) bool {
+	for _, part := range strings.Split(p, "/") {
+		if part == "." || part == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+func parseTimeoutSeconds(raw any) (int, error) {
+	if raw == nil {
+		return defaultAPITimeoutSeconds, nil
+	}
+
+	var timeoutValue float64
+	switch v := raw.(type) {
+	case float64:
+		timeoutValue = v
+	case float32:
+		timeoutValue = float64(v)
+	case int:
+		timeoutValue = float64(v)
+	case int32:
+		timeoutValue = float64(v)
+	case int64:
+		timeoutValue = float64(v)
+	case string:
+		parsed, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return 0, fmt.Errorf("argument \"timeout\" must be numeric")
+		}
+		timeoutValue = parsed
+	default:
+		return 0, fmt.Errorf("argument \"timeout\" must be numeric")
+	}
+
+	if math.IsNaN(timeoutValue) || math.IsInf(timeoutValue, 0) {
+		return 0, fmt.Errorf("argument \"timeout\" must be a finite number")
+	}
+	if timeoutValue != math.Trunc(timeoutValue) {
+		return 0, fmt.Errorf("argument \"timeout\" must be a whole number of seconds")
+	}
+
+	timeoutSec := int(timeoutValue)
+	if timeoutSec < minAPITimeoutSeconds {
+		timeoutSec = minAPITimeoutSeconds
+	}
+	if timeoutSec > maxAPITimeoutSeconds {
+		timeoutSec = maxAPITimeoutSeconds
+	}
+	return timeoutSec, nil
+}
+
+func readLimitedBody(r io.Reader, limit int) ([]byte, bool, error) {
+	body, err := io.ReadAll(io.LimitReader(r, int64(limit)+1))
+	if err != nil {
+		return nil, false, err
+	}
+	if len(body) > limit {
+		return body[:limit], true, nil
+	}
+	return body, false, nil
 }
 
 // injectAuthHeader resolves the credential from the vault entry data and
