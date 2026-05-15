@@ -299,9 +299,15 @@ func isMethodAllowed(method string, allowed []string) bool {
 	return false
 }
 
-// checkExecuteAPIRequestApproval checks the agent's approval mode and either
+// checkExecuteAPIRequestApproval checks the agent's approval mode for API request execution.
+func (s *Server) checkExecuteAPIRequestApproval(ctx context.Context) error {
+	return s.checkApproval(ctx, "execute_api_request",
+		"agent %q requests to execute an API request")
+}
+
+// checkApproval is a shared helper that checks the agent's approval mode and either
 // allows execution, denies it, or prompts the user for confirmation.
-func (s *Server) checkExecuteAPIRequestApproval(_ context.Context) error {
+func (s *Server) checkApproval(_ context.Context, operation, detailFmt string) error {
 	if s == nil || s.agent == nil {
 		return fmt.Errorf("server not initialized")
 	}
@@ -319,22 +325,22 @@ func (s *Server) checkExecuteAPIRequestApproval(_ context.Context) error {
 	case "none", "auto":
 		return nil
 	case "deny":
-		return fmt.Errorf("execute_api_request denied: approval mode is 'deny'")
+		return fmt.Errorf("%s denied: approval mode is 'deny'", operation)
 	case "prompt":
 		timeout := s.agent.ApprovalTimeout
 		if timeout <= 0 {
 			timeout = 30 * time.Second
 		}
 		result := RequestApproval(ApprovalRequest{
-			Operation: "execute_api_request",
-			Details:   fmt.Sprintf("agent %q requests to execute an API request", s.agent.Name),
+			Operation: operation,
+			Details:   fmt.Sprintf(detailFmt, s.agent.Name),
 			Timeout:   timeout,
 		})
 		if result.Error != nil {
-			return fmt.Errorf("execute_api_request approval failed: %w", result.Error)
+			return fmt.Errorf("%s approval failed: %w", operation, result.Error)
 		}
 		if !result.Approved {
-			return fmt.Errorf("execute_api_request denied: user did not approve")
+			return fmt.Errorf("%s denied: user did not approve", operation)
 		}
 		metrics.RecordApproval(s.agent.Name, "granted")
 		return nil

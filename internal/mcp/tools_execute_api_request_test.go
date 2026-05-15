@@ -454,93 +454,85 @@ func TestHandleExecuteAPIRequest_MissingEndpoint(t *testing.T) {
 	}
 }
 
-func TestHandleExecuteAPIRequest_EndpointDenied(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer ts.Close()
-
-	vaultDir, identity := mockVaultWithEntry(t, "restricted", map[string]any{
-		"credential": "token",
-	})
-	srv := newTestServerWithVault(t, config.AgentProfile{
-		Name:           "test",
-		AllowedPaths:   []string{"*"},
-		CanRunCommands: true,
-		ApprovalMode:   "none",
-	}, "stdio", vaultDir)
-	srv.vault.Identity = identity
-
-	writeTemplateOverride(t, vaultDir, "restricted", fmt.Sprintf(`base_url: %s
+func TestHandleExecuteAPIRequest_DeniedEndpointMethod(t *testing.T) {
+	tests := []struct {
+		name       string
+		entryName  string
+		tmplConfig string
+		endpoint   string
+		method     string
+		wantErrSub string
+	}{
+		{
+			name:      "endpoint denied",
+			entryName: "restricted",
+			tmplConfig: `base_url: %s
 auth_type: bearer
 entry_ref: restricted
 allowed_endpoints:
   - /v1/*
 allowed_methods:
   - GET
-`, ts.URL))
-
-	req := CallToolRequest{
-		Arguments: map[string]any{
-			"template": "restricted",
-			"endpoint": "/admin/delete",
-			"method":   "GET",
+`,
+			endpoint:   "/admin/delete",
+			method:     "GET",
+			wantErrSub: "endpoint not allowed",
 		},
-	}
-	result, err := srv.handleExecuteAPIRequest(context.Background(), req)
-	if err != nil {
-		t.Fatalf("handleExecuteAPIRequest() error = %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("handleExecuteAPIRequest() expected error result for denied endpoint")
-	}
-	if !strings.Contains(result.Text, "endpoint not allowed") {
-		t.Errorf("result text = %q, want 'endpoint not allowed'", result.Text)
-	}
-}
-
-func TestHandleExecuteAPIRequest_MethodDenied(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer ts.Close()
-
-	vaultDir, identity := mockVaultWithEntry(t, "readonly", map[string]any{
-		"credential": "token",
-	})
-	srv := newTestServerWithVault(t, config.AgentProfile{
-		Name:           "test",
-		AllowedPaths:   []string{"*"},
-		CanRunCommands: true,
-		ApprovalMode:   "none",
-	}, "stdio", vaultDir)
-	srv.vault.Identity = identity
-
-	writeTemplateOverride(t, vaultDir, "readonly", fmt.Sprintf(`base_url: %s
+		{
+			name:      "method denied",
+			entryName: "readonly",
+			tmplConfig: `base_url: %s
 auth_type: bearer
 entry_ref: readonly
 allowed_endpoints:
   - /*
 allowed_methods:
   - GET
-`, ts.URL))
-
-	req := CallToolRequest{
-		Arguments: map[string]any{
-			"template": "readonly",
-			"endpoint": "/test",
-			"method":   "DELETE",
+`,
+			endpoint:   "/test",
+			method:     "DELETE",
+			wantErrSub: "method not allowed",
 		},
 	}
-	result, err := srv.handleExecuteAPIRequest(context.Background(), req)
-	if err != nil {
-		t.Fatalf("handleExecuteAPIRequest() error = %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("handleExecuteAPIRequest() expected error result for denied method")
-	}
-	if !strings.Contains(result.Text, "method not allowed") {
-		t.Errorf("result text = %q, want 'method not allowed'", result.Text)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			vaultDir, identity := mockVaultWithEntry(t, tc.entryName, map[string]any{
+				"credential": "token",
+			})
+			srv := newTestServerWithVault(t, config.AgentProfile{
+				Name:           "test",
+				AllowedPaths:   []string{"*"},
+				CanRunCommands: true,
+				ApprovalMode:   "none",
+			}, "stdio", vaultDir)
+			srv.vault.Identity = identity
+
+			writeTemplateOverride(t, vaultDir, tc.entryName, fmt.Sprintf(tc.tmplConfig, ts.URL))
+
+			req := CallToolRequest{
+				Arguments: map[string]any{
+					"template": tc.entryName,
+					"endpoint": tc.endpoint,
+					"method":   tc.method,
+				},
+			}
+			result, err := srv.handleExecuteAPIRequest(context.Background(), req)
+			if err != nil {
+				t.Fatalf("handleExecuteAPIRequest() error = %v", err)
+			}
+			if !result.IsError {
+				t.Fatal("handleExecuteAPIRequest() expected error result for " + tc.name)
+			}
+			if !strings.Contains(result.Text, tc.wantErrSub) {
+				t.Errorf("result text = %q, want %q", result.Text, tc.wantErrSub)
+			}
+		})
 	}
 }
 
