@@ -205,6 +205,65 @@ For automated scripts that need the raw token:
 TOKEN=$(openpass mcp-config <agent> --token-only)
 ```
 
+## OAuth Dynamic Client Registration
+
+OpenPass supports OAuth 2.1 + PKCE + Dynamic Client Registration (DCR) for MCP
+clients that implement the DCR flow. This allows clients to automatically
+register and obtain scoped tokens without manual bearer token setup.
+
+### Supported Features
+
+- **DCR (RFC 7591)**: Clients register via `POST /oauth/register` and receive a
+  `client_id`. Registrations persist across server restarts.
+- **PKCE (RFC 7636)**: Authorization code flow with S256 code challenge method.
+- **Authorization Code Grant (RFC 6749 §4.1)**: User consent required via TTY
+  prompt before issuing tokens.
+- **Refresh Token Grant (RFC 6749 §6)**: Clients receive refresh tokens alongside
+  access tokens. Token rotation invalidates previous tokens (single-use pattern).
+
+### opencode Configuration
+
+For opencode (and other DCR-capable clients), configure the MCP server with
+OAuth enabled:
+
+```json
+{
+  "mcpServers": {
+    "openpass": {
+      "type": "remote",
+      "url": "http://127.0.0.1:8080/mcp",
+      "oauth": true
+    }
+  }
+}
+```
+
+Run `opencode mcp auth openpass` to start the DCR flow. The client will:
+1. Discover the authorization server metadata from well-known endpoints
+2. Register a client via DCR
+3. Walk through the PKCE authorization flow (TTY user consent)
+4. Receive scoped access and refresh tokens
+5. Automatically refresh tokens when they expire
+
+### Configuration
+
+Token TTLs can be customized in `config.yaml`:
+
+```yaml
+mcp:
+  oauth:
+    access_token_ttl: 1h     # how long access tokens are valid (default: 24h)
+    refresh_token_ttl: 720h  # how long refresh tokens are valid (default: 30d)
+```
+
+### Benefits Over Bearer Tokens
+
+- **No manual token setup** — clients self-register
+- **Scoped tokens** — each OAuth-issued token is independently revocable
+- **Automatic rotation** — refresh tokens keep connections alive without
+  re-authentication
+- **Persistent registration** — survives server restarts
+
 ## Credential Cache Validation
 
 ### Cache Invalidation with Metadata

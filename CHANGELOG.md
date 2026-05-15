@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- OAuth 2.1 + PKCE + DCR: persistent client registry survives server restarts (#45)
+- OAuth refresh token grant (RFC 6749 §6) with configurable TTLs (#46)
+- Config options `mcp.oauth.access_token_ttl` (default 24h) and `mcp.oauth.refresh_token_ttl` (default 30d) (#46)
+
+### Changed
+
+- OAuth docs updated to reflect live OAuth implementation (removed "501 Not Implemented" claims) (#47)
+- Agent integration docs: added OAuth DCR section with opencode example (#47)
+
+### Fixed
+
+- OAuth error response: `unauthorized_client` → `invalid_client` with `WWW-Authenticate` header (#45)
+
 ## [v2.9.0] - 2026-05-13
 
 ### Added

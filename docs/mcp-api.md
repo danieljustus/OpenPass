@@ -99,9 +99,17 @@ The agent name must match a profile in the vault configuration.
 
 ---
 
-## OAuth Well-Known Endpoints
+## OAuth 2.1 with PKCE and DCR
 
-OpenPass exposes OAuth well-known endpoints for MCP client discovery. These endpoints comply with RFC 9728 (OAuth Protected Resource Metadata) and RFC 8414 (OAuth Authorization Server Metadata). They exist so that OAuth-only MCP clients (such as opencode) can discover server capabilities without crashing on JSON parse errors during auto-discovery.
+OpenPass implements [OAuth 2.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1) with [PKCE](https://datatracker.ietf.org/doc/html/rfc7636) and [Dynamic Client Registration](https://datatracker.ietf.org/doc/html/rfc7591) (DCR). This allows MCP clients that support DCR (such as opencode) to automatically register with the OpenPass MCP server and obtain scoped tokens without manual token management.
+
+### OAuth Flow Overview
+
+1. **Discovery**: The client fetches `/.well-known/oauth-authorization-server` to find the authorize, token, and registration endpoints.
+2. **Registration**: The client sends a `POST /oauth/register` with its redirect URIs. The server returns a `client_id`.
+3. **Authorization**: The client redirects the user to `/mcp/oauth/authorize` with PKCE challenge. The server prompts for user consent via TTY and issues a short-lived authorization code.
+4. **Token Exchange**: The client exchanges the authorization code for an access token + refresh token at `/mcp/oauth/token`.
+5. **Refresh**: When the access token expires, the client uses the refresh token to obtain a new pair without user interaction.
 
 ### Endpoint Reference
 
@@ -109,12 +117,11 @@ OpenPass exposes OAuth well-known endpoints for MCP client discovery. These endp
 |----------|--------|--------|-------------|
 | `/.well-known/oauth-protected-resource` | GET | 200 | Protected resource metadata (RFC 9728) |
 | `/.well-known/oauth-authorization-server` | GET | 200 | Authorization server metadata (RFC 8414) |
-| `/mcp/oauth/authorize` | POST | 501 | OAuth authorization stub |
-| `/mcp/oauth/token` | POST | 501 | OAuth token exchange stub |
+| `/oauth/register` | POST | 201 | Dynamic client registration (RFC 7591) |
+| `/mcp/oauth/authorize` | GET | 302/400 | Authorization request (RFC 6749 §4.1.1) |
+| `/mcp/oauth/token` | POST | 200/400 | Token exchange and refresh (RFC 6749 §4.1.3, §6) |
 
-### Well-Known Endpoint Responses
-
-The two well-known discovery endpoints return static metadata that describes how OpenPass handles OAuth:
+### Discovery Endpoints
 
 ```json
 GET /.well-known/oauth-protected-resource
@@ -137,6 +144,7 @@ Content-Type: application/json
   "issuer": "http://127.0.0.1:8080",
   "authorization_endpoint": "http://127.0.0.1:8080/mcp/oauth/authorize",
   "token_endpoint": "http://127.0.0.1:8080/mcp/oauth/token",
+  "registration_endpoint": "http://127.0.0.1:8080/oauth/register",
   "response_types_supported": ["code"],
   "code_challenge_methods_supported": ["S256"],
   "token_endpoint_auth_methods_supported": ["none"],
@@ -144,28 +152,119 @@ Content-Type: application/json
 }
 ```
 
-The authorization and token endpoints return 501 Not Implemented:
+### Client Registration
 
 ```json
-POST /mcp/oauth/authorize
-HTTP/1.1 501 Not Implemented
+POST /oauth/register
 Content-Type: application/json
 
 {
-  "error": "not_implemented",
-  "error_description": "OAuth authorization is not yet implemented. Use bearer token authentication."
+  "redirect_uris": ["http://127.0.0.1:4321/callback"]
 }
 ```
 
-### OpenCode Integration Guide
-
-OpenPass uses bearer token authentication, not OAuth. The well-known endpoints exist only to prevent client crashes during auto-discovery. They are not used for actual OAuth flows.
-
-To configure opencode to use OpenPass as an MCP server with bearer token auth:
+Response (201 Created):
 
 ```json
 {
-  "mcp": {
+  "client_id": "a1b2c3d4e5f6a7b8",
+  "client_id_issued_at": 1700000000,
+  "client_secret_expires_at": 0,
+  "token_endpoint_auth_method": "none",
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "redirect_uris": ["http://127.0.0.1:4321/callback"]
+}
+```
+
+Client registrations are **persistent** across server restarts (stored in `<vault-dir>/mcp-oauth-clients.json`).
+
+### Token Exchange (authorization_code)
+
+```json
+POST /mcp/oauth/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code&
+code=AUTH_CODE&
+code_verifier=VERIFIER
+```
+
+Response (200 OK):
+
+```json
+{
+  "access_token": "a1b2c3d4...",
+  "token_type": "Bearer",
+  "expires_in": 86400,
+  "refresh_token": "e5f6a7b8..."
+}
+```
+
+### Token Refresh
+
+```json
+POST /mcp/oauth/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=refresh_token&
+refresh_token=REFRESH_TOKEN
+```
+
+Response (200 OK):
+
+```json
+{
+  "access_token": "new_access_token...",
+  "token_type": "Bearer",
+  "expires_in": 86400,
+  "refresh_token": "new_refresh_token..."
+}
+```
+
+Token rotation: each refresh invalidates the previous access token and refresh token (single-use pattern).
+
+### Configuration
+
+OAuth token TTLs are configurable via `config.yaml`:
+
+```yaml
+mcp:
+  oauth:
+    access_token_ttl: 1h    # default: 24h
+    refresh_token_ttl: 720h # default: 720h (30 days)
+```
+
+### opencode Integration
+
+opencode can use either OAuth with DCR or static bearer token auth.
+
+**OAuth with DCR (recommended)**:
+
+```json
+{
+  "mcpServers": {
+    "openpass": {
+      "type": "remote",
+      "url": "http://127.0.0.1:8080/mcp",
+      "oauth": true
+    }
+  }
+}
+```
+
+With this configuration, `opencode mcp auth openpass` will:
+1. Discover the authorization server metadata
+2. Register a client via DCR
+3. Walk through the PKCE authorization flow (user consent via TTY)
+4. Receive scoped access+refresh tokens
+5. Automatically refresh tokens when they expire
+
+**Bearer token auth (legacy)**:
+
+```json
+{
+  "mcpServers": {
     "openpass": {
       "type": "remote",
       "url": "http://127.0.0.1:8080/mcp",
@@ -178,8 +277,6 @@ To configure opencode to use OpenPass as an MCP server with bearer token auth:
   }
 }
 ```
-
-With this configuration, `opencode mcp auth openpass` will no longer crash with a JSON parse error. The client discovers the well-known endpoints, reads the bearer token metadata, and falls back to the supplied `Authorization` header instead of attempting an OAuth flow.
 
 ---
 
