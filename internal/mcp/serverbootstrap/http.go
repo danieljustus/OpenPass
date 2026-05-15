@@ -118,12 +118,12 @@ func RunHTTPServerOnListener(ctx context.Context, listener net.Listener, v *vaul
 		resultChan := make(chan result, 1)
 
 		go func() {
-			mcpServer, err := factory(v, agentName, "http")
-			if err != nil {
-				resultChan <- result{err: err}
+			mcpSrv, mcpErr := factory(v, agentName, "http")
+			if mcpErr != nil {
+				resultChan <- result{err: mcpErr}
 				return
 			}
-			h := mcp.NewProtocolHandler("openpass", "1.0.0", mcpServer)
+			h := mcp.NewProtocolHandler("openpass", "1.0.0", mcpSrv)
 
 			cacheMu.Lock()
 			if existing, ok := handlerCache[agentName]; ok {
