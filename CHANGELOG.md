@@ -5,22 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v3.0.0] - 2026-05-15
 
 ### Added
 
-- OAuth 2.1 + PKCE + DCR: persistent client registry survives server restarts (#45)
-- OAuth refresh token grant (RFC 6749 §6) with configurable TTLs (#46)
-- Config options `mcp.oauth.access_token_ttl` (default 24h) and `mcp.oauth.refresh_token_ttl` (default 30d) (#46)
+- **Security: MCP response hardening** — new `taint.Untrusted` typesystem provides compile-time safety boundary between trusted and untrusted data; all MCP responses pass through `SanitizeForMCP` chokepoint; new `EmbedAsData()` helper wraps untrusted content in safe `<data>` tags; all 12 prompt injection points migrated to `EmbedAsData` (#38, #40)
+- **Security: typed vault accessors** — `FieldUntrusted()`, `TagsUntrusted()`, `UsageHintUntrusted()` return `taint.Untrusted` values with provenance tracking; `SecretHandle` type with `ParseSecretHandle()` for `op://` path resolution; `HandleResolver` interface (#39)
+- **Security: `CanReadValues` profile option** — gates `get_entry_value` behind explicit agent permission; `requireApproval()` helper with `Intent` struct, `ApprovalMode` (none/auto/deny/prompt), and audit-logged approval/rejection events (#40)
+- **Security: custom Go vet analyzer (`passlint`)** — detects `fmt.Print*/Sprintf/Fprint*` with `taint.Untrusted` args; integrated into CI via `make vet` (#42)
+- **Terminal output hardening** — all TUI, Doctor, and CLI output sanitized through `render.ForTerminal()` and `ForTerminalLine()` (#41)
+- OAuth refresh token grant (RFC 6749 §6) with configurable TTLs (`ScopedToken` gains `RefreshTokenHash`/`RefreshExpiresAt`; `CreateWithRefresh()`/`RotateViaRefreshToken()`; single-use rotation) (#46)
+- Persistent OAuth client registry — client registrations survive server restarts via JSON persistence (`oauthClientStore.Load()`/`Save()`); optional TTL with background expired-client cleanup (#45)
+- Config options `mcp.oauth.access_token_ttl` (default 24h) and `mcp.oauth.refresh_token_ttl` (default 720h/30d) with file config + merge support (#46)
+- Nix flake for NixOS/Nix support — `nix run github:danieljustus/OpenPass` with `buildGoModule` package, default app, and dev shell (#36)
+- New `internal/ui/render` package with `ForTerminal()`, `QuoteForTerminal()`, `ForTerminalLine()` sanitizers
+- New `internal/mcp/render.go` with `RenderChokepoint` and `SanitizeForMCP()`
 
 ### Changed
 
+- **Breaking: MCP `get_entry` response format** — `fields` now `[]map[string]{name, handle, kind}` instead of `[]string`; each field includes type-inferred `kind` (string, number, boolean, totp, object, null) (#40)
+- **Breaking: `include_value` removed** — `handleGet` returns metadata only; `handleSanitizeOutput` delegates to `SanitizeForMCP` chokepoint (#42)
+- **Breaking: prompt format migrated** — all user-supplied values in MCP prompts are now wrapped in `<data label=..>` tags with `(data)` annotation, removing `%s`/`%q` injection risk (#40)
 - OAuth docs updated to reflect live OAuth implementation (removed "501 Not Implemented" claims) (#47)
-- Agent integration docs: added OAuth DCR section with opencode example (#47)
+- Agent integration docs: added OAuth DCR section with opencode configuration example (#47)
+- `get_entry_metadata`: `UsageHint` sanitized through `SanitizeForMCP`
+- `list_entries`/`find_entries`: `Path` and `UsageHint` sanitized through `SanitizeForMCP`
+- `set_entry_field`/`delete_entry`: use `requireApproval()` instead of `requiresApproval`
+- Bumped `github.com/mattn/go-runewidth` from v0.0.19 to v0.0.23 (#44)
+- Bumped `actions/upload-artifact` from 4 to 7 (#43)
+- `gocyclo` complexity threshold adjusted to 30 for existing codebase
 
 ### Fixed
 
 - OAuth error response: `unauthorized_client` → `invalid_client` with `WWW-Authenticate` header (#45)
+- Nix `vendorHash` resolved for reproducible builds (#36)
+- `err` shadowing in `handlerForAgent` goroutine closure
+- `gofmt` formatting across `config.go`, `taint_test.go`, `schema.go`, `token.go`, `oauth.go`, and test files
+- `errcheck`: handle `fmt.Fprintf` return values in `taint.go`
+- `goconst`: use `SecretTypePassword` constant in `types.go`
+- `govet shadow`: rename `err` variables in `tools_delete.go` and `tools_get.go`
+- `prealloc`: preallocate slice with capacity in `approval_helper.go`
+- `unconvert`: remove unnecessary `string()` conversion
+- `unused`: remove dead `buildVaultResolver` function
+- Skip file permission assertion on Windows (`chmod` is no-op on Windows)
+- `goimports`: formatting on `passlint_test.go`
 
 ## [v2.9.0] - 2026-05-13
 
@@ -472,6 +500,7 @@ Interactive TUI, vault management, and observability release.
 [v2.4.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.4.0
 [v2.5.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.5.0
 [v2.7.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.7.0
+[v3.0.0]: https://github.com/danieljustus/OpenPass/releases/tag/v3.0.0
 [v2.9.0]: https://github.com/danieljustus/OpenPass/releases/tag/v2.9.0
 [v2.8.2]: https://github.com/danieljustus/OpenPass/releases/tag/v2.8.2
 [v2.8.1]: https://github.com/danieljustus/OpenPass/releases/tag/v2.8.1
