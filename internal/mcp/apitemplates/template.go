@@ -57,8 +57,8 @@ type templateFile struct {
 	DefaultHeaders   map[string]string `yaml:"default_headers"`
 }
 
-// Load loads a template by name. It first checks embedded builtins, then
-// checks the user's template directory (~/.openpass/templates/) for overrides.
+// Load loads a template by name. It checks the user's template directory
+// (<vault>/templates/) first, then falls back to embedded built-ins.
 func Load(name string, vaultDir string) (*APITemplate, error) {
 	if name == "" {
 		return nil, fmt.Errorf("template name is required")
@@ -76,7 +76,7 @@ func Load(name string, vaultDir string) (*APITemplate, error) {
 	return loadBuiltin(name)
 }
 
-// LoadAll loads all available templates (builtin and user overrides).
+// LoadAll loads all embedded built-in templates.
 func LoadAll() ([]*APITemplate, error) {
 	var templates []*APITemplate
 
