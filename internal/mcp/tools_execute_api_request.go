@@ -178,7 +178,7 @@ func (s *Server) handleExecuteAPIRequest(ctx context.Context, req CallToolReques
 	// Audit log: template + endpoint + method + status code only
 	auditMsg := fmt.Sprintf("template=%s, endpoint=%s, method=%s, status=%d",
 		tmpl.Name, endpoint, method, resp.StatusCode)
-	s.logAudit(ctx, "execute_api_request", auditMsg, resp.StatusCode < 500)
+	s.logAudit(ctx, "execute_api_request", auditMsg, resp.StatusCode < 400)
 
 	resultJSON, err := json.Marshal(map[string]any{
 		"status_code":  resp.StatusCode,
