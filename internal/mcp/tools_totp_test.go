@@ -157,6 +157,44 @@ func TestHandleGenerateTOTP_ClipboardDefault(t *testing.T) {
 	if clipResult["code"] != nil {
 		t.Error("code should not be present in clipboard response")
 	}
+	if clipResult["clipboard_clears_in"] == nil {
+		t.Error("expected clipboard_clears_in in clipboard result")
+	}
+	if clipResult["expires_in"] != nil {
+		t.Error("expires_in should not be present in clipboard response (use clipboard_clears_in)")
+	}
+}
+
+func TestHandleGenerateTOTP_DefaultsToReturnForCanReadValues(t *testing.T) {
+	// Agents with only CanReadValues (no clipboard, no autotype) should default
+	// destination to "return" rather than "clipboard" to avoid a confusing denial.
+	vaultDir, identity := mockVault(t)
+	srv := newTestServerWithVault(t, config.AgentProfile{
+		Name:          "test",
+		AllowedPaths:  []string{"*"},
+		CanWrite:      false,
+		CanReadValues: true,
+		ApprovalMode:  "none",
+	}, "stdio", vaultDir)
+	srv.vault.Identity = identity
+	writeTOTPEntry(t, vaultDir, identity)
+
+	// No destination specified — should default to "return" for this agent.
+	// Without return_code=true, totpReturn will return a tool-level error.
+	req := CallToolRequest{
+		Arguments: map[string]any{"path": "github"},
+	}
+
+	result, err := srv.handleGenerateTOTP(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleGenerateTOTP() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatal("expected error result: return_code must be true (destination defaulted to return)")
+	}
+	if !strings.Contains(result.Text, "return_code must be true") {
+		t.Fatalf("error = %q, want 'return_code must be true'", result.Text)
+	}
 }
 
 func TestHandleGenerateTOTP_ClipboardExplicit(t *testing.T) {

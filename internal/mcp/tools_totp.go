@@ -28,7 +28,7 @@ func (s *Server) handleGenerateTOTP(ctx context.Context, req CallToolRequest) (*
 		return nil, fmt.Errorf("access denied: path %q outside allowed scope", path)
 	}
 
-	destination := req.GetString("destination", "clipboard")
+	destination := req.GetString("destination", s.defaultTOTPDestination())
 	returnCode := req.GetBool("return_code", false)
 
 	svc := vaultsvc.New(slog.Default(), s.vault)
@@ -100,13 +100,13 @@ func (s *Server) totpClipboard(ctx context.Context, path string, code *crypto.TO
 	metrics.RecordVaultOperation("totp", "success")
 
 	result := map[string]any{
-		"success":     true,
-		"destination": "clipboard",
-		"expires_in":  autoClearDuration,
+		"success":             true,
+		"destination":         "clipboard",
+		"clipboard_clears_in": autoClearDuration,
 	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return NewToolResultError(fmt.Sprintf("failed to create response: %v", err)), nil
+		return nil, fmt.Errorf("marshal totp clipboard result: %w", err)
 	}
 	return NewToolResultText(string(resultJSON)), nil
 }
@@ -168,6 +168,16 @@ func (s *Server) totpReturn(ctx context.Context, path string, code *crypto.TOTPC
 		return nil, fmt.Errorf("marshal totp result: %w", err)
 	}
 	return NewToolResultText(string(resultJSON)), nil
+}
+
+func (s *Server) defaultTOTPDestination() string {
+	if s.canUseClipboard() {
+		return "clipboard"
+	}
+	if s.canUseAutotype() {
+		return "autotype"
+	}
+	return "return"
 }
 
 func generateTOTPAvailable(s *Server) bool {
