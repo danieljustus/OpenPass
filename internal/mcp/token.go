@@ -512,7 +512,7 @@ func (r *TokenRegistry) cleanupOnce() {
 
 // StartFileWatcher begins polling the registry file's modification time at the
 // given interval and reloads the registry whenever the file changes. It returns
-// a stop function. The goroutine terminates when ctx is cancelled or the stop
+// a stop function. The goroutine terminates when ctx is canceled or the stop
 // function is called.
 func (r *TokenRegistry) StartFileWatcher(ctx context.Context, interval time.Duration) func() {
 	stopCh := make(chan struct{})
