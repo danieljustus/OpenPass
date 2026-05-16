@@ -1,5 +1,6 @@
 # Binaries
 openpass
+OpenPass
 *.exe
 *.dll
 *.so

@@ -83,6 +83,12 @@ func (s *Server) executeTool(ctx context.Context, name string, args json.RawMess
 		metrics.RecordMCPRequest(name, agentName, "error", time.Since(start))
 		return nil, fmt.Errorf("tool %q is not available in the current environment", name)
 	}
+	if isToolBlockedByAgent(s.agent, name) {
+		span.SetStatus(codes.Error, "tool not found")
+		metrics.RecordMCPRequest(name, agentName, "error", time.Since(start))
+		s.logAudit(ctx, "agent_tool_denied", name, false)
+		return nil, fmt.Errorf("unknown tool: %s", name)
+	}
 
 	// Check token tool scope
 	if token, ok := TokenFromContext(ctx); ok {
