@@ -44,6 +44,73 @@ func ParseSecretHandle(s string) (SecretHandle, bool) {
 	return SecretHandle{Path: rest}, true
 }
 
+// Classification represents the sensitivity level of a value.
+type Classification int
+
+const (
+	// Public information that can be freely shared.
+	Public Classification = iota
+	// Internal information intended for internal use.
+	Internal
+	// Confidential information that requires controlled access.
+	Confidential
+	// Secret information that must be sealed from LLM exposure by default.
+	Secret
+	// Restricted information with the highest sensitivity level.
+	Restricted
+)
+
+// String returns the human-readable label for the classification.
+func (c Classification) String() string {
+	switch c {
+	case Public:
+		return "public"
+	case Internal:
+		return "internal"
+	case Confidential:
+		return "confidential"
+	case Secret:
+		return "secret"
+	case Restricted:
+		return "restricted"
+	default:
+		return "unknown"
+	}
+}
+
+// OutputType specifies the rendering format for a Value.
+type OutputType int
+
+const (
+	// Plaintext output (raw value).
+	Plaintext OutputType = iota
+	// Masked output (value partially obscured).
+	Masked
+	// Redacted output (value fully removed).
+	Redacted
+	// MCP output (value sanitized for MCP protocol).
+	MCPOutput
+)
+
+// Value wraps a secret value with its classification and metadata
+// for controlled exposure.
+type Value struct {
+	Raw            string
+	Sanitized      string
+	Classification Classification
+	Tags           []string
+}
+
+// NewValue creates a Value with the given raw content and classification.
+func NewValue(raw string, class Classification, tags ...string) Value {
+	return Value{
+		Raw:            raw,
+		Sanitized:      raw,
+		Classification: class,
+		Tags:           tags,
+	}
+}
+
 // ErrUntrustedFormat is returned when an Untrusted value is used in an
 // unsafe context. Call .Render() or .UnsafeRawForStorage() explicitly.
 var ErrUntrustedFormat = errors.New("taint: use of Untrusted in format argument")

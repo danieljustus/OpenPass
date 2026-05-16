@@ -26,7 +26,7 @@ func toolActionType(toolName string) string {
 		return "run"
 	case "list_entries":
 		return "list"
-	case "get_entry", "get_entry_value", "get_entry_metadata":
+	case "get_entry", "get_entry_value", "get_entry_metadata", "secret_unseal":
 		return "get"
 	case "find_entries":
 		return "find"

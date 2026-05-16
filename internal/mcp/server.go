@@ -59,8 +59,9 @@ type Server struct {
 	policyEngine *policy.Engine
 	shareStore   *ShareStore
 
-	approvalCache      *approvalCache
-	approvalKeyCounter atomic.Int64
+	approvalCache         *approvalCache
+	approvalKeyCounter    atomic.Int64
+	secretsAccessed       atomic.Int64
 }
 
 // New creates a new MCP server instance with the specified vault and agent configuration.

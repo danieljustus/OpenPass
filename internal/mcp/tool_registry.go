@@ -313,6 +313,15 @@ func toolDefinitions() []toolDefinition {
 			RiskLevel: RiskLevelHigh,
 		},
 		{
+			Name:        "secret_unseal",
+			Description: "Unseal a secret handle to reveal its value. High-sensitivity entries return handles (op://path/field) instead of plaintext. This tool resolves those handles. Requires user approval per handle.",
+			InputSchema: objectSchema([]string{"handle"}, map[string]schemaProperty{
+				"handle": {Type: "string", Description: "Secret handle to unseal (e.g. op://github/password)"},
+			}),
+			Handler:   (*Server).handleSecretUnseal,
+			RiskLevel: RiskLevelHigh,
+		},
+		{
 			Name:        "list_shares",
 			Description: "List share grants. Can filter by status, agent, or secret path.",
 			InputSchema: objectSchema([]string{}, map[string]schemaProperty{

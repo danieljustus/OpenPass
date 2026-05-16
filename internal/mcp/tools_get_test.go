@@ -10,6 +10,7 @@ import (
 
 	"github.com/danieljustus/OpenPass/internal/config"
 	"github.com/danieljustus/OpenPass/internal/vault"
+	"github.com/danieljustus/OpenPass/internal/vault/taint"
 )
 
 //nolint:dupl // similar test structure for get success cases
@@ -397,18 +398,100 @@ func TestHandleGet_RedactedTOTPStillGeneratesCode(t *testing.T) {
 	}
 }
 
-func TestHandleGetValue_Success(t *testing.T) {
+func TestHandleGetValue_SealsSecretClassification(t *testing.T) {
 	vaultDir, identity := mockVault(t)
+	secretEntry := &vault.Entry{
+		Data: map[string]any{
+			"password": "testpass123",
+			"username": "testuser",
+		},
+		Classification: taint.Secret,
+	}
+	if err := vault.WriteEntry(vaultDir, "secret-entry", secretEntry, identity); err != nil {
+		t.Fatalf("write secret entry: %v", err)
+	}
+
 	srv := newTestServerWithVault(t, config.AgentProfile{
 		Name:         "test",
 		AllowedPaths: []string{"*"},
 		CanWrite:     false,
 		ApprovalMode: "none",
+		AutoUnseal:   false,
 	}, "stdio", vaultDir)
 	srv.vault.Identity = identity
 
 	req := CallToolRequest{
-		Arguments: map[string]any{"path": "github"},
+		Arguments: map[string]any{"path": "secret-entry"},
+	}
+
+	result, err := srv.handleGetValue(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleGetValue() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("handleGetValue() returned nil result")
+	}
+	if result.IsError {
+		t.Fatalf("handleGetValue() returned error: %s", result.Text)
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal([]byte(result.Text), &resp); err != nil {
+		t.Fatalf("parse result: %v", err)
+	}
+
+	handle, hasHandle := resp["handle"]
+	classification, hasClass := resp["classification"]
+	note, hasNote := resp["note"]
+
+	if !hasHandle {
+		t.Error("expected 'handle' field in sealed response")
+	}
+	if !hasClass {
+		t.Error("expected 'classification' field in sealed response")
+	}
+	if !hasNote {
+		t.Error("expected 'note' field in sealed response")
+	}
+
+	handleStr, ok := handle.(string)
+	if !ok || !strings.HasPrefix(handleStr, "op://") {
+		t.Errorf("handle = %v, want op:// prefix", handle)
+	}
+
+	classStr, _ := classification.(string)
+	if classStr != "secret" {
+		t.Errorf("classification = %q, want 'secret'", classStr)
+	}
+	if note == "" {
+		t.Error("expected non-empty note")
+	}
+}
+
+func TestHandleGetValue_ReturnsValuesWhenAutoUnsealTrue(t *testing.T) {
+	vaultDir, identity := mockVault(t)
+	secretEntry := &vault.Entry{
+		Data: map[string]any{
+			"password": "testpass123",
+			"username": "testuser",
+		},
+		Classification: taint.Secret,
+	}
+	if err := vault.WriteEntry(vaultDir, "secret-entry", secretEntry, identity); err != nil {
+		t.Fatalf("write secret entry: %v", err)
+	}
+
+	srv := newTestServerWithVault(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		CanWrite:     false,
+		ApprovalMode: "none",
+		AutoUnseal:   true,
+	}, "stdio", vaultDir)
+	srv.vault.Identity = identity
+
+	req := CallToolRequest{
+		Arguments: map[string]any{"path": "secret-entry"},
 	}
 
 	result, err := srv.handleGetValue(context.Background(), req)
@@ -428,6 +511,9 @@ func TestHandleGetValue_Success(t *testing.T) {
 	}
 	if entry.Data["password"] != "testpass123" {
 		t.Errorf("password = %v, want testpass123", entry.Data["password"])
+	}
+	if entry.Data["username"] != "testuser" {
+		t.Errorf("username = %v, want testuser", entry.Data["username"])
 	}
 }
 

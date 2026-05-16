@@ -73,6 +73,7 @@ type AgentProfile struct {
 	CanUseAutotype      bool                `yaml:"canUseAutotype,omitempty"`
 	CanReadValues       bool                `yaml:"canReadValues,omitempty"`
 	ExposeValueTools    bool                `yaml:"exposeValueTools,omitempty"`
+	AutoUnseal          bool                `yaml:"autoUnseal,omitempty"`
 	RequireApproval     bool                `yaml:"requireApproval"`
 	ApprovalTimeout     time.Duration       `yaml:"approvalTimeout,omitempty"`
 	AllowedTools        []string            `yaml:"allowed_tools,omitempty"`
@@ -85,6 +86,7 @@ type AgentProfile struct {
 type fileAgentProfile struct {
 	Tier                *string             `yaml:"tier,omitempty"`
 	ExposeValueTools    *bool               `yaml:"exposeValueTools,omitempty"`
+	AutoUnseal          *bool               `yaml:"autoUnseal,omitempty"`
 	ApprovalTimeout     *time.Duration      `yaml:"approvalTimeout,omitempty"`
 	CanWrite            *bool               `yaml:"canWrite,omitempty"`
 	CanRunCommands      *bool               `yaml:"canRunCommands,omitempty"`
@@ -259,6 +261,9 @@ func Load(path string) (*Config, error) {
 			}
 			if profile.ExposeValueTools != nil {
 				current.ExposeValueTools = *profile.ExposeValueTools
+			}
+			if profile.AutoUnseal != nil {
+				current.AutoUnseal = *profile.AutoUnseal
 			}
 			if profile.DynamicProviders != nil {
 				current.DynamicProviders = make(map[string][]string, len(profile.DynamicProviders))
@@ -500,6 +505,7 @@ func buildFileAgents(agents map[string]AgentProfile) map[string]fileAgentProfile
 		canUseAutotype := profile.CanUseAutotype
 		canReadValues := profile.CanReadValues
 		exposeValueTools := profile.ExposeValueTools
+		autoUnseal := profile.AutoUnseal
 		requireApproval := profile.RequireApproval
 		fap := fileAgentProfile{
 			AllowedPaths:     allowed,
@@ -510,6 +516,7 @@ func buildFileAgents(agents map[string]AgentProfile) map[string]fileAgentProfile
 			CanUseAutotype:   &canUseAutotype,
 			CanReadValues:    &canReadValues,
 			ExposeValueTools: &exposeValueTools,
+			AutoUnseal:       &autoUnseal,
 			RequireApproval:  &requireApproval,
 		}
 		if profile.Tier != "" {
@@ -622,17 +629,18 @@ func newDefaultAgentProfile(name string) AgentProfile {
 		CanRunCommands:   false,
 		ApprovalMode:     "none",
 		ExposeValueTools: true,
+		AutoUnseal:       true,
 	}
 }
 
 func builtinAgentProfiles() map[string]AgentProfile {
 	return map[string]AgentProfile{
-		"default":     {Name: "default", AllowedPaths: []string{"*"}, CanWrite: false, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true},
-		"claude-code": {Name: "claude-code", AllowedPaths: []string{"*"}, CanWrite: true, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true},
-		"codex":       {Name: "codex", AllowedPaths: []string{"*"}, CanWrite: false, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true},
-		"hermes":      {Name: "hermes", AllowedPaths: []string{"*"}, CanWrite: true, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true},
-		"openclaw":    {Name: "openclaw", AllowedPaths: []string{"*"}, CanWrite: true, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true},
-		"opencode":    {Name: "opencode", AllowedPaths: []string{"*"}, CanWrite: false, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true},
+		"default":     {Name: "default", AllowedPaths: []string{"*"}, CanWrite: false, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true, AutoUnseal: true},
+		"claude-code": {Name: "claude-code", AllowedPaths: []string{"*"}, CanWrite: true, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true, AutoUnseal: true},
+		"codex":       {Name: "codex", AllowedPaths: []string{"*"}, CanWrite: false, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true, AutoUnseal: true},
+		"hermes":      {Name: "hermes", AllowedPaths: []string{"*"}, CanWrite: true, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true, AutoUnseal: true},
+		"openclaw":    {Name: "openclaw", AllowedPaths: []string{"*"}, CanWrite: true, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true, AutoUnseal: true},
+		"opencode":    {Name: "opencode", AllowedPaths: []string{"*"}, CanWrite: false, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true, AutoUnseal: true},
 	}
 }
 

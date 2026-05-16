@@ -27,10 +27,11 @@ import (
 
 // Entry represents a vault entry with flexible data storage using map[string]any.
 type Entry struct {
-	Path           string         `json:"path,omitempty"`
-	Data           map[string]any `json:"data"`
-	Metadata       EntryMetadata  `json:"meta"`
-	SecretMetadata SecretMetadata `json:"secret_meta,omitempty"`
+	Path           string              `json:"path,omitempty"`
+	Data           map[string]any      `json:"data"`
+	Metadata       EntryMetadata       `json:"meta"`
+	SecretMetadata SecretMetadata      `json:"secret_meta,omitempty"`
+	Classification taint.Classification `json:"classification,omitempty"`
 }
 
 // EntryMetadata contains metadata about an entry
@@ -560,6 +561,7 @@ func cloneEntry(entry *Entry) *Entry {
 	clone := &Entry{
 		Metadata:       entry.Metadata,
 		SecretMetadata: entry.SecretMetadata,
+		Classification: entry.Classification,
 	}
 	if entry.SecretMetadata.ExpiresAt != nil {
 		expiresAt := *entry.SecretMetadata.ExpiresAt
