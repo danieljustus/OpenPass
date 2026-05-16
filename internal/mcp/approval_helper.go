@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/danieljustus/OpenPass/internal/envfilter"
 	"github.com/danieljustus/OpenPass/internal/vault/taint"
 )
 
@@ -131,6 +132,7 @@ func getGitBranch(workingDir string) string {
 		return ""
 	}
 	cmd := exec.Command("git", "-C", workingDir, "rev-parse", "--abbrev-ref", "HEAD")
+	envfilter.PrepareCmd(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return ""

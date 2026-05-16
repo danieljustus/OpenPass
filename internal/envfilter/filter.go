@@ -1,0 +1,105 @@
+// Package envfilter provides environment variable whitelist filtering for
+// subprocess execution. It prevents leaking sensitive process environment
+// variables (API keys, tokens, secrets) to child processes by only passing
+// through a curated set of safe variables.
+package envfilter
+
+import (
+	"os"
+	"os/exec"
+	"strings"
+)
+
+// DefaultWhitelist returns the default set of safe environment variables
+// that are allowed to pass through to subprocesses.
+//
+// These include:
+//   - Basic POSIX: PATH, HOME, TMPDIR, TEMP, TMP, USER, LOGNAME, SHELL
+//   - Locale: LANG, LC_ALL
+//   - Terminal: TERM, COLORTERM
+//   - Display (X11): DISPLAY, XAUTHORITY
+//   - Git: GIT_ASKPASS, GIT_SSH, GIT_SSH_COMMAND, SSH_AUTH_SOCK, SSH_AGENT_LAUNCHER
+//   - GPG: GNUPGHOME
+func DefaultWhitelist() []string {
+	return []string{
+		"PATH",
+		"HOME",
+		"TMPDIR",
+		"TEMP",
+		"TMP",
+		"USER",
+		"LOGNAME",
+		"LANG",
+		"LC_ALL",
+		"SHELL",
+		"TERM",
+		"COLORTERM",
+		"DISPLAY",
+		"XAUTHORITY",
+		"GIT_ASKPASS",
+		"GIT_SSH",
+		"GIT_SSH_COMMAND",
+		"SSH_AUTH_SOCK",
+		"SSH_AGENT_LAUNCHER",
+		"GNUPGHOME",
+	}
+}
+
+// FilterEnv returns only the environment variables from os.Environ()
+// whose names appear in the whitelist. Returns an empty (nil) slice
+// when whitelist is empty.
+func FilterEnv(whitelist []string) []string {
+	if len(whitelist) == 0 {
+		return nil
+	}
+	wl := make(map[string]bool, len(whitelist))
+	for _, v := range whitelist {
+		wl[v] = true
+	}
+	env := os.Environ()
+	filtered := make([]string, 0, len(env))
+	for _, e := range env {
+		parts := strings.SplitN(e, "=", 2)
+		if len(parts) > 0 && wl[parts[0]] {
+			filtered = append(filtered, e)
+		}
+	}
+	return filtered
+}
+
+// MergeWhitelist merges multiple whitelists into one without duplicates.
+// The order of first occurrence is preserved. Returns an empty slice
+// when called with no arguments.
+func MergeWhitelist(lists ...[]string) []string {
+	seen := make(map[string]bool)
+	result := make([]string, 0)
+	for _, list := range lists {
+		for _, v := range list {
+			if !seen[v] {
+				seen[v] = true
+				result = append(result, v)
+			}
+		}
+	}
+	return result
+}
+
+// PrepareCmd sets the Env field on cmd using the default whitelist.
+// Additional env var names can be passed to extend the whitelist
+// (e.g., for tool-specific vars like GIT_SSH_COMMAND).
+//
+// Usage:
+//
+//	cmd := exec.Command("git", "status")
+//	envfilter.PrepareCmd(cmd)
+//	if err := cmd.Run(); err != nil { ... }
+//
+//	// With additional vars:
+//	envfilter.PrepareCmd(cmd, "GIT_SSH_COMMAND", "SSH_AUTH_SOCK")
+func PrepareCmd(cmd *exec.Cmd, additional ...string) {
+	whitelist := DefaultWhitelist()
+	if len(additional) > 0 {
+		whitelist = MergeWhitelist(DefaultWhitelist(), additional)
+	}
+	cmd.Env = FilterEnv(whitelist)
+}

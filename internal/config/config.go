@@ -40,6 +40,7 @@ type Config struct {
 	UseTouchID     bool                    `yaml:"useTouchID,omitempty"`
 	Profiles       map[string]*Profile     `yaml:"profiles,omitempty"`
 	DefaultProfile string                  `yaml:"defaultProfile,omitempty"`
+	EnvWhitelist   []string                `yaml:"envWhitelist,omitempty"`
 }
 
 type fileConfig struct {
@@ -58,6 +59,7 @@ type fileConfig struct {
 	UseTouchID     *bool                       `yaml:"useTouchID,omitempty"`
 	Profiles       map[string]fileProfile      `yaml:"profiles,omitempty"`
 	DefaultProfile string                      `yaml:"defaultProfile,omitempty"`
+	EnvWhitelist   []string                    `yaml:"envWhitelist,omitempty"`
 }
 
 type AgentProfile struct {
@@ -81,6 +83,7 @@ type AgentProfile struct {
 	MaxReadsPerDay      int                 `yaml:"max_reads_per_day,omitempty"`
 	MaxSecretsInSession int                 `yaml:"max_secrets_in_session,omitempty"`
 	DynamicProviders    map[string][]string `yaml:"dynamicProviders,omitempty"` // provider → allowed roles; nil denies all
+	AllowedEnvVars      []string            `yaml:"allowedEnvVars,omitempty"`
 }
 
 type fileAgentProfile struct {
@@ -103,6 +106,7 @@ type fileAgentProfile struct {
 	MaxReadsPerDay      *int                `yaml:"max_reads_per_day,omitempty"`
 	MaxSecretsInSession *int                `yaml:"max_secrets_in_session,omitempty"`
 	DynamicProviders    map[string][]string `yaml:"dynamicProviders,omitempty"`
+	AllowedEnvVars      []string            `yaml:"allowedEnvVars,omitempty"`
 }
 
 type fileProfile struct {
@@ -178,6 +182,10 @@ func Load(path string) (*Config, error) {
 	if raw.DefaultProfile != "" {
 		cfg.DefaultProfile = raw.DefaultProfile
 	}
+	if raw.EnvWhitelist != nil {
+		cfg.EnvWhitelist = append([]string(nil), raw.EnvWhitelist...)
+	}
+
 	if raw.Profiles != nil {
 		cfg.Profiles = make(map[string]*Profile, len(raw.Profiles))
 		for name, fp := range raw.Profiles {
@@ -271,6 +279,9 @@ func Load(path string) (*Config, error) {
 					rolesCopy := append([]string(nil), roles...)
 					current.DynamicProviders[p] = rolesCopy
 				}
+			}
+			if profile.AllowedEnvVars != nil {
+				current.AllowedEnvVars = append([]string(nil), profile.AllowedEnvVars...)
 			}
 			cfg.Agents[name] = current
 		}
@@ -555,6 +566,9 @@ func buildFileAgents(agents map[string]AgentProfile) map[string]fileAgentProfile
 				rolesCopy := append([]string(nil), roles...)
 				fap.DynamicProviders[p] = rolesCopy
 			}
+		}
+		if profile.AllowedEnvVars != nil {
+			fap.AllowedEnvVars = append([]string(nil), profile.AllowedEnvVars...)
 		}
 		result[name] = fap
 	}

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/danieljustus/OpenPass/internal/envfilter"
 )
 
 func init() {
@@ -30,6 +32,7 @@ func (a *windowsAutotype) Type(text string) error {
 
 	cmd := exec.Command("powershell.exe",
 		"-NoProfile", "-NonInteractive", "-Command", readSendKeysWrapper)
+	envfilter.PrepareCmd(cmd)
 	cmd.Stdin = strings.NewReader(escaped)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("autotype failed: %w", err)

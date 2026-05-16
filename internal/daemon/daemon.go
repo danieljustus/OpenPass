@@ -16,8 +16,18 @@ import (
 	"text/template"
 
 	"github.com/danieljustus/OpenPass/internal/config"
+	"github.com/danieljustus/OpenPass/internal/envfilter"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 )
+
+// runFilteredCmd creates an exec.Cmd with environment whitelist filtering
+// applied. This prevents leaking sensitive env vars to subprocesses like
+// launchctl and systemctl.
+func runFilteredCmd(name string, args ...string) *exec.Cmd {
+	cmd := exec.Command(name, args...)
+	envfilter.PrepareCmd(cmd)
+	return cmd
+}
 
 const (
 	// macOS launchd paths
@@ -348,10 +358,10 @@ func (i *Installer) installDarwin() error {
 
 	// Unload any existing instance first (ignore errors)
 	// #nosec G204 -- plistPath is generated internally by darwinPlistPath()
-	_ = exec.Command("launchctl", "unload", plistPath).Run()
+	_ = runFilteredCmd("launchctl", "unload", plistPath).Run()
 
 	// #nosec G204 -- plistPath is generated internally by darwinPlistPath()
-	if out, err := exec.Command("launchctl", "load", plistPath).CombinedOutput(); err != nil {
+	if out, err := runFilteredCmd("launchctl", "load", plistPath).CombinedOutput(); err != nil {
 		return errorspkg.NewCLIError(errorspkg.ExitGeneralError,
 			fmt.Sprintf("failed to load launchd service: %s", strings.TrimSpace(string(out))),
 			err)
@@ -368,7 +378,7 @@ func (i *Installer) uninstallDarwin() error {
 
 	// Try to unload (best-effort)
 	// #nosec G204 -- plistPath is generated internally by darwinPlistPath()
-	_ = exec.Command("launchctl", "unload", plistPath).Run()
+	_ = runFilteredCmd("launchctl", "unload", plistPath).Run()
 
 	if err := os.Remove(plistPath); err != nil && !os.IsNotExist(err) {
 		return errorspkg.NewCLIError(errorspkg.ExitPermissionDenied,
@@ -388,7 +398,7 @@ func (i *Installer) statusDarwin() (string, error) {
 		return "not installed", nil
 	}
 
-	out, err := exec.Command("launchctl", "list", launchAgentLabel).CombinedOutput()
+	out, err := runFilteredCmd("launchctl", "list", launchAgentLabel).CombinedOutput()
 	if err != nil {
 		return "stopped", nil
 	}
@@ -492,19 +502,19 @@ func (i *Installer) installLinux() error {
 			"failed to write systemd service file", err)
 	}
 
-	if out, err := exec.Command("systemctl", "--user", "daemon-reload").CombinedOutput(); err != nil {
+	if out, err := runFilteredCmd("systemctl", "--user", "daemon-reload").CombinedOutput(); err != nil {
 		return errorspkg.NewCLIError(errorspkg.ExitGeneralError,
 			fmt.Sprintf("systemctl daemon-reload failed: %s", strings.TrimSpace(string(out))),
 			err)
 	}
 
-	if out, err := exec.Command("systemctl", "--user", "enable", "openpass-mcp").CombinedOutput(); err != nil {
+	if out, err := runFilteredCmd("systemctl", "--user", "enable", "openpass-mcp").CombinedOutput(); err != nil {
 		return errorspkg.NewCLIError(errorspkg.ExitGeneralError,
 			fmt.Sprintf("systemctl enable failed: %s", strings.TrimSpace(string(out))),
 			err)
 	}
 
-	if out, err := exec.Command("systemctl", "--user", "start", "openpass-mcp").CombinedOutput(); err != nil {
+	if out, err := runFilteredCmd("systemctl", "--user", "start", "openpass-mcp").CombinedOutput(); err != nil {
 		return errorspkg.NewCLIError(errorspkg.ExitGeneralError,
 			fmt.Sprintf("systemctl start failed: %s", strings.TrimSpace(string(out))),
 			err)
@@ -515,8 +525,8 @@ func (i *Installer) installLinux() error {
 
 func (i *Installer) uninstallLinux() error {
 	// Best-effort stop and disable
-	_ = exec.Command("systemctl", "--user", "stop", "openpass-mcp").Run()
-	_ = exec.Command("systemctl", "--user", "disable", "openpass-mcp").Run()
+	_ = runFilteredCmd("systemctl", "--user", "stop", "openpass-mcp").Run()
+	_ = runFilteredCmd("systemctl", "--user", "disable", "openpass-mcp").Run()
 
 	svcPath, err := i.linuxServicePath()
 	if err != nil {
@@ -529,7 +539,7 @@ func (i *Installer) uninstallLinux() error {
 	}
 
 	// Reload to pick up the removal
-	_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
+	_ = runFilteredCmd("systemctl", "--user", "daemon-reload").Run()
 
 	return nil
 }
@@ -544,7 +554,7 @@ func (i *Installer) statusLinux() (string, error) {
 		return "not installed", nil
 	}
 
-	out, err := exec.Command("systemctl", "--user", "is-active", "openpass-mcp").CombinedOutput()
+	out, err := runFilteredCmd("systemctl", "--user", "is-active", "openpass-mcp").CombinedOutput()
 	if err != nil {
 		output := strings.TrimSpace(string(out))
 		if output == "inactive" || output == "failed" {

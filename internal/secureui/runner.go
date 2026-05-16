@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os/exec"
 	"time"
+
+	"github.com/danieljustus/OpenPass/internal/envfilter"
 )
 
 // runner abstracts subprocess execution so backends can be unit-tested with a
@@ -22,7 +24,9 @@ func (execRunner) run(name string, args []string, timeout time.Duration) ([]byte
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, name, args...).Output()
+	cmd := exec.CommandContext(ctx, name, args...)
+	envfilter.PrepareCmd(cmd)
+	out, err := cmd.Output()
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return nil, ErrTimeout
 	}
