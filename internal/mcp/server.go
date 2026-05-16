@@ -5,14 +5,19 @@ package mcp
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
 
+	"github.com/danieljustus/OpenPass/internal/anomaly"
 	"github.com/danieljustus/OpenPass/internal/audit"
 	"github.com/danieljustus/OpenPass/internal/config"
+	"github.com/danieljustus/OpenPass/internal/notify"
 	"github.com/danieljustus/OpenPass/internal/policy"
 	"github.com/danieljustus/OpenPass/internal/vault"
 )
@@ -62,6 +67,18 @@ type Server struct {
 	approvalCache         *approvalCache
 	approvalKeyCounter    atomic.Int64
 	secretsAccessed       atomic.Int64
+
+	hookRegistry     *HookRegistry
+	sessionID        string
+	anomalyDetector *anomaly.AnomalyDetector
+}
+
+// SessionID returns the server's unique session identifier.
+func (s *Server) SessionID() string {
+	if s == nil {
+		return ""
+	}
+	return s.sessionID
 }
 
 // New creates a new MCP server instance with the specified vault and agent configuration.
@@ -115,14 +132,92 @@ func New(v *vault.Vault, agentName string, transport string) (*Server, error) {
 		}
 	}
 
-	return &Server{
-		vault:         v,
-		agent:         &agent,
-		auditLog:      auditLog,
-		transport:     transport,
-		policyEngine:  policyEngine,
-		approvalCache: newApprovalCache(),
-	}, nil
+	sessionID, err := generateSessionID()
+	if err != nil {
+		return nil, fmt.Errorf("generate session id: %w", err)
+	}
+
+	detector := anomaly.New(
+		anomaly.WithAlertHook(func(alert anomaly.AnomalyAlert) {
+			slog.Default().Warn("anomaly detected",
+				"type", alert.Type,
+				"severity", alert.Severity.String(),
+				"agent", alert.Agent,
+				"description", alert.Description,
+			)
+			notify.AlertNotify("Anomaly Detected: "+string(alert.Type), alert.Description)
+		}),
+	)
+
+	srv := &Server{
+		vault:           v,
+		agent:           &agent,
+		auditLog:        auditLog,
+		transport:       transport,
+		policyEngine:    policyEngine,
+		approvalCache:   newApprovalCache(),
+		hookRegistry:    NewHookRegistry(),
+		sessionID:       sessionID,
+		anomalyDetector: detector,
+	}
+
+	// Register hooks specified in the agent's config profile
+	srv.registerConfigHooks(cfg)
+
+	return srv, nil
+}
+
+// RegisterPreCallHook registers a pre-call hook on the server's hook registry.
+func (s *Server) RegisterPreCallHook(hook PreCallHook) {
+	if s == nil || s.hookRegistry == nil {
+		return
+	}
+	s.hookRegistry.RegisterPreCallHook(hook)
+}
+
+// RegisterPostCallHook registers a post-call hook on the server's hook registry.
+func (s *Server) RegisterPostCallHook(hook PostCallHook) {
+	if s == nil || s.hookRegistry == nil {
+		return
+	}
+	s.hookRegistry.RegisterPostCallHook(hook)
+}
+
+// registerConfigHooks reads the agent's PreCallHooks and PostCallHooks config
+// and registers the corresponding built-in hook implementations.
+func (s *Server) registerConfigHooks(cfg *config.Config) {
+	if s == nil || s.agent == nil {
+		return
+	}
+
+	rateLimit := 60
+	if cfg != nil && cfg.MCP != nil && cfg.MCP.RateLimit > 0 {
+		rateLimit = cfg.MCP.RateLimit
+	}
+
+	for _, name := range s.agent.PreCallHooks {
+		switch name {
+		case "audit":
+			s.RegisterPreCallHook(NewAuditPreHook())
+		case "rate_limit":
+			s.RegisterPreCallHook(NewRateLimitPreHook(rateLimit))
+		case "scope_check":
+			s.RegisterPreCallHook(NewScopeCheckPreHook())
+		case "metrics":
+			s.RegisterPreCallHook(NewMetricsPreHook())
+		}
+	}
+
+	for _, name := range s.agent.PostCallHooks {
+		switch name {
+		case "audit":
+			s.RegisterPostCallHook(NewAuditPostHook())
+		case "notification":
+			s.RegisterPostCallHook(NewNotificationPostHook())
+		case "metrics":
+			s.RegisterPostCallHook(NewMetricsPostHook())
+		}
+	}
 }
 
 // ServeStdio runs the MCP server using stdio transport.
@@ -130,6 +225,35 @@ func (s *Server) ServeStdio(ctx context.Context) error {
 	transport := NewStdioTransport()
 	handler := NewProtocolHandler("OpenPass", "1.0.0", s)
 	return transport.Start(ctx, handler.HandleMessage)
+}
+
+// generateSessionID creates a unique session identifier using crypto/rand.
+func generateSessionID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// generateRequestID creates a unique request identifier.
+func generateRequestID() (string, error) {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// invalidateApprovalCache clears all remembered approvals for the current session.
+// This is called when an anomaly is detected to force re-approval on subsequent operations.
+func (s *Server) invalidateApprovalCache() {
+	if s == nil || s.approvalCache == nil {
+		return
+	}
+	s.approvalCache.mu.Lock()
+	s.approvalCache.cache = make(map[string]bool)
+	s.approvalCache.mu.Unlock()
 }
 
 // Close shuts down the server and closes the audit log.

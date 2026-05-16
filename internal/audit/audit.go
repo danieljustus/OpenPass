@@ -135,6 +135,8 @@ type LogEntry struct {
 	ShareAction string `json:"share_action,omitempty"`
 	DurMs       int64  `json:"dur_ms,omitempty"`
 	TokenID     string `json:"token_id,omitempty"`
+	RequestID   string `json:"req_id,omitempty"`
+	SessionID   string `json:"sess_id,omitempty"`
 	HMAC        string `json:"hmac,omitempty"`
 	OK          bool   `json:"ok"`
 }
