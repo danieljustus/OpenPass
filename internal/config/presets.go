@@ -51,6 +51,17 @@ var TierPresets = map[TierPreset]AgentProfile{
 	},
 }
 
+// GetPreset returns a pointer to a copy of the AgentProfile for the given tier,
+// or nil if the tier is not recognized. Callers can safely modify the returned copy.
+func GetPreset(tier string) *AgentProfile {
+	p, ok := TierPresets[TierPreset(tier)]
+	if !ok {
+		return nil
+	}
+	return &p
+}
+
+
 // ApplyTierPreset applies the preset values for the given tier to target.
 // Only capability/approval fields are overwritten; Name and AllowedPaths are preserved.
 // Returns true if the tier was found and applied, false otherwise.
