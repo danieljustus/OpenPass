@@ -22,6 +22,7 @@ type ShareGrant struct {
 	ToAgent     string        `json:"to_agent"`
 	SecretPath  string        `json:"secret_path"`
 	SecretField string        `json:"secret_field,omitempty"`
+	Nonce       string        `json:"nonce,omitempty"`
 	Status      ShareStatus   `json:"status"`
 	CreatedAt   time.Time     `json:"created_at"`
 	ExpiresAt   *time.Time    `json:"expires_at,omitempty"`

@@ -128,14 +128,58 @@ func (s *Server) handleGetValue(ctx context.Context, req CallToolRequest) (*Call
 		entry = redactEntry(entry, s.agent.RedactFields)
 	}
 
+	// Sanitize tags to prevent prompt injection via tag metadata.
+	for i, tag := range entry.Metadata.Tags {
+		entry.Metadata.Tags[i] = globalChokepoint.SanitizeForMCP(tag)
+	}
+
 	s.logAudit(ctx, "get_value", path, true)
 	metrics.RecordVaultOperation("read", "success")
+
+	shouldSeal := entry.Classification >= taint.Secret && (s.agent == nil || !s.agent.AutoUnseal)
+
+	if shouldSeal {
+		return s.sealEntryResponse(ctx, entry, path), nil
+	}
+
+	if s.agent.MaxSecretsInSession > 0 {
+		accessed := s.secretsAccessed.Load()
+		fieldCount := int64(len(entry.Data))
+		if accessed+fieldCount > int64(s.agent.MaxSecretsInSession) {
+			return NewToolResultError(
+				fmt.Sprintf("max secrets per session exceeded (%d/%d)", accessed+fieldCount, s.agent.MaxSecretsInSession)), nil
+		}
+	}
+
+	for range entry.Data {
+		s.secretsAccessed.Add(1)
+	}
 
 	result, err := json.Marshal(entry)
 	if err != nil {
 		return nil, err
 	}
 	return NewToolResultText(string(result)), nil
+}
+
+func (s *Server) sealEntryResponse(_ context.Context, entry *vault.Entry, path string) *CallToolResult {
+	var fieldName string
+	for k := range entry.Data {
+		fieldName = k
+		break
+	}
+	handle := (taint.SecretHandle{Path: path, Field: fieldName}).String()
+
+	resp := map[string]any{
+		"handle":         handle,
+		"classification": entry.Classification.String(),
+		"note":           "Use secret_unseal tool to reveal the value",
+	}
+	result, err := json.Marshal(resp)
+	if err != nil {
+		return NewToolResultError("failed to marshal sealed response")
+	}
+	return NewToolResultText(string(result))
 }
 
 func (s *Server) handleGetMetadata(ctx context.Context, req CallToolRequest) (*CallToolResult, error) {

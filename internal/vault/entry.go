@@ -27,10 +27,12 @@ import (
 
 // Entry represents a vault entry with flexible data storage using map[string]any.
 type Entry struct {
-	Path           string         `json:"path,omitempty"`
-	Data           map[string]any `json:"data"`
-	Metadata       EntryMetadata  `json:"meta"`
-	SecretMetadata SecretMetadata `json:"secret_meta,omitempty"`
+	Path           string               `json:"path,omitempty"`
+	Data           map[string]any       `json:"data"`
+	Metadata       EntryMetadata        `json:"meta"`
+	SecretMetadata SecretMetadata       `json:"secret_meta,omitempty"`
+	Classification taint.Classification `json:"classification,omitempty"`
+	Canary         bool                 `json:"canary,omitempty"`
 }
 
 // EntryMetadata contains metadata about an entry
@@ -560,6 +562,8 @@ func cloneEntry(entry *Entry) *Entry {
 	clone := &Entry{
 		Metadata:       entry.Metadata,
 		SecretMetadata: entry.SecretMetadata,
+		Classification: entry.Classification,
+		Canary:         entry.Canary,
 	}
 	if entry.SecretMetadata.ExpiresAt != nil {
 		expiresAt := *entry.SecretMetadata.ExpiresAt
@@ -787,4 +791,127 @@ func (e *Entry) HasField(name string) bool {
 	}
 	_, ok := e.Data[name]
 	return ok
+}
+
+// WithoutCanary returns a copy of the entry with the canary flag cleared.
+// This is used before returning entries to agents so canary entries remain
+// indistinguishable from real entries at the agent/network layer.
+func (e *Entry) WithoutCanary() *Entry {
+	if e == nil {
+		return nil
+	}
+	cp := cloneEntry(e)
+	cp.Canary = false
+	return cp
+}
+
+// IsCanary returns whether this entry is a honeytoken/canary entry.
+func (e *Entry) IsCanary() bool {
+	return e != nil && e.Canary
+}
+
+// canaryPaths is an in-memory set of known canary entry paths.
+// Maintained separately from encrypted entries to enable O(1) canary checks
+// without requiring decryption.
+var canaryPaths struct {
+	mu    sync.RWMutex
+	paths map[string]bool
+}
+
+func init() {
+	canaryPaths.paths = make(map[string]bool)
+}
+
+// MarkCanaryPath adds a path to the in-memory canary set.
+// This does NOT affect the stored entry — use SetEntryCanary for persistence.
+func MarkCanaryPath(path string) {
+	canaryPaths.mu.Lock()
+	canaryPaths.paths[path] = true
+	canaryPaths.mu.Unlock()
+}
+
+// UnmarkCanaryPath removes a path from the in-memory canary set.
+func UnmarkCanaryPath(path string) {
+	canaryPaths.mu.Lock()
+	delete(canaryPaths.paths, path)
+	canaryPaths.mu.Unlock()
+}
+
+// IsCanaryPath checks if the given path is a known canary entry.
+// This is an O(1) lookup using an in-memory set and does NOT require
+// decrypting the vault entry.
+func IsCanaryPath(path string) bool {
+	canaryPaths.mu.RLock()
+	_, ok := canaryPaths.paths[path]
+	canaryPaths.mu.RUnlock()
+	return ok
+}
+
+// SetEntryCanary marks or unmarks an existing vault entry as a canary/honeytoken.
+// This rewrites the entry with the updated canary flag and updates the in-memory set.
+func SetEntryCanary(vaultDir, path string, identity *age.X25519Identity, canary bool) error {
+	if identity == nil {
+		return errors.New("nil identity")
+	}
+
+	entry, err := ReadEntry(vaultDir, path, identity)
+	if err != nil {
+		return fmt.Errorf("read entry for canary update: %w", err)
+	}
+
+	entry.Canary = canary
+	if err := WriteEntry(vaultDir, path, entry, identity); err != nil {
+		return fmt.Errorf("write entry for canary update: %w", err)
+	}
+
+	if canary {
+		MarkCanaryPath(path)
+	} else {
+		UnmarkCanaryPath(path)
+	}
+	return nil
+}
+
+// DefaultCanaryEntries returns a set of default canary entry configurations
+// that look like realistic credentials. Each entry's data contains plausible
+// fake values that would alert if accessed by an unauthorized agent.
+func DefaultCanaryEntries() []struct {
+	Path string
+	Data map[string]any
+} {
+	return []struct {
+		Path string
+		Data map[string]any
+	}{
+		{
+			Path: ".canary/aws-root-key",
+			Data: map[string]any{
+				"username":   "aws-root",
+				"access_key": "AKIA12345678CANARY",
+				"secret_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYCANARYKEY",
+				"region":     "us-east-1",
+				"note":       "Root account access key - use with caution",
+			},
+		},
+		{
+			Path: ".canary/github-admin-token",
+			Data: map[string]any{
+				"username": "github-admin",
+				"token":    "ghp_CANARY1234567890abcdefghijklmnopqrstuv",
+				"scope":    "repo,admin:org,admin:repo_hooks",
+				"note":     "Full admin access to all org repositories",
+			},
+		},
+		{
+			Path: ".canary/production-database",
+			Data: map[string]any{
+				"username": "db_admin",
+				"password": "C4n4ry!Str0ng!P455w0rd!2024",
+				"host":     "prod-db.internal.example.com",
+				"port":     "5432",
+				"database": "production",
+				"note":     "Production database admin credentials",
+			},
+		},
+	}
 }

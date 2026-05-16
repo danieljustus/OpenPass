@@ -44,6 +44,73 @@ func ParseSecretHandle(s string) (SecretHandle, bool) {
 	return SecretHandle{Path: rest}, true
 }
 
+// Classification represents the sensitivity level of a value.
+type Classification int
+
+const (
+	// Public information that can be freely shared.
+	Public Classification = iota
+	// Internal information intended for internal use.
+	Internal
+	// Confidential information that requires controlled access.
+	Confidential
+	// Secret information that must be sealed from LLM exposure by default.
+	Secret
+	// Restricted information with the highest sensitivity level.
+	Restricted
+)
+
+// String returns the human-readable label for the classification.
+func (c Classification) String() string {
+	switch c {
+	case Public:
+		return "public"
+	case Internal:
+		return "internal"
+	case Confidential:
+		return "confidential"
+	case Secret:
+		return "secret"
+	case Restricted:
+		return "restricted"
+	default:
+		return "unknown"
+	}
+}
+
+// OutputType specifies the rendering format for a Value.
+type OutputType int
+
+const (
+	// Plaintext output (raw value).
+	Plaintext OutputType = iota
+	// Masked output (value partially obscured).
+	Masked
+	// Redacted output (value fully removed).
+	Redacted
+	// MCP output (value sanitized for MCP protocol).
+	MCPOutput
+)
+
+// Value wraps a secret value with its classification and metadata
+// for controlled exposure.
+type Value struct {
+	Raw            string
+	Sanitized      string
+	Classification Classification
+	Tags           []string
+}
+
+// NewValue creates a Value with the given raw content and classification.
+func NewValue(raw string, class Classification, tags ...string) Value {
+	return Value{
+		Raw:            raw,
+		Sanitized:      raw,
+		Classification: class,
+		Tags:           tags,
+	}
+}
+
 // ErrUntrustedFormat is returned when an Untrusted value is used in an
 // unsafe context. Call .Render() or .UnsafeRawForStorage() explicitly.
 var ErrUntrustedFormat = errors.New("taint: use of Untrusted in format argument")
@@ -85,6 +152,18 @@ func (rf RenderedFragment) Target() RenderTarget { return rf.target }
 // String returns the rendered string value.
 func (rf RenderedFragment) String() string { return rf.value }
 
+// mcpSanitizer is optionally set by the mcp package to apply MCP-specific
+// sanitization (ANSI stripping, control char removal, XML injection prevention)
+// when Untrusted.Render(MCP) is called. This bridges the taint system with
+// the MCP output chokepoint without introducing a circular import.
+var mcpSanitizer func(string) string
+
+// SetMCPSanitizer registers the MCP output sanitizer function. The mcp
+// package calls this from its init(). Passing nil clears the sanitizer.
+func SetMCPSanitizer(fn func(string) string) {
+	mcpSanitizer = fn
+}
+
 // Untrusted represents data that has not been validated as safe for output.
 // It carries provenance metadata and enforces explicit rendering.
 //
@@ -103,11 +182,16 @@ func Wrap(raw string, prov Provenance) Untrusted {
 
 // Render produces a RenderedFragment for the given target. The returned
 // fragment is safe to use in the target context — it has been sanitized
-// according to the target's escaping rules (this base implementation
-// returns the raw value; target-specific sanitization happens in the
-// render package).
+// according to the target's escaping rules. For MCP targets, the
+// registered sanitizer (set by the mcp package via SetMCPSanitizer) is
+// applied to strip ANSI escapes, control characters, and XML injection.
+// Terminal targets return the raw value unchanged.
 func (u Untrusted) Render(target RenderTarget) RenderedFragment {
-	return RenderedFragment{target: target, value: u.raw}
+	value := u.raw
+	if target == MCP && mcpSanitizer != nil {
+		value = mcpSanitizer(value)
+	}
+	return RenderedFragment{target: target, value: value}
 }
 
 // Bytes returns the raw underlying data as a byte slice. Use this only

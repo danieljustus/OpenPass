@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 
+	"github.com/danieljustus/OpenPass/internal/anomaly"
 	"github.com/danieljustus/OpenPass/internal/metrics"
+	"github.com/danieljustus/OpenPass/internal/notify"
+	"github.com/danieljustus/OpenPass/internal/vault"
 )
 
 func toolError(msg string) *CallToolResult {
@@ -26,7 +30,7 @@ func toolActionType(toolName string) string {
 		return "run"
 	case "list_entries":
 		return "list"
-	case "get_entry", "get_entry_value", "get_entry_metadata":
+	case "get_entry", "get_entry_value", "get_entry_metadata", "secret_unseal":
 		return "get"
 	case "find_entries":
 		return "find"
@@ -54,6 +58,13 @@ func (s *Server) executeTool(ctx context.Context, name string, args json.RawMess
 		agentName = s.agent.Name
 	}
 
+	// Generate request ID and propagate it through context for audit logging
+	reqID, err := generateRequestID()
+	if err != nil {
+		slog.Default().Warn("failed to generate request ID", "err", err)
+	}
+	ctx = WithRequestID(ctx, reqID)
+
 	ctx, span := metrics.StartSpan(ctx, "executeTool",
 		attribute.String("tool.name", name),
 		attribute.String("agent.name", agentName),
@@ -68,8 +79,10 @@ func (s *Server) executeTool(ctx context.Context, name string, args json.RawMess
 		return nil, fmt.Errorf("parse arguments: %w", err)
 	}
 
-	if path, _ := req.RequireString("path"); path != "" {
-		span.SetAttributes(attribute.String("entry.path", metrics.HashEntryPath(path)))
+	entryPath, _ := req.RequireString("path")
+
+	if entryPath != "" {
+		span.SetAttributes(attribute.String("entry.path", metrics.HashEntryPath(entryPath)))
 	}
 
 	def, ok := findToolDefinition(name)
@@ -102,21 +115,49 @@ func (s *Server) executeTool(ctx context.Context, name string, args json.RawMess
 	}
 
 	// Evaluate declarative policies before tool execution
-	if path, _ := req.RequireString("path"); path != "" {
-		if policyErr := s.checkPolicy(ctx, path, toolActionType(name)); policyErr != nil {
+	if entryPath != "" {
+		if policyErr := s.checkPolicy(ctx, entryPath, toolActionType(name)); policyErr != nil {
 			span.SetStatus(codes.Error, policyErr.Error())
 			metrics.RecordMCPRequest(name, agentName, "error", time.Since(start))
 			return nil, policyErr
 		}
 	}
 
+	// Execute pre-call hooks
+	if s.hookRegistry != nil {
+		for _, hook := range s.hookRegistry.PreCallHooks() {
+			ctx, err = hook(ctx, name, req, s)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				metrics.RecordMCPRequest(name, agentName, "error", time.Since(start))
+				return nil, err
+			}
+		}
+	}
+
 	result, err := def.Handler(s, ctx, req)
+
+	// Execute post-call hooks
+	// Post-call hook errors are logged but never abort execution
+	// (the result has already been computed by the handler).
+	if s.hookRegistry != nil {
+		for _, hook := range s.hookRegistry.PostCallHooks() {
+			newResult, newErr := hook(ctx, name, req, result, err)
+			if newErr != nil {
+				s.logAudit(ctx, "post_call_hook_error", name, false)
+			} else {
+				result = newResult
+			}
+		}
+	}
 
 	duration := time.Since(start)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		span.SetAttributes(attribute.String("status", "error"))
 		metrics.RecordMCPRequest(name, agentName, "error", duration)
+		// Fire-and-forget anomaly detection (non-blocking)
+		s.detectAnomalyAsync(ctx, name, entryPath, reqID, agentName, duration, false)
 		return nil, err
 	}
 
@@ -128,5 +169,61 @@ func (s *Server) executeTool(ctx context.Context, name string, args json.RawMess
 	span.SetAttributes(attribute.String("status", status))
 	metrics.RecordMCPRequest(name, agentName, status, duration)
 
+	// Fire-and-forget anomaly detection (non-blocking)
+	s.detectAnomalyAsync(ctx, name, entryPath, reqID, agentName, duration, true)
+
 	return callToolResultPayload(result), nil
+}
+
+// detectAnomalyAsync runs anomaly detection in a separate goroutine so it
+// NEVER blocks tool execution. It checks all detection patterns and handles
+// any alerts that are generated (logging, notifications, cache invalidation).
+func (s *Server) detectAnomalyAsync(_ context.Context, toolName, entryPath, reqID, agentName string, duration time.Duration, ok bool) {
+	if s == nil || s.anomalyDetector == nil {
+		return
+	}
+	if agentName == "" {
+		return
+	}
+
+	go func() {
+		event := anomaly.ToolCallEvent{
+			Timestamp: time.Now(),
+			Agent:     agentName,
+			Tool:      toolName,
+			Path:      entryPath,
+			Duration:  duration,
+			OK:        ok,
+			IsCanary:  entryPath != "" && vault.IsCanaryPath(entryPath),
+			RequestID: reqID,
+		}
+
+		alert := s.anomalyDetector.Check(context.Background(), event)
+		if alert == nil {
+			return
+		}
+
+		slog.Default().Warn("anomaly detected",
+			"type", alert.Type,
+			"severity", alert.Severity.String(),
+			"agent", alert.Agent,
+			"path", alert.Path,
+			"request_id", alert.RequestID,
+			"description", alert.Description,
+		)
+
+		// Log anomaly to audit
+		s.logAudit(context.Background(), "anomaly_"+string(alert.Type), alert.Path, false)
+
+		// Desktop notification for high-severity events
+		if alert.Severity >= anomaly.SeverityHigh {
+			notify.AlertNotify(
+				"Anomaly: "+string(alert.Type),
+				alert.Description,
+			)
+		}
+
+		// Invalidate approval cache for any anomaly to force re-approval
+		s.invalidateApprovalCache()
+	}()
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/danieljustus/OpenPass/internal/envfilter"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/ui/cliout"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
@@ -71,6 +72,7 @@ The editor is determined by the --editor flag or EDITOR environment variable (de
 
 			//#nosec G204 -- editor path validated via exec.LookPath above
 			editorCmd := exec.Command(editor, tmpFile.Name())
+			envfilter.PrepareCmd(editorCmd)
 			editorCmd.Stdin = os.Stdin
 			editorCmd.Stdout = os.Stdout
 			editorCmd.Stderr = os.Stderr

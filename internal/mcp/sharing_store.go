@@ -2,15 +2,18 @@ package mcp
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
-
+	openpasscrypto "github.com/danieljustus/OpenPass/internal/crypto"
 	"github.com/danieljustus/OpenPass/internal/fileutil"
 )
 
@@ -25,11 +28,12 @@ type shareStoreFile struct {
 // ShareStore provides thread-safe management of secret share grants backed
 // by an on-disk JSON file.
 type ShareStore struct {
-	path    string
-	mu      sync.RWMutex
-	grants  map[string]*ShareGrant // keyed by grant ID
-	version int
-	stopFn  func()
+	path       string
+	mu         sync.RWMutex
+	grants     map[string]*ShareGrant // keyed by grant ID
+	version    int
+	signingKey []byte
+	stopFn     func()
 }
 
 // NewShareStore creates a ShareStore that loads/saves from the given file
@@ -40,6 +44,41 @@ func NewShareStore(path string) *ShareStore {
 		grants:  make(map[string]*ShareGrant),
 		version: shareStoreVersion,
 	}
+}
+
+// SetSigningKey sets the HMAC signing key used to generate and verify
+// cryptographically bound grant IDs. If the key is nil, grants will use
+// random hex IDs instead of HMAC-based IDs (backward compatibility mode).
+func (s *ShareStore) SetSigningKey(key []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.signingKey = key
+}
+
+// InitSigningKey loads or creates the grant signing key from the OS keyring
+// (with memory fallback). This should be called once after creating the store.
+// Returns the loaded key, or nil if the keyring is unavailable (the store will
+// fall back to non-HMAC IDs without error).
+func (s *ShareStore) InitSigningKey(vaultDir string) ([]byte, error) {
+	key, err := LoadOrCreateGrantSigningKey(vaultDir)
+	if err != nil {
+		return nil, err
+	}
+	s.SetSigningKey(key)
+	return key, nil
+}
+
+// randomGrantID generates a random hex string for use as a grant ID when no
+// signing key is configured (backward compatibility mode for existing tests
+// and legacy grants).
+func randomGrantID() string {
+	buf := make([]byte, 16)
+	if _, err := io.ReadFull(rand.Reader, buf); err != nil {
+		// Cryptographic randomness is expected to always succeed on modern systems.
+		// Fall back to a timestamp-based ID if it somehow fails.
+		return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(buf)
 }
 
 // Load reads the JSON share store file from disk and populates the in-memory
@@ -98,8 +137,11 @@ func (s *ShareStore) Save() error {
 // Create creates a new share grant in pending status and persists to disk.
 // If TTL > 0, the grant's ExpiresAt is set relative to creation time.
 // Returns the created grant.
+//
+// If a signing key has been set via SetSigningKey or InitSigningKey, the
+// grant ID is a cryptographically bound HMAC-SHA256 hash of the grant fields
+// plus a random nonce. Otherwise a random hex ID is used (legacy mode).
 func (s *ShareStore) Create(fromAgent, toAgent, secretPath, secretField string, ttl time.Duration) (*ShareGrant, error) {
-	id := uuid.New().String()
 	createdAt := time.Now().UTC()
 
 	var expiresAt *time.Time
@@ -109,7 +151,6 @@ func (s *ShareStore) Create(fromAgent, toAgent, secretPath, secretField string, 
 	}
 
 	g := &ShareGrant{
-		ID:          id,
 		FromAgent:   fromAgent,
 		ToAgent:     toAgent,
 		SecretPath:  secretPath,
@@ -120,18 +161,56 @@ func (s *ShareStore) Create(fromAgent, toAgent, secretPath, secretField string, 
 		TTL:         ttl,
 	}
 
+	s.mu.RLock()
+	key := s.signingKey
+	s.mu.RUnlock()
+
+	if len(key) > 0 {
+		grantID, err := newHMACGrantID(g, key)
+		if err != nil {
+			return nil, fmt.Errorf("generate hmac grant id: %w", err)
+		}
+		g.ID = grantID
+	} else {
+		g.ID = randomGrantID()
+	}
+
 	s.mu.Lock()
-	s.grants[id] = g
+	s.grants[g.ID] = g
 	s.mu.Unlock()
 
 	if err := s.Save(); err != nil {
 		s.mu.Lock()
-		delete(s.grants, id)
+		delete(s.grants, g.ID)
 		s.mu.Unlock()
 		return nil, err
 	}
 
 	return g, nil
+}
+
+// newHMACGrantID creates an HMAC-bound grant ID from the grant's fields.
+func newHMACGrantID(g *ShareGrant, key []byte) (string, error) {
+	fields := openpasscrypto.GrantIDFields{
+		FromAgent:   g.FromAgent,
+		ToAgent:     g.ToAgent,
+		SecretPath:  g.SecretPath,
+		SecretField: g.SecretField,
+		CreatedAt:   g.CreatedAt,
+	}
+
+	grantID, err := openpasscrypto.GenerateGrantID(fields, key)
+	if err != nil {
+		return "", err
+	}
+
+	// Store the nonce on the grant for reference.
+	nonce, parseErr := openpasscrypto.ParseNonceFromID(grantID)
+	if parseErr == nil {
+		g.Nonce = nonce
+	}
+
+	return grantID, nil
 }
 
 // Get retrieves a grant by its ID. Returns the grant and true if found.
@@ -266,16 +345,52 @@ func (s *ShareStore) ListForAgent(agentName string) []*ShareGrant {
 
 // CheckAccess verifies whether toAgent has an approved, non-expired share
 // grant for the given secretPath. Returns the matching grant if found.
+//
+// For grants with HMAC-format IDs (nonce:hmac), the HMAC is verified before
+// returning the grant. If verification fails (tampered/forged grant), the
+// grant is treated as invalid and a security event is logged. Legacy UUID
+// grants are returned without HMAC verification.
 func (s *ShareStore) CheckAccess(toAgent, secretPath string) (*ShareGrant, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	for _, g := range s.grants {
 		if g.ToAgent == toAgent && g.SecretPath == secretPath && g.Status == ShareApproved && !g.IsExpired() {
+			// Verify HMAC for cryptographically bound grants.
+			if openpasscrypto.IsHMACFormat(g.ID) {
+				if len(s.signingKey) == 0 {
+					slog.Warn("cannot verify HMAC grant: signing key not configured",
+						"grant_id", g.ID, "to_agent", toAgent)
+					continue
+				}
+				if !verifyGrantHMAC(g, s.signingKey) {
+					slog.Warn("security: grant HMAC verification failed (possible forgery)",
+						"grant_id", g.ID, "to_agent", toAgent, "from_agent", g.FromAgent,
+						"secret_path", g.SecretPath)
+					continue
+				}
+			}
 			return g, true
 		}
 	}
 	return nil, false
+}
+
+// verifyGrantHMAC returns true if the grant's HMAC ID is valid for its
+// current fields using the given key.
+func verifyGrantHMAC(g *ShareGrant, key []byte) bool {
+	fields := openpasscrypto.GrantIDFields{
+		FromAgent:   g.FromAgent,
+		ToAgent:     g.ToAgent,
+		SecretPath:  g.SecretPath,
+		SecretField: g.SecretField,
+		CreatedAt:   g.CreatedAt,
+	}
+	valid, err := openpasscrypto.VerifyGrantID(g.ID, fields, key)
+	if err != nil {
+		return false
+	}
+	return valid
 }
 
 // CleanupExpired iterates all grants and removes those whose ExpiresAt has

@@ -24,6 +24,16 @@ const (
 	AuthMethodTouchID     = "touchid"
 )
 
+// CustomPattern defines a user-provided PII/secret scan pattern for the
+// masking/sanitizer. Patterns are compiled at runtime and merged with the
+// built-in defaults.
+type CustomPattern struct {
+	Name        string `yaml:"name"`
+	Pattern     string `yaml:"pattern"`
+	Description string `yaml:"description"`
+	Severity    string `yaml:"severity"`
+}
+
 type Config struct {
 	Agents         map[string]AgentProfile `yaml:"agents"`
 	Vault          *VaultConfig            `yaml:"vault,omitempty"`
@@ -40,6 +50,8 @@ type Config struct {
 	UseTouchID     bool                    `yaml:"useTouchID,omitempty"`
 	Profiles       map[string]*Profile     `yaml:"profiles,omitempty"`
 	DefaultProfile string                  `yaml:"defaultProfile,omitempty"`
+	EnvWhitelist   []string                `yaml:"envWhitelist,omitempty"`
+	ScanPatterns   []CustomPattern         `yaml:"scan_patterns,omitempty"`
 }
 
 type fileConfig struct {
@@ -58,6 +70,8 @@ type fileConfig struct {
 	UseTouchID     *bool                       `yaml:"useTouchID,omitempty"`
 	Profiles       map[string]fileProfile      `yaml:"profiles,omitempty"`
 	DefaultProfile string                      `yaml:"defaultProfile,omitempty"`
+	EnvWhitelist   []string                    `yaml:"envWhitelist,omitempty"`
+	ScanPatterns   []CustomPattern             `yaml:"scan_patterns,omitempty"`
 }
 
 type AgentProfile struct {
@@ -73,6 +87,7 @@ type AgentProfile struct {
 	CanUseAutotype      bool                `yaml:"canUseAutotype,omitempty"`
 	CanReadValues       bool                `yaml:"canReadValues,omitempty"`
 	ExposeValueTools    bool                `yaml:"exposeValueTools,omitempty"`
+	AutoUnseal          bool                `yaml:"autoUnseal,omitempty"`
 	RequireApproval     bool                `yaml:"requireApproval"`
 	ApprovalTimeout     time.Duration       `yaml:"approvalTimeout,omitempty"`
 	AllowedTools        []string            `yaml:"allowed_tools,omitempty"`
@@ -80,11 +95,15 @@ type AgentProfile struct {
 	MaxReadsPerDay      int                 `yaml:"max_reads_per_day,omitempty"`
 	MaxSecretsInSession int                 `yaml:"max_secrets_in_session,omitempty"`
 	DynamicProviders    map[string][]string `yaml:"dynamicProviders,omitempty"` // provider → allowed roles; nil denies all
+	AllowedEnvVars      []string            `yaml:"allowedEnvVars,omitempty"`
+	PreCallHooks        []string            `yaml:"pre_call_hooks,omitempty"`
+	PostCallHooks       []string            `yaml:"post_call_hooks,omitempty"`
 }
 
 type fileAgentProfile struct {
 	Tier                *string             `yaml:"tier,omitempty"`
 	ExposeValueTools    *bool               `yaml:"exposeValueTools,omitempty"`
+	AutoUnseal          *bool               `yaml:"autoUnseal,omitempty"`
 	ApprovalTimeout     *time.Duration      `yaml:"approvalTimeout,omitempty"`
 	CanWrite            *bool               `yaml:"canWrite,omitempty"`
 	CanRunCommands      *bool               `yaml:"canRunCommands,omitempty"`
@@ -101,6 +120,9 @@ type fileAgentProfile struct {
 	MaxReadsPerDay      *int                `yaml:"max_reads_per_day,omitempty"`
 	MaxSecretsInSession *int                `yaml:"max_secrets_in_session,omitempty"`
 	DynamicProviders    map[string][]string `yaml:"dynamicProviders,omitempty"`
+	AllowedEnvVars      []string            `yaml:"allowedEnvVars,omitempty"`
+	PreCallHooks        []string            `yaml:"pre_call_hooks,omitempty"`
+	PostCallHooks       []string            `yaml:"post_call_hooks,omitempty"`
 }
 
 type fileProfile struct {
@@ -176,6 +198,14 @@ func Load(path string) (*Config, error) {
 	if raw.DefaultProfile != "" {
 		cfg.DefaultProfile = raw.DefaultProfile
 	}
+	if raw.EnvWhitelist != nil {
+		cfg.EnvWhitelist = append([]string(nil), raw.EnvWhitelist...)
+	}
+
+	if raw.ScanPatterns != nil {
+		cfg.ScanPatterns = append([]CustomPattern(nil), raw.ScanPatterns...)
+	}
+
 	if raw.Profiles != nil {
 		cfg.Profiles = make(map[string]*Profile, len(raw.Profiles))
 		for name, fp := range raw.Profiles {
@@ -260,12 +290,18 @@ func Load(path string) (*Config, error) {
 			if profile.ExposeValueTools != nil {
 				current.ExposeValueTools = *profile.ExposeValueTools
 			}
+			if profile.AutoUnseal != nil {
+				current.AutoUnseal = *profile.AutoUnseal
+			}
 			if profile.DynamicProviders != nil {
 				current.DynamicProviders = make(map[string][]string, len(profile.DynamicProviders))
 				for p, roles := range profile.DynamicProviders {
 					rolesCopy := append([]string(nil), roles...)
 					current.DynamicProviders[p] = rolesCopy
 				}
+			}
+			if profile.AllowedEnvVars != nil {
+				current.AllowedEnvVars = append([]string(nil), profile.AllowedEnvVars...)
 			}
 			cfg.Agents[name] = current
 		}
@@ -475,6 +511,9 @@ func (c *Config) SaveTo(path string) error {
 			Format: &format,
 		}
 	}
+	if len(c.ScanPatterns) > 0 {
+		raw.ScanPatterns = append([]CustomPattern(nil), c.ScanPatterns...)
+	}
 	raw.Agents = buildFileAgents(c.Agents)
 	for name, profile := range c.Profiles {
 		if profile != nil {
@@ -500,6 +539,7 @@ func buildFileAgents(agents map[string]AgentProfile) map[string]fileAgentProfile
 		canUseAutotype := profile.CanUseAutotype
 		canReadValues := profile.CanReadValues
 		exposeValueTools := profile.ExposeValueTools
+		autoUnseal := profile.AutoUnseal
 		requireApproval := profile.RequireApproval
 		fap := fileAgentProfile{
 			AllowedPaths:     allowed,
@@ -510,6 +550,7 @@ func buildFileAgents(agents map[string]AgentProfile) map[string]fileAgentProfile
 			CanUseAutotype:   &canUseAutotype,
 			CanReadValues:    &canReadValues,
 			ExposeValueTools: &exposeValueTools,
+			AutoUnseal:       &autoUnseal,
 			RequireApproval:  &requireApproval,
 		}
 		if profile.Tier != "" {
@@ -548,6 +589,9 @@ func buildFileAgents(agents map[string]AgentProfile) map[string]fileAgentProfile
 				rolesCopy := append([]string(nil), roles...)
 				fap.DynamicProviders[p] = rolesCopy
 			}
+		}
+		if profile.AllowedEnvVars != nil {
+			fap.AllowedEnvVars = append([]string(nil), profile.AllowedEnvVars...)
 		}
 		result[name] = fap
 	}
@@ -622,17 +666,18 @@ func newDefaultAgentProfile(name string) AgentProfile {
 		CanRunCommands:   false,
 		ApprovalMode:     "none",
 		ExposeValueTools: true,
+		AutoUnseal:       true,
 	}
 }
 
 func builtinAgentProfiles() map[string]AgentProfile {
 	return map[string]AgentProfile{
-		"default":     {Name: "default", AllowedPaths: []string{"*"}, CanWrite: false, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true},
-		"claude-code": {Name: "claude-code", AllowedPaths: []string{"*"}, CanWrite: true, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true},
-		"codex":       {Name: "codex", AllowedPaths: []string{"*"}, CanWrite: false, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true},
-		"hermes":      {Name: "hermes", AllowedPaths: []string{"*"}, CanWrite: true, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true},
-		"openclaw":    {Name: "openclaw", AllowedPaths: []string{"*"}, CanWrite: true, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true},
-		"opencode":    {Name: "opencode", AllowedPaths: []string{"*"}, CanWrite: false, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true},
+		"default":     {Name: "default", AllowedPaths: []string{"*"}, CanWrite: false, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true, AutoUnseal: true},
+		"claude-code": {Name: "claude-code", AllowedPaths: []string{"*"}, CanWrite: true, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true, AutoUnseal: true},
+		"codex":       {Name: "codex", AllowedPaths: []string{"*"}, CanWrite: false, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true, AutoUnseal: true},
+		"hermes":      {Name: "hermes", AllowedPaths: []string{"*"}, CanWrite: true, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true, AutoUnseal: true},
+		"openclaw":    {Name: "openclaw", AllowedPaths: []string{"*"}, CanWrite: true, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true, AutoUnseal: true},
+		"opencode":    {Name: "opencode", AllowedPaths: []string{"*"}, CanWrite: false, CanRunCommands: false, ApprovalMode: "none", ExposeValueTools: true, AutoUnseal: true},
 	}
 }
 

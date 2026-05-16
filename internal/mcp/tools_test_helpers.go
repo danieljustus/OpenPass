@@ -32,9 +32,10 @@ func newTestServerWithVault(t *testing.T, profile config.AgentProfile, transport
 			Dir:      vaultDir,
 			Identity: identity,
 		},
-		agent:     &profile,
-		auditLog:  auditLog,
-		transport: transport,
+		agent:        &profile,
+		auditLog:     auditLog,
+		transport:    transport,
+		hookRegistry: NewHookRegistry(),
 	}
 }
 

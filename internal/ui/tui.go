@@ -19,6 +19,7 @@ import (
 
 	clipboardapp "github.com/danieljustus/OpenPass/internal/clipboard"
 	vaultcrypto "github.com/danieljustus/OpenPass/internal/crypto"
+	"github.com/danieljustus/OpenPass/internal/envfilter"
 	render "github.com/danieljustus/OpenPass/internal/ui/render"
 	theme "github.com/danieljustus/OpenPass/internal/ui/theme"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
@@ -800,6 +801,7 @@ func editEntryCmd(svc vaultsvc.Service, path string) tea.Cmd {
 			return entryEditedMsg{path: path, err: editorErr}
 		}
 		cmd := exec.Command(editor, tmpPath) //#nosec G204 G702 -- editor path resolved via exec.LookPath above.
+		envfilter.PrepareCmd(cmd)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr

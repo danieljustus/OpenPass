@@ -21,6 +21,7 @@ var TierPresets = map[TierPreset]AgentProfile{
 		CanUseAutotype:   false,
 		CanReadValues:    false,
 		ExposeValueTools: false,
+		AutoUnseal:       false,
 		ApprovalMode:     "none",
 		RequireApproval:  false,
 		AllowedPaths:     []string{},
@@ -33,6 +34,7 @@ var TierPresets = map[TierPreset]AgentProfile{
 		CanUseAutotype:   true,
 		CanReadValues:    true,
 		ExposeValueTools: false,
+		AutoUnseal:       false,
 		ApprovalMode:     "prompt",
 		RequireApproval:  true,
 		AllowedPaths:     []string{},
@@ -45,6 +47,7 @@ var TierPresets = map[TierPreset]AgentProfile{
 		CanUseAutotype:   true,
 		CanReadValues:    true,
 		ExposeValueTools: true,
+		AutoUnseal:       true,
 		ApprovalMode:     "prompt",
 		RequireApproval:  true,
 		AllowedPaths:     []string{},
@@ -76,6 +79,7 @@ func ApplyTierPreset(target *AgentProfile, tier string) bool {
 	target.CanUseAutotype = preset.CanUseAutotype
 	target.CanReadValues = preset.CanReadValues
 	target.ExposeValueTools = preset.ExposeValueTools
+	target.AutoUnseal = preset.AutoUnseal
 	target.ApprovalMode = preset.ApprovalMode
 	target.RequireApproval = preset.RequireApproval
 	return true

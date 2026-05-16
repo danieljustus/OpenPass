@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/danieljustus/OpenPass/internal/envfilter"
 )
 
 type passImporter struct {
@@ -78,6 +80,7 @@ func (i *passImporter) Parse(r io.Reader) ([]ImportedEntry, error) {
 
 func decryptPassFile(path string) (string, error) {
 	cmd := exec.Command("gpg", "--decrypt", "--batch", "--yes", path)
+	envfilter.PrepareCmd(cmd)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 

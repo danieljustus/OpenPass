@@ -7,10 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	openpasscrypto "github.com/danieljustus/OpenPass/internal/crypto"
 )
 
 func TestShareStore_CreateGet_Roundtrip(t *testing.T) {
@@ -1202,5 +1205,386 @@ func TestShareStore_JSON_MultipleCycles(t *testing.T) {
 	}
 	if g2loaded.Status != ShareApproved {
 		t.Errorf("g2 status = %q, want approved", g2loaded.Status)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// HMAC grant ID tests
+// ---------------------------------------------------------------------------
+
+func testGrantSigningKey() []byte {
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i)
+	}
+	return key
+}
+
+func TestShareStore_CreateWithHMAC(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mcp-shares.json")
+
+	store := NewShareStore(path)
+	store.SetSigningKey(testGrantSigningKey())
+
+	g, err := store.Create("alice", "bob", "vault/secret/password", "", 0)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	// ID should be in HMAC format (contains ":").
+	if !strings.Contains(g.ID, ":") {
+		t.Fatalf("grant ID %q should be in HMAC format (nonce:hmac)", g.ID)
+	}
+
+	// Nonce should be stored on the grant.
+	if g.Nonce == "" {
+		t.Error("Nonce should be set on HMAC grants")
+	}
+
+	// Should be retrievable by ID.
+	got, ok := store.Get(g.ID)
+	if !ok {
+		t.Fatal("Get() should find HMAC grant by ID")
+	}
+	if got.ID != g.ID {
+		t.Errorf("ID mismatch: %q vs %q", got.ID, g.ID)
+	}
+}
+
+func TestShareStore_CreateWithHMAC_ApproveAndCheckAccess(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mcp-shares.json")
+
+	store := NewShareStore(path)
+	store.SetSigningKey(testGrantSigningKey())
+
+	g, err := store.Create("alice", "bob", "vault/secret/api-key", "", 0)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	if err := store.Approve(g.ID, "admin"); err != nil {
+		t.Fatalf("Approve() error = %v", err)
+	}
+
+	// CheckAccess should find the HMAC grant.
+	grant, ok := store.CheckAccess("bob", "vault/secret/api-key")
+	if !ok {
+		t.Fatal("CheckAccess should find approved HMAC grant")
+	}
+	if grant.ID != g.ID {
+		t.Errorf("grant ID = %q, want %q", grant.ID, g.ID)
+	}
+}
+
+func TestShareStore_CheckAccess_RejectsForgedGrant(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mcp-shares.json")
+
+	store := NewShareStore(path)
+	store.SetSigningKey(testGrantSigningKey())
+
+	g, err := store.Create("alice", "bob", "vault/secret/api-key", "", 0)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	if err := store.Approve(g.ID, "admin"); err != nil {
+		t.Fatalf("Approve() error = %v", err)
+	}
+
+	// Manually forge a grant in the store with a different path but same ID.
+	store.mu.Lock()
+	store.grants[g.ID] = &ShareGrant{
+		ID:         g.ID,
+		FromAgent:  "alice",
+		ToAgent:    "bob",
+		SecretPath: "vault/secret/forged-path",
+		Status:     ShareApproved,
+		CreatedAt:  g.CreatedAt,
+		Nonce:      g.Nonce,
+	}
+	store.mu.Unlock()
+
+	// CheckAccess should NOT find the grant because HMAC won't verify
+	// (the secret_path in the stored grant doesn't match the HMAC).
+	grant, ok := store.CheckAccess("bob", "vault/secret/forged-path")
+	if ok {
+		t.Fatal("CheckAccess should reject forged grant with mismatched HMAC")
+	}
+	if grant != nil {
+		t.Fatal("forged grant should return nil")
+	}
+}
+
+func TestShareStore_CheckAccess_RejectsForgedFromAgent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mcp-shares.json")
+
+	store := NewShareStore(path)
+	store.SetSigningKey(testGrantSigningKey())
+
+	// Alice shares a secret with bob.
+	g, err := store.Create("alice", "bob", "vault/secret/key", "", 0)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if err := store.Approve(g.ID, "admin"); err != nil {
+		t.Fatalf("Approve() error = %v", err)
+	}
+
+	// Mallory tries to modify the grant to be from her instead.
+	store.mu.Lock()
+	store.grants[g.ID].FromAgent = "mallory"
+	store.mu.Unlock()
+
+	// bob/forged-path shouldn't match, but let's test the original path.
+	_, ok := store.CheckAccess("bob", "vault/secret/key")
+	if ok {
+		t.Fatal("CheckAccess should reject grant with tampered FromAgent")
+	}
+}
+
+func TestShareStore_CheckAccess_LegacyUUIDGrantStillWorks(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mcp-shares.json")
+
+	store := NewShareStore(path)
+	// Store has a signing key, but we manually inject a legacy UUID grant
+	// to test backward compatibility.
+	store.SetSigningKey(testGrantSigningKey())
+
+	// Inject a legacy UUID-format grant directly.
+	legacyID := "550e8400-e29b-41d4-a716-446655440000"
+	store.mu.Lock()
+	store.grants[legacyID] = &ShareGrant{
+		ID:         legacyID,
+		FromAgent:  "alice",
+		ToAgent:    "bob",
+		SecretPath: "vault/secret/legacy",
+		Status:     ShareApproved,
+		CreatedAt:  time.Now().UTC(),
+	}
+	store.mu.Unlock()
+
+	// Legacy UUID grants should still be accessible.
+	grant, ok := store.CheckAccess("bob", "vault/secret/legacy")
+	if !ok {
+		t.Fatal("CheckAccess should find legacy UUID grants")
+	}
+	if grant.ID != legacyID {
+		t.Errorf("grant ID = %q, want %q", grant.ID, legacyID)
+	}
+}
+
+func TestShareStore_CheckAccess_HybridStore(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mcp-shares.json")
+
+	store := NewShareStore(path)
+	store.SetSigningKey(testGrantSigningKey())
+
+	// Create an HMAC grant.
+	hmacGrant, err := store.Create("alice", "bob", "vault/secret/hmac-path", "", 0)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if err := store.Approve(hmacGrant.ID, "admin"); err != nil {
+		t.Fatalf("Approve() error = %v", err)
+	}
+
+	// Inject a legacy UUID grant.
+	legacyID := "550e8400-e29b-41d4-a716-446655440001"
+	store.mu.Lock()
+	store.grants[legacyID] = &ShareGrant{
+		ID:         legacyID,
+		FromAgent:  "alice",
+		ToAgent:    "bob",
+		SecretPath: "vault/secret/legacy-path",
+		Status:     ShareApproved,
+		CreatedAt:  time.Now().UTC(),
+	}
+	store.mu.Unlock()
+
+	// Both should be accessible.
+	hmacResult, ok := store.CheckAccess("bob", "vault/secret/hmac-path")
+	if !ok {
+		t.Fatal("HMAC grant should be accessible")
+	}
+	if hmacResult.ID != hmacGrant.ID {
+		t.Errorf("HMAC grant ID = %q, want %q", hmacResult.ID, hmacGrant.ID)
+	}
+
+	legacyResult, ok := store.CheckAccess("bob", "vault/secret/legacy-path")
+	if !ok {
+		t.Fatal("Legacy UUID grant should be accessible")
+	}
+	if legacyResult.ID != legacyID {
+		t.Errorf("legacy grant ID = %q, want %q", legacyResult.ID, legacyID)
+	}
+}
+
+func TestShareStore_HMACGrant_JSONRoundtrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mcp-shares.json")
+
+	store := NewShareStore(path)
+	store.SetSigningKey(testGrantSigningKey())
+
+	g, err := store.Create("alice", "bob", "vault/secret/password", "password_field", 30*time.Minute)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if err := store.Approve(g.ID, "admin"); err != nil {
+		t.Fatalf("Approve() error = %v", err)
+	}
+
+	// Load into a fresh store with the same key.
+	store2 := NewShareStore(path)
+	store2.SetSigningKey(testGrantSigningKey())
+	if err := store2.Load(); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	// Grant should be retrievable.
+	got, ok := store2.Get(g.ID)
+	if !ok {
+		t.Fatal("Get() after Load() returned false")
+	}
+	if got.ID != g.ID {
+		t.Errorf("ID = %q, want %q", got.ID, g.ID)
+	}
+	if got.FromAgent != "alice" {
+		t.Errorf("FromAgent = %q, want alice", got.FromAgent)
+	}
+	if got.ToAgent != "bob" {
+		t.Errorf("ToAgent = %q, want bob", got.ToAgent)
+	}
+
+	// CheckAccess should still work after reload.
+	grant, ok := store2.CheckAccess("bob", "vault/secret/password")
+	if !ok {
+		t.Fatal("CheckAccess should work after JSON roundtrip")
+	}
+	if grant.ID != g.ID {
+		t.Errorf("grant ID = %q, want %q", grant.ID, g.ID)
+	}
+}
+
+func TestShareStore_HMACGrant_WrongKeyFailsCheckAccess(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mcp-shares.json")
+
+	store := NewShareStore(path)
+	store.SetSigningKey(testGrantSigningKey())
+
+	g, err := store.Create("alice", "bob", "vault/secret/key", "", 0)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if err := store.Approve(g.ID, "admin"); err != nil {
+		t.Fatalf("Approve() error = %v", err)
+	}
+
+	// Create a store with a DIFFERENT key and load the same grants.
+	store2 := NewShareStore(path)
+	differentKey := make([]byte, 32)
+	for i := range differentKey {
+		differentKey[i] = byte(255 - i)
+	}
+	store2.SetSigningKey(differentKey)
+	if err := store2.Load(); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	// CheckAccess should NOT work with a different key.
+	_, ok := store2.CheckAccess("bob", "vault/secret/key")
+	if ok {
+		t.Fatal("CheckAccess should fail when signing key is different")
+	}
+}
+
+func TestShareStore_HMACGrant_NoKeyFailsCheckAccess(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mcp-shares.json")
+
+	store := NewShareStore(path)
+	store.SetSigningKey(testGrantSigningKey())
+
+	g, err := store.Create("alice", "bob", "vault/secret/key", "", 0)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if err := store.Approve(g.ID, "admin"); err != nil {
+		t.Fatalf("Approve() error = %v", err)
+	}
+
+	// Create a store with NO signing key and load the same grants.
+	store2 := NewShareStore(path)
+	if err := store2.Load(); err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	// CheckAccess should NOT work because HMAC grants need a key for verification.
+	_, ok := store2.CheckAccess("bob", "vault/secret/key")
+	if ok {
+		t.Fatal("CheckAccess should fail when no signing key is configured")
+	}
+}
+
+func TestShareStore_NoSigningKey_UsesRandomID(t *testing.T) {
+	// Verify that when no signing key is set, grants use random IDs (legacy mode).
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mcp-shares.json")
+
+	store := NewShareStore(path)
+
+	g, err := store.Create("alice", "bob", "vault/secret/password", "", 0)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	// ID should NOT be in HMAC format when no key is set.
+	if strings.Contains(g.ID, ":") {
+		t.Fatalf("grant ID %q should NOT be in HMAC format when no key is set", g.ID)
+	}
+
+	// ID should be non-empty.
+	if g.ID == "" {
+		t.Fatal("grant ID must not be empty")
+	}
+
+	// Nonce should be empty when no key.
+	if g.Nonce != "" {
+		t.Error("Nonce should be empty when no signing key")
+	}
+}
+
+func TestShareStore_InitSigningKey(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mcp-shares.json")
+
+	store := NewShareStore(path)
+
+	// InitSigningKey should work (uses memory fallback in CI).
+	key, err := store.InitSigningKey(dir)
+	if err != nil {
+		t.Fatalf("InitSigningKey() error = %v", err)
+	}
+	if len(key) != 32 {
+		t.Fatalf("key length = %d, want 32", len(key))
+	}
+
+	// Now Create should produce HMAC-format IDs.
+	g, err := store.Create("alice", "bob", "vault/secret/key", "", 0)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if !openpasscrypto.IsHMACFormat(g.ID) {
+		t.Errorf("grant ID %q should be in HMAC format", g.ID)
+	}
+	if g.Nonce == "" {
+		t.Error("Nonce should be set")
 	}
 }

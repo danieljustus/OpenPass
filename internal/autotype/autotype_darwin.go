@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/danieljustus/OpenPass/internal/envfilter"
 )
 
 func init() {
@@ -25,6 +27,7 @@ func (a *darwinAutotype) Type(text string) error {
 	// inline) through stdin keeps it out of argv where any local user could
 	// read it via `ps -ef`.
 	cmd := exec.Command("osascript")
+	envfilter.PrepareCmd(cmd)
 	cmd.Stdin = strings.NewReader(script)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("autotype failed: %w", err)

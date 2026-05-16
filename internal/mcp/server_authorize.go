@@ -16,6 +16,27 @@ import (
 	"github.com/danieljustus/OpenPass/internal/vault"
 )
 
+// requestIDKey is used for storing request IDs in context.
+type requestIDKey struct{}
+
+// WithRequestID stores a request ID in the context.
+func WithRequestID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, requestIDKey{}, id)
+}
+
+// RequestIDFromContext extracts the request ID from the context, returning
+// empty string if it is not set.
+func RequestIDFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	id, ok := ctx.Value(requestIDKey{}).(string)
+	if !ok {
+		return ""
+	}
+	return id
+}
+
 func (s *Server) authorize(ctx context.Context, path string, write bool, approved bool) error {
 	if s == nil || s.agent == nil {
 		return errors.New("server not initialized")
@@ -115,6 +136,8 @@ func (s *Server) logAudit(ctx context.Context, action, path string, ok bool) {
 		Transport: s.transport,
 		OK:        ok,
 		Reason:    reason,
+		SessionID: s.sessionID,
+		RequestID: RequestIDFromContext(ctx),
 	}
 	if token, ok := TokenFromContext(ctx); ok {
 		entry.TokenID = token.ID
@@ -124,9 +147,11 @@ func (s *Server) logAudit(ctx context.Context, action, path string, ok bool) {
 	}
 }
 
-// checkShareAccess checks if the current agent has an approved, non-expired share for the given path.
-// Returns the ShareGrant and true if access is granted, or nil and false otherwise.
-func (s *Server) checkShareAccess(_ context.Context, path string) (*ShareGrant, bool) {
+// checkShareAccess checks if the current agent has an approved, non-expired
+// share for the given path. Grants with invalid HMAC (tampered/forged) are
+// rejected as a security measure. Returns the ShareGrant and true if access
+// is granted, or nil and false otherwise.
+func (s *Server) checkShareAccess(ctx context.Context, path string) (*ShareGrant, bool) {
 	if s.shareStore == nil {
 		return nil, false
 	}
@@ -135,6 +160,7 @@ func (s *Server) checkShareAccess(_ context.Context, path string) (*ShareGrant, 
 		return nil, false
 	}
 	if grant.ExpiresAt != nil && time.Now().After(*grant.ExpiresAt) {
+		s.logAuditShare(ctx, "share_expired", path, grant, false)
 		return nil, false
 	}
 	return grant, true
@@ -185,6 +211,8 @@ func (s *Server) logAuditShare(ctx context.Context, action, path string, grant *
 		FromAgent:   grant.FromAgent,
 		ToAgent:     grant.ToAgent,
 		ShareAction: action,
+		SessionID:   s.sessionID,
+		RequestID:   RequestIDFromContext(ctx),
 	}
 	if token, ok := TokenFromContext(ctx); ok {
 		entry.TokenID = token.ID

@@ -15,6 +15,10 @@ type SecretPattern struct {
 	Regex       *regexp.Regexp
 	Description string
 	Severity    string // "high", "medium", "low"
+	// Validator is an optional callback for post-regex validation (e.g., Luhn
+	// check for credit cards, MOD-97 for IBANs). Returning false excludes the
+	// match from results.
+	Validator func(value string) bool
 }
 
 // DefaultPatterns returns the built-in secret detection patterns.
@@ -117,6 +121,56 @@ func DefaultPatterns() []SecretPattern {
 			Description: "JSON Web Token",
 			Severity:    "medium",
 		},
+		{
+			Name:        "email_address",
+			Regex:       regexp.MustCompile(`\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b`),
+			Description: "Email Address",
+			Severity:    "medium",
+		},
+		{
+			Name:        "credit_card",
+			Regex:       regexp.MustCompile(`\b(?:\d[ -]*?){13,16}\b`),
+			Description: "Credit Card Number (Luhn validated)",
+			Severity:    "high",
+			Validator:   ValidateLuhn,
+		},
+		{
+			Name:        "iban",
+			Regex:       regexp.MustCompile(`\b[A-Z]{2}\d{2}[A-Z0-9]{1,30}\b`),
+			Description: "IBAN (International Bank Account Number)",
+			Severity:    "high",
+			Validator:   ValidateIBAN,
+		},
+		{
+			Name:        "phone_number",
+			Regex:       regexp.MustCompile(`\b(?:\+?\d{1,3}[-. ]?)?\(?\d{2,4}\)?[-. ]?\d{2,4}[-. ]?\d{4,9}\b`),
+			Description: "Phone Number",
+			Severity:    "low",
+		},
+		{
+			Name:        "bearer_token",
+			Regex:       regexp.MustCompile(`\bBearer\s+[A-Za-z0-9\-._~+/]+={0,2}\b`),
+			Description: "Bearer Authentication Token",
+			Severity:    "high",
+		},
+		{
+			Name:        "aws_sts_session_token",
+			Regex:       regexp.MustCompile(`\bFQoGZXIvYXdzE[\w/+=]{100,}\b`),
+			Description: "AWS STS Session Token",
+			Severity:    "high",
+		},
+		{
+			Name:        "ssn_us",
+			Regex:       regexp.MustCompile(`\b\d{3}-\d{2}-\d{4}\b`),
+			Description: "US Social Security Number",
+			Severity:    "high",
+		},
+		{
+			Name:        "ipv4_address",
+			Regex:       regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`),
+			Description: "IPv4 Address",
+			Severity:    "low",
+		},
 	}
 }
 
@@ -170,9 +224,13 @@ func (r *PatternRegistry) FindMatches(text string) []Match {
 	for _, p := range patterns {
 		matches := p.Regex.FindAllStringIndex(text, -1)
 		for _, m := range matches {
+			value := text[m[0]:m[1]]
+			if p.Validator != nil && !p.Validator(value) {
+				continue
+			}
 			allMatches = append(allMatches, Match{
 				PatternName: p.Name,
-				Value:       text[m[0]:m[1]],
+				Value:       value,
 				Start:       m[0],
 				End:         m[1],
 				Severity:    p.Severity,

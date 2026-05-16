@@ -30,9 +30,13 @@ func (s *Server) handleCopyToClipboard(ctx context.Context, req CallToolRequest)
 	}
 
 	if s.requiresApproval() {
-		s.logAudit(ctx, "copy_to_clipboard", path, false)
-		metrics.RecordApproval(s.agent.Name, "denied")
-		return nil, fmt.Errorf("copy_to_clipboard denied: approval required but cannot be granted")
+		if reqErr := s.requireApproval(ctx, Intent{
+			Action:    "copy_to_clipboard",
+			EntryPath: path,
+			Summary:   fmt.Sprintf("copy password from %s to clipboard", path),
+		}); reqErr != nil {
+			return nil, reqErr
+		}
 	}
 
 	svc := vaultsvc.New(slog.Default(), s.vault)
