@@ -191,41 +191,35 @@ func buildHTTPServerConfig(vDir, agentName string, dryRun bool) (map[string]any,
 		return nil, "", err
 	}
 
-	if dryRun {
-		// Dry-run: return config with a placeholder token, but do not
-		// create or persist a real token in the registry.
-		config := map[string]any{
-			"url":             httpCfg.URL,
-			"timeout":         120,
-			"connect_timeout": 30,
-			"headers": map[string]string{
-				"Accept":               httpCfg.Header["Accept"],
-				"Authorization":        "Bearer <dry-run>",
-				"MCP-Protocol-Version": httpCfg.Header["MCP-Protocol-Version"],
-				"X-OpenPass-Agent":     httpCfg.Header["X-OpenPass-Agent"],
-			},
+	var rawToken string
+	var tokenID string
+
+	if !dryRun {
+		// Create a scoped token for this agent.
+		regPath := mcp.TokenRegistryFilePath(vDir)
+		reg := mcp.NewTokenRegistry(regPath)
+		if loadErr := reg.Load(); loadErr != nil {
+			return nil, "", fmt.Errorf("load token registry: %w", loadErr)
 		}
-		return config, "<dry-run>", nil
-	}
 
-	// Create a scoped token for this agent.
-	regPath := mcp.TokenRegistryFilePath(vDir)
-	reg := mcp.NewTokenRegistry(regPath)
-	if loadErr := reg.Load(); loadErr != nil {
-		return nil, "", fmt.Errorf("load token registry: %w", loadErr)
-	}
-
-	token, rawToken, err := reg.Create(
-		fmt.Sprintf("mcp-install-%s", agentName),
-		[]string{"*"},
-		agentName,
-		30*24*time.Hour, // 30 days default
-	)
-	if err != nil {
-		return nil, "", fmt.Errorf("create scoped token: %w", err)
-	}
-	if err := reg.Save(); err != nil {
-		return nil, "", fmt.Errorf("save token registry: %w", err)
+		token, rt, err := reg.Create(
+			fmt.Sprintf("mcp-install-%s", agentName),
+			[]string{"*"},
+			agentName,
+			30*24*time.Hour, // 30 days default
+		)
+		if err != nil {
+			return nil, "", fmt.Errorf("create scoped token: %w", err)
+		}
+		if err := reg.Save(); err != nil {
+			return nil, "", fmt.Errorf("save token registry: %w", err)
+		}
+		rawToken = rt
+		tokenID = token.ID
+	} else {
+		// Use a deterministic preview token so dry-run output is stable.
+		rawToken = "<dry-run-preview-token>"
+		tokenID = "<not-generated-dry-run>"
 	}
 
 	// Use the raw token directly in the config instead of env reference
@@ -246,7 +240,7 @@ func buildHTTPServerConfig(vDir, agentName string, dryRun bool) (map[string]any,
 		maps.Copy(config, def.ServerConfigExtras)
 	}
 
-	return config, token.ID, nil
+	return config, tokenID, nil
 }
 
 func printInstallResult(result *install.Result, dryRun bool, backupPath string) {
@@ -273,7 +267,7 @@ func printInstallResult(result *install.Result, dryRun bool, backupPath string) 
 		printQuietAware("  Backup:      %s\n", backupPath)
 	}
 	if result.TokenID != "" {
-		if result.TokenID == "<dry-run>" {
+		if result.TokenID == "<not-generated-dry-run>" {
 			printQuietAware("  Token ID:    <not generated (dry-run)>\n")
 		} else {
 			printQuietAware("  Token ID:    %s\n", result.TokenID)
