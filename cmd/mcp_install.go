@@ -105,7 +105,7 @@ func runInstall(vDir string, agentType install.AgentType, dryRun, httpMode bool)
 	}
 
 	// Generate server config.
-	serverConfig, tokenID, err := buildServerConfig(vDir, string(agentType), httpMode)
+	serverConfig, tokenID, err := buildServerConfig(vDir, string(agentType), httpMode, dryRun)
 	if err != nil {
 		return err
 	}
@@ -170,9 +170,9 @@ func runAutoDetect(vDir string, dryRun, httpMode bool) error {
 	return nil
 }
 
-func buildServerConfig(vDir, agentName string, httpMode bool) (map[string]any, string, error) {
+func buildServerConfig(vDir, agentName string, httpMode, dryRun bool) (map[string]any, string, error) {
 	if httpMode {
-		return buildHTTPServerConfig(vDir, agentName)
+		return buildHTTPServerConfig(vDir, agentName, dryRun)
 	}
 	return buildStdioServerConfig(agentName), "", nil
 }
@@ -185,10 +185,27 @@ func buildStdioServerConfig(agentName string) map[string]any {
 	}
 }
 
-func buildHTTPServerConfig(vDir, agentName string) (map[string]any, string, error) {
+func buildHTTPServerConfig(vDir, agentName string, dryRun bool) (map[string]any, string, error) {
 	httpCfg, err := resolveHTTPConfig(agentName, "")
 	if err != nil {
 		return nil, "", err
+	}
+
+	if dryRun {
+		// Dry-run: return config with a placeholder token, but do not
+		// create or persist a real token in the registry.
+		config := map[string]any{
+			"url":             httpCfg.URL,
+			"timeout":         120,
+			"connect_timeout": 30,
+			"headers": map[string]string{
+				"Accept":               httpCfg.Header["Accept"],
+				"Authorization":        "Bearer <dry-run>",
+				"MCP-Protocol-Version": httpCfg.Header["MCP-Protocol-Version"],
+				"X-OpenPass-Agent":     httpCfg.Header["X-OpenPass-Agent"],
+			},
+		}
+		return config, "<dry-run>", nil
 	}
 
 	// Create a scoped token for this agent.
@@ -256,7 +273,11 @@ func printInstallResult(result *install.Result, dryRun bool, backupPath string) 
 		printQuietAware("  Backup:      %s\n", backupPath)
 	}
 	if result.TokenID != "" {
-		printQuietAware("  Token ID:    %s\n", result.TokenID)
+		if result.TokenID == "<dry-run>" {
+			printQuietAware("  Token ID:    <not generated (dry-run)>\n")
+		} else {
+			printQuietAware("  Token ID:    %s\n", result.TokenID)
+		}
 	}
 }
 
