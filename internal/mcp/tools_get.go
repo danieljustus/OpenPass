@@ -128,6 +128,11 @@ func (s *Server) handleGetValue(ctx context.Context, req CallToolRequest) (*Call
 		entry = redactEntry(entry, s.agent.RedactFields)
 	}
 
+	// Sanitize tags to prevent prompt injection via tag metadata.
+	for i, tag := range entry.Metadata.Tags {
+		entry.Metadata.Tags[i] = globalChokepoint.SanitizeForMCP(tag)
+	}
+
 	s.logAudit(ctx, "get_value", path, true)
 	metrics.RecordVaultOperation("read", "success")
 
