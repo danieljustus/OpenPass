@@ -124,9 +124,11 @@ func (s *Server) logAudit(ctx context.Context, action, path string, ok bool) {
 	}
 }
 
-// checkShareAccess checks if the current agent has an approved, non-expired share for the given path.
-// Returns the ShareGrant and true if access is granted, or nil and false otherwise.
-func (s *Server) checkShareAccess(_ context.Context, path string) (*ShareGrant, bool) {
+// checkShareAccess checks if the current agent has an approved, non-expired
+// share for the given path. Grants with invalid HMAC (tampered/forged) are
+// rejected as a security measure. Returns the ShareGrant and true if access
+// is granted, or nil and false otherwise.
+func (s *Server) checkShareAccess(ctx context.Context, path string) (*ShareGrant, bool) {
 	if s.shareStore == nil {
 		return nil, false
 	}
@@ -135,6 +137,7 @@ func (s *Server) checkShareAccess(_ context.Context, path string) (*ShareGrant, 
 		return nil, false
 	}
 	if grant.ExpiresAt != nil && time.Now().After(*grant.ExpiresAt) {
+		s.logAuditShare(ctx, "share_expired", path, grant, false)
 		return nil, false
 	}
 	return grant, true
