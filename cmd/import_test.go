@@ -409,6 +409,151 @@ func TestImportReviewPromote(t *testing.T) {
 	}
 }
 
+func TestImportReviewPromoteSkipsExisting(t *testing.T) {
+	vaultDir, passphrase := initVault(t)
+	setPassEnv(t, string(passphrase))
+	defer setupVaultFlag(t, vaultDir)()
+
+	// Quarantine import
+	if err := os.Setenv("OPENPASS_PASSPHRASE", string(passphrase)); err != nil {
+		t.Fatalf("set passphrase env: %v", err)
+	}
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "import", "csv", csvImportFixture(t), "--quarantine"})
+	var importOutput string
+	var importErr error
+	importOutput = captureStdout(func() {
+		importErr = rootCmd.Execute()
+	})
+	rootCmd.SetArgs(nil)
+	if importErr != nil {
+		t.Fatalf("quarantine import failed: %v", importErr)
+	}
+
+	// Extract the import-id
+	var importID string
+	for _, line := range strings.Split(importOutput, "\n") {
+		if strings.HasPrefix(line, "Quarantine import ID: ") {
+			importID = strings.TrimSpace(strings.TrimPrefix(line, "Quarantine import ID: "))
+		}
+	}
+	if importID == "" {
+		t.Fatalf("could not extract import-id from output: %s", importOutput)
+	}
+
+	// Create a conflicting destination entry
+	svc := importTestVaultService(t, vaultDir, string(passphrase))
+	if err := svc.SetFields("GitHub,-Personal", map[string]any{
+		"username": "existing@example.com",
+	}); err != nil {
+		t.Fatalf("create conflicting destination entry: %v", err)
+	}
+
+	// Re-set passphrase
+	if err := os.Setenv("OPENPASS_PASSPHRASE", string(passphrase)); err != nil {
+		t.Fatalf("set passphrase env: %v", err)
+	}
+
+	// Promote WITHOUT --overwrite — should fail
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "import", "review", "promote", importID})
+	var promoteErr error
+	promoteOutput := captureStdout(func() {
+		promoteErr = rootCmd.Execute()
+	})
+	rootCmd.SetArgs(nil)
+	if promoteErr == nil {
+		t.Fatal("expected error when destination already exists without --overwrite, got nil")
+	}
+
+	// Warning output should mention "already exists"
+	if !strings.Contains(promoteOutput, "already exists") {
+		t.Errorf("promote output missing 'already exists' warning: %s", promoteOutput)
+	}
+
+	// Quarantine entry should still exist (not deleted)
+	quarantined, err := svc.List("quarantine/")
+	if err != nil {
+		t.Fatalf("list quarantine: %v", err)
+	}
+	if len(quarantined) == 0 {
+		t.Error("quarantine was cleaned up despite promote failure")
+	}
+}
+
+func TestImportReviewPromoteOverwrite(t *testing.T) {
+	vaultDir, passphrase := initVault(t)
+	setPassEnv(t, string(passphrase))
+	defer setupVaultFlag(t, vaultDir)()
+
+	// Quarantine import
+	if err := os.Setenv("OPENPASS_PASSPHRASE", string(passphrase)); err != nil {
+		t.Fatalf("set passphrase env: %v", err)
+	}
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "import", "csv", csvImportFixture(t), "--quarantine"})
+	var importOutput string
+	var importErr error
+	importOutput = captureStdout(func() {
+		importErr = rootCmd.Execute()
+	})
+	rootCmd.SetArgs(nil)
+	if importErr != nil {
+		t.Fatalf("quarantine import failed: %v", importErr)
+	}
+
+	// Extract the import-id
+	var importID string
+	for _, line := range strings.Split(importOutput, "\n") {
+		if strings.HasPrefix(line, "Quarantine import ID: ") {
+			importID = strings.TrimSpace(strings.TrimPrefix(line, "Quarantine import ID: "))
+		}
+	}
+	if importID == "" {
+		t.Fatalf("could not extract import-id from output: %s", importOutput)
+	}
+
+	// Create a conflicting destination entry with stale data
+	svc := importTestVaultService(t, vaultDir, string(passphrase))
+	if err := svc.SetFields("GitHub,-Personal", map[string]any{
+		"username": "stale@example.com",
+		"extra":    "stale-field",
+	}); err != nil {
+		t.Fatalf("create conflicting destination entry: %v", err)
+	}
+
+	// Re-set passphrase
+	if err := os.Setenv("OPENPASS_PASSPHRASE", string(passphrase)); err != nil {
+		t.Fatalf("set passphrase env: %v", err)
+	}
+
+	// Promote WITH --overwrite — should succeed
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "import", "review", "promote", importID, "--overwrite"})
+	var promoteErr error
+	captureStdout(func() {
+		promoteErr = rootCmd.Execute()
+	})
+	rootCmd.SetArgs(nil)
+	if promoteErr != nil {
+		t.Fatalf("import review promote --overwrite failed: %v", promoteErr)
+	}
+
+	// Destination entry should have been updated with imported data
+	entry, err := svc.GetEntry("GitHub,-Personal")
+	if err != nil {
+		t.Fatalf("get overwritten entry: %v", err)
+	}
+	if entry.Data["username"] != "user@example.com" {
+		t.Errorf("username was not overwritten, got %#v", entry.Data["username"])
+	}
+
+	// Quarantine should be empty
+	quarantined, err := svc.List("quarantine/")
+	if err != nil {
+		t.Fatalf("list quarantine: %v", err)
+	}
+	if len(quarantined) != 0 {
+		t.Errorf("quarantine not cleaned up after --overwrite promote: %v", quarantined)
+	}
+}
+
 func TestImportReviewPromoteNotFound(t *testing.T) {
 	vaultDir, passphrase := initVault(t)
 	setPassEnv(t, string(passphrase))

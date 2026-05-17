@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sort"
 	"strings"
 	"time"
 
@@ -230,8 +231,13 @@ var importReviewListCmd = &cobra.Command{
 				printQuietAware("No quarantined imports found.\n")
 				return nil
 			}
-			for id, count := range batches {
-				printQuietAware("%s  (%d entries)\n", id, count)
+			ids := make([]string, 0, len(batches))
+			for id := range batches {
+				ids = append(ids, id)
+			}
+			sort.Strings(ids)
+			for _, id := range ids {
+				printQuietAware("%s  (%d entries)\n", id, batches[id])
 			}
 			return nil
 		})
