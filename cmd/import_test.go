@@ -196,6 +196,74 @@ func assertCSVImportedEntries(t *testing.T, svc vaultsvc.Service, prefix string)
 	}
 }
 
+func TestImportQuarantineMutualExclusion(t *testing.T) {
+	vaultDir, passphrase := initVault(t)
+	setPassEnv(t, string(passphrase))
+	defer setupVaultFlag(t, vaultDir)()
+
+	if err := os.Setenv("OPENPASS_PASSPHRASE", string(passphrase)); err != nil {
+		t.Fatalf("set passphrase env: %v", err)
+	}
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "import", "csv", csvImportFixture(t), "--quarantine", "--prefix", "myprefix/"})
+	defer rootCmd.SetArgs(nil)
+
+	var execErr error
+	captureStdout(func() {
+		execErr = rootCmd.Execute()
+	})
+	if execErr == nil {
+		t.Fatal("expected error combining --quarantine and --prefix, got nil")
+	}
+	if !strings.Contains(execErr.Error(), "--quarantine and --prefix cannot be used together") {
+		t.Errorf("unexpected error message: %v", execErr)
+	}
+}
+
+func TestImportQuarantinePath(t *testing.T) {
+	vaultDir, passphrase := initVault(t)
+	setPassEnv(t, string(passphrase))
+	defer setupVaultFlag(t, vaultDir)()
+
+	if err := os.Setenv("OPENPASS_PASSPHRASE", string(passphrase)); err != nil {
+		t.Fatalf("set passphrase env: %v", err)
+	}
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "import", "csv", csvImportFixture(t), "--quarantine"})
+	defer rootCmd.SetArgs(nil)
+
+	var execErr error
+	output := captureStdout(func() {
+		execErr = rootCmd.Execute()
+	})
+	if execErr != nil {
+		t.Fatalf("import --quarantine failed: %v", execErr)
+	}
+
+	// Output should contain the quarantine import ID line
+	if !strings.Contains(output, "Quarantine import ID: import-") {
+		t.Errorf("output missing quarantine import ID: %s", output)
+	}
+
+	// Verify entries are stored under quarantine/<import-id>/
+	svc := importTestVaultService(t, vaultDir, string(passphrase))
+	quarantined, err := svc.List("quarantine/")
+	if err != nil {
+		t.Fatalf("list quarantine entries: %v", err)
+	}
+	if len(quarantined) == 0 {
+		t.Fatal("no entries imported under quarantine/ prefix")
+	}
+	// All quarantined entries must be under quarantine/import-YYYYMMDD-<hex>/
+	for _, e := range quarantined {
+		if !strings.HasPrefix(e, "quarantine/import-") {
+			t.Errorf("entry %q not under quarantine/import-* prefix", e)
+		}
+	}
+	// Verify that exactly the 3 CSV entries are present
+	if len(quarantined) != 3 {
+		t.Errorf("expected 3 quarantined entries, got %d: %v", len(quarantined), quarantined)
+	}
+}
+
 func snapshotImportEntries(t *testing.T, svc vaultsvc.Service, paths []string) map[string]*vaultpkg.Entry {
 	t.Helper()
 	snapshot := make(map[string]*vaultpkg.Entry, len(paths))

@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -21,6 +23,7 @@ var (
 	importSkipExisting bool
 	importOverwrite    bool
 	importMapping      string
+	importQuarantine   bool
 )
 
 var importCmd = &cobra.Command{
@@ -46,12 +49,22 @@ var importCmd = &cobra.Command{
 			return errorspkg.NewCLIError(errorspkg.ExitGeneralError, "--skip-existing and --overwrite cannot be used together", nil)
 		}
 
+		if importQuarantine && importPrefix != "" {
+			return errorspkg.NewCLIError(errorspkg.ExitGeneralError, "--quarantine and --prefix cannot be used together", nil)
+		}
+
 		options := importer.ImportOptions{
 			DryRun:       importDryRun,
 			Prefix:       strings.Trim(importPrefix, "/"),
 			SkipExisting: importSkipExisting,
 			Overwrite:    importOverwrite,
 			Mapping:      importMapping,
+		}
+
+		if importQuarantine {
+			importID := generateImportID()
+			options.Prefix = "quarantine/" + importID
+			printQuietAware("Quarantine import ID: %s\n", importID)
 		}
 
 		if _, err := importer.ParseMapping(options.Mapping); err != nil {
@@ -136,6 +149,7 @@ func init() {
 	importCmd.Flags().BoolVar(&importSkipExisting, "skip-existing", false, "Skip entries that already exist")
 	importCmd.Flags().BoolVar(&importOverwrite, "overwrite", false, "Delete existing entries before writing")
 	importCmd.Flags().StringVar(&importMapping, "mapping", "", "CSV column mapping (format: title=col1,username=col2,...)")
+	importCmd.Flags().BoolVar(&importQuarantine, "quarantine", false, "Import entries into quarantine/<import-id>/ for human review before agent access")
 	rootCmd.AddCommand(importCmd)
 }
 
@@ -164,6 +178,14 @@ func importEntryPath(prefix, entryPath string) string {
 		return prefix
 	}
 	return path.Join(prefix, entryPath)
+}
+
+func generateImportID() string {
+	buf := make([]byte, 4)
+	if _, err := rand.Read(buf); err != nil {
+		return fmt.Sprintf("import-%s-%x", time.Now().UTC().Format("20060102"), time.Now().UnixNano())
+	}
+	return fmt.Sprintf("import-%s-%x", time.Now().UTC().Format("20060102"), buf)
 }
 
 func importEntryExists(svc vaultsvc.Service, entryPath string) (bool, error) {
