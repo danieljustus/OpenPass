@@ -65,7 +65,7 @@ func SecretTypeFromString(s string) SecretType {
 func IsValidSecretType(s string) bool {
 	switch strings.ToLower(s) {
 	case "api_key", "bearer_token", "basic_auth", "ssh_key",
-		"password", "certificate", "database_url", "totp_seed", "custom":
+		string(SecretTypePassword), "certificate", "database_url", "totp_seed", "custom":
 		return true
 	}
 	return false
