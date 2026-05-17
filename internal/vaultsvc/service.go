@@ -17,6 +17,8 @@ import (
 
 // Service defines the high-level vault operations interface.
 // Encapsulates the full lifecycle: vault-open → decrypt → operation → encrypt → auto-commit.
+//
+//nolint:dupl // interface intentionally mirrored by MockService
 type Service interface {
 	Vault() *vaultpkg.Vault
 	GetField(path, field string) (any, error)

@@ -168,9 +168,9 @@ func (s *Server) handleGetValue(ctx context.Context, req CallToolRequest) (*Call
 	if s.agent != nil && s.agent.PromptInjectionMode != "" && s.agent.PromptInjectionMode != "off" {
 		for k, v := range entry.Data {
 			if str, ok := v.(string); ok {
-				checked, err := s.applySemanticInjectionCheck(str)
-				if err != nil {
-					return NewToolResultError(err.Error()), nil
+				checked, checkErr := s.applySemanticInjectionCheck(str)
+				if checkErr != nil {
+					return NewToolResultError(checkErr.Error()), nil
 				}
 				entry.Data[k] = checked
 			}

@@ -1,3 +1,4 @@
+//nolint:dupl // mock struct intentionally mirrors Service interface
 package vaultsvc
 
 import (
