@@ -33,14 +33,26 @@ type Entry struct {
 	SecretMetadata SecretMetadata       `json:"secret_meta,omitempty"`
 	Classification taint.Classification `json:"classification,omitempty"`
 	Canary         bool                 `json:"canary,omitempty"`
+
+	// PendingWrite is a transient write record to be appended on next persist.
+	// Not serialized to disk; use json:"-" to exclude from JSON.
+	PendingWrite *WriteRecord `json:"-"`
+}
+
+// WriteRecord tracks a write operation on an entry for audit/provenance.
+type WriteRecord struct {
+	Timestamp time.Time `json:"timestamp"`
+	Field     string    `json:"field,omitempty"`
+	Action    string    `json:"action"`
 }
 
 // EntryMetadata contains metadata about an entry
 type EntryMetadata struct {
-	Created time.Time `json:"created"`
-	Updated time.Time `json:"updated"`
-	Version int       `json:"version"`
-	Tags    []string  `json:"tags,omitempty"`
+	Created      time.Time     `json:"created"`
+	Updated      time.Time     `json:"updated"`
+	Version      int           `json:"version"`
+	Tags         []string      `json:"tags,omitempty"`
+	WriteHistory []WriteRecord `json:"write_history,omitempty"`
 }
 
 // SecretMetadata contains semantic metadata about a secret for AI agent usage.
@@ -273,6 +285,12 @@ func writeEntryLocked(vaultDir, path string, entry *Entry, identity *age.X25519I
 	copyEntry.Metadata.Version++
 	if copyEntry.Data == nil {
 		copyEntry.Data = map[string]any{}
+	}
+	if copyEntry.PendingWrite != nil {
+		record := *copyEntry.PendingWrite
+		record.Timestamp = now
+		copyEntry.Metadata.WriteHistory = append(copyEntry.Metadata.WriteHistory, record)
+		copyEntry.PendingWrite = nil
 	}
 
 	if isPseudonymizeEnabled(cfg) {
@@ -573,6 +591,14 @@ func cloneEntry(entry *Entry) *Entry {
 		if cloned, ok := deepCloneMap(entry.Data).(map[string]any); ok {
 			clone.Data = cloned
 		}
+	}
+	if len(entry.Metadata.WriteHistory) > 0 {
+		clone.Metadata.WriteHistory = make([]WriteRecord, len(entry.Metadata.WriteHistory))
+		copy(clone.Metadata.WriteHistory, entry.Metadata.WriteHistory)
+	}
+	if entry.PendingWrite != nil {
+		record := *entry.PendingWrite
+		clone.PendingWrite = &record
 	}
 	return clone
 }

@@ -1,4 +1,4 @@
-// Package passlint_test tests the passlint analyzer using analysistest.
+// Package passlint_test tests the passlint analyzers using analysistest.
 package passlint_test
 
 import (
@@ -12,4 +12,19 @@ import (
 func TestAnalyzer(t *testing.T) {
 	testdata := analysistest.TestData()
 	analysistest.Run(t, testdata, passlint.Analyzer, "p/a")
+}
+
+func TestMCPCkeckScopeAnalyzer(t *testing.T) {
+	testdata := analysistest.TestData()
+	analysistest.Run(t, testdata, passlint.MCPCkeckScopeAnalyzer, "mcp/handlers")
+}
+
+func TestMCPStringSafelyAnalyzer(t *testing.T) {
+	testdata := analysistest.TestData()
+	analysistest.Run(t, testdata, passlint.MCPStringSafelyAnalyzer, "mcp/strings")
+}
+
+func TestMCPMarshalAnalyzer(t *testing.T) {
+	testdata := analysistest.TestData()
+	analysistest.Run(t, testdata, passlint.MCPMarshalAnalyzer, "mcp/marshal")
 }

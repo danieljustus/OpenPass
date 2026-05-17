@@ -17,11 +17,14 @@ import (
 
 // Service defines the high-level vault operations interface.
 // Encapsulates the full lifecycle: vault-open → decrypt → operation → encrypt → auto-commit.
+//
+//nolint:dupl // interface intentionally mirrored by MockService
 type Service interface {
 	Vault() *vaultpkg.Vault
 	GetField(path, field string) (any, error)
 	SetField(path, field string, value any) error
 	SetFields(path string, data map[string]any) error
+	SetFieldsWithProvenance(path string, data map[string]any, record vaultpkg.WriteRecord) error
 	Delete(path string) error
 	List(prefix string) ([]string, error)
 	Find(query string, opts vaultpkg.FindOptions) ([]vaultpkg.Match, error)
@@ -75,25 +78,70 @@ func (s *vaultService) GetField(path, field string) (any, error) {
 // Uses multi-recipient encryption if recipients are configured.
 func (s *vaultService) SetField(path, field string, value any) error {
 	data := map[string]any{field: value}
-	return s.setEntry(path, data)
+	return s.setEntry(path, data, nil)
 }
 
 // SetFields sets multiple fields on an entry, creating the entry if it doesn't exist.
 func (s *vaultService) SetFields(path string, data map[string]any) error {
-	return s.setEntry(path, data)
+	return s.setEntry(path, data, nil)
+}
+
+// SetFieldsWithProvenance sets multiple fields and records provenance metadata.
+func (s *vaultService) SetFieldsWithProvenance(path string, data map[string]any, record vaultpkg.WriteRecord) error {
+	return s.setEntry(path, data, &record)
+}
+
+// MaxFieldLength is the maximum allowed length for string field values.
+const MaxFieldLength = 4096
+
+func validateFieldLengths(data map[string]any) error {
+	for k, v := range data {
+		if s, ok := v.(string); ok && len(s) > MaxFieldLength {
+			return errorspkg.NewCLIError(errorspkg.ExitGeneralError, fmt.Sprintf("field %q exceeds maximum length of %d characters", k, MaxFieldLength), nil)
+		}
+		if m, ok := v.(map[string]any); ok {
+			if err := validateFieldLengths(m); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // setEntry is the internal upsert implementation shared by SetField and SetFields.
-func (s *vaultService) setEntry(path string, data map[string]any) error {
+func (s *vaultService) setEntry(path string, data map[string]any, provenance *vaultpkg.WriteRecord) error {
+	if err := validateFieldLengths(data); err != nil {
+		return err
+	}
 	existing, readErr := vaultpkg.ReadEntry(s.vault.Dir, path, s.vault.Identity)
+	// Infer field name from single-key data maps (typical for set_entry_field).
+	field := ""
+	if len(data) == 1 {
+		for k := range data {
+			field = k
+			break
+		}
+	}
+	if provenance != nil {
+		provenance.Field = field
+	}
 	switch {
 	case readErr == nil && existing != nil:
 		// Entry exists — merge new data into it
+		if provenance != nil {
+			existing.PendingWrite = provenance
+		} else {
+			existing.PendingWrite = &vaultpkg.WriteRecord{Field: field, Action: "set"}
+		}
 		if _, err := vaultpkg.MergeEntryWithRecipients(s.vault.Dir, path, data, s.vault.Identity); err != nil {
 			return errorspkg.WriteFailed(err, "cannot update entry %s: %v", path, err)
 		}
 	case errors.Is(readErr, os.ErrNotExist):
 		// New entry
+		action := "create"
+		if provenance != nil && provenance.Action != "" {
+			action = provenance.Action
+		}
 		entry := &vaultpkg.Entry{
 			Data: data,
 			Metadata: vaultpkg.EntryMetadata{
@@ -101,6 +149,7 @@ func (s *vaultService) setEntry(path string, data map[string]any) error {
 				Updated: time.Now().UTC(),
 				Version: 0,
 			},
+			PendingWrite: &vaultpkg.WriteRecord{Field: field, Action: action},
 		}
 		if pwd, ok := data["password"]; ok {
 			if pwdStr, ok := pwd.(string); ok && pwdStr != "" {

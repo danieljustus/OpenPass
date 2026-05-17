@@ -96,6 +96,8 @@ type AgentProfile struct {
 	MaxSecretsInSession int                 `yaml:"max_secrets_in_session,omitempty"`
 	DynamicProviders    map[string][]string `yaml:"dynamicProviders,omitempty"` // provider → allowed roles; nil denies all
 	AllowedEnvVars      []string            `yaml:"allowedEnvVars,omitempty"`
+	AllowedExecutables  []string            `yaml:"allowedExecutables,omitempty"`
+	PromptInjectionMode string              `yaml:"promptInjectionMode,omitempty"`
 	PreCallHooks        []string            `yaml:"pre_call_hooks,omitempty"`
 	PostCallHooks       []string            `yaml:"post_call_hooks,omitempty"`
 }
@@ -121,6 +123,8 @@ type fileAgentProfile struct {
 	MaxSecretsInSession *int                `yaml:"max_secrets_in_session,omitempty"`
 	DynamicProviders    map[string][]string `yaml:"dynamicProviders,omitempty"`
 	AllowedEnvVars      []string            `yaml:"allowedEnvVars,omitempty"`
+	AllowedExecutables  []string            `yaml:"allowedExecutables,omitempty"`
+	PromptInjectionMode *string             `yaml:"promptInjectionMode,omitempty"`
 	PreCallHooks        []string            `yaml:"pre_call_hooks,omitempty"`
 	PostCallHooks       []string            `yaml:"post_call_hooks,omitempty"`
 }
@@ -303,6 +307,12 @@ func Load(path string) (*Config, error) {
 			if profile.AllowedEnvVars != nil {
 				current.AllowedEnvVars = append([]string(nil), profile.AllowedEnvVars...)
 			}
+			if profile.AllowedExecutables != nil {
+				current.AllowedExecutables = append([]string(nil), profile.AllowedExecutables...)
+			}
+			if profile.PromptInjectionMode != nil {
+				current.PromptInjectionMode = *profile.PromptInjectionMode
+			}
 			cfg.Agents[name] = current
 		}
 	}
@@ -314,6 +324,16 @@ func Load(path string) (*Config, error) {
 			// valid
 		default:
 			return nil, fmt.Errorf("agent %q: invalid approvalMode %q (valid: none, deny, prompt)", name, profile.ApprovalMode)
+		}
+	}
+
+	// Validate PromptInjectionMode values
+	for name, profile := range cfg.Agents {
+		switch profile.PromptInjectionMode {
+		case "", "off", "log-only", "wrap", "deny":
+			// valid
+		default:
+			return nil, fmt.Errorf("agent %q: invalid promptInjectionMode %q (valid: off, log-only, wrap, deny)", name, profile.PromptInjectionMode)
 		}
 	}
 
@@ -592,6 +612,13 @@ func buildFileAgents(agents map[string]AgentProfile) map[string]fileAgentProfile
 		}
 		if profile.AllowedEnvVars != nil {
 			fap.AllowedEnvVars = append([]string(nil), profile.AllowedEnvVars...)
+		}
+		if profile.AllowedExecutables != nil {
+			fap.AllowedExecutables = append([]string(nil), profile.AllowedExecutables...)
+		}
+		if profile.PromptInjectionMode != "" {
+			pim := profile.PromptInjectionMode
+			fap.PromptInjectionMode = &pim
 		}
 		result[name] = fap
 	}

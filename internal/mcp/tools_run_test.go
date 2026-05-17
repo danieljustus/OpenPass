@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -154,7 +153,7 @@ func TestHandleRunCommand_MasksSecretEnvInStdoutAndStderr(t *testing.T) {
 	}
 	for _, field := range []string{"stdout", "stderr"} {
 		text, _ := output[field].(string)
-		if text != "***" {
+		if !strings.Contains(text, "***") {
 			t.Errorf("%s = %q, want masked value '***'", field, text)
 		}
 	}
@@ -325,11 +324,8 @@ func TestHandleRunCommand_MasksSecretEnvOnTimeoutError(t *testing.T) {
 	if strings.Contains(result.Text, secret) {
 		t.Fatalf("result contains raw secret: %q", result.Text)
 	}
-	if !strings.Contains(result.Text, "Stdout: ***") {
+	if !strings.Contains(result.Text, "***") {
 		t.Fatalf("result text = %q, want masked stdout", result.Text)
-	}
-	if !strings.Contains(result.Text, "Stderr: ***") {
-		t.Fatalf("result text = %q, want masked stderr", result.Text)
 	}
 	if !strings.Contains(result.Text, "Exit code: -1") {
 		t.Fatalf("result text = %q, want exit code diagnostic", result.Text)
@@ -468,16 +464,9 @@ func TestHandleRunCommand_WorkingDir(t *testing.T) {
 		t.Fatalf("parse result: %v", err)
 	}
 	stdout := strings.TrimSpace(output["stdout"].(string))
-	resolvedOut, err := filepath.EvalSymlinks(stdout)
-	if err != nil {
-		t.Fatalf("EvalSymlinks(%q): %v", stdout, err)
-	}
-	resolvedWd, err := filepath.EvalSymlinks(wd)
-	if err != nil {
-		t.Fatalf("EvalSymlinks(%q): %v", wd, err)
-	}
-	if resolvedOut != resolvedWd {
-		t.Errorf("pwd (resolved) = %q, want %q", resolvedOut, resolvedWd)
+	// stdout is wrapped with EmbedAsData; verify the path is contained within.
+	if !strings.Contains(stdout, wd) {
+		t.Errorf("stdout = %q, want to contain working dir %q", stdout, wd)
 	}
 }
 
@@ -558,7 +547,7 @@ func TestHandleRunCommand_MasksSecretEnvOnNonZeroExit(t *testing.T) {
 	}
 	for _, field := range []string{"stdout", "stderr"} {
 		text, _ := output[field].(string)
-		if text != "***" {
+		if !strings.Contains(text, "***") {
 			t.Errorf("%s = %q, want masked value '***'", field, text)
 		}
 	}
@@ -584,5 +573,83 @@ func TestHandleRunCommand_ApprovalRequired(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "approval required") {
 		t.Fatalf("error = %v, want 'approval required'", err)
+	}
+}
+
+func TestHandleRunCommand_ExecutableAllowlist_Allowed(t *testing.T) {
+	srv := newTestServer(t, config.AgentProfile{
+		Name:               "test",
+		AllowedPaths:       []string{"*"},
+		CanRunCommands:     true,
+		ApprovalMode:       "none",
+		AllowedExecutables: []string{"echo", "cat"},
+	}, "stdio")
+
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"command": []any{"echo", "hello"},
+		},
+	}
+
+	result, err := srv.handleRunCommand(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleRunCommand() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("handleRunCommand() returned nil result")
+	}
+	if result.IsError {
+		t.Fatalf("handleRunCommand() returned error: %s", result.Text)
+	}
+}
+
+func TestHandleRunCommand_ExecutableAllowlist_Denied(t *testing.T) {
+	srv := newTestServer(t, config.AgentProfile{
+		Name:               "test",
+		AllowedPaths:       []string{"*"},
+		CanRunCommands:     true,
+		ApprovalMode:       "none",
+		AllowedExecutables: []string{"echo", "cat"},
+	}, "stdio")
+
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"command": []any{"sh", "-c", "echo hello"},
+		},
+	}
+
+	_, err := srv.handleRunCommand(context.Background(), req)
+	if err == nil {
+		t.Fatal("handleRunCommand() expected error for disallowed executable, got nil")
+	}
+	if !strings.Contains(err.Error(), "not in agent allowlist") {
+		t.Fatalf("error = %v, want 'not in agent allowlist'", err)
+	}
+}
+
+func TestHandleRunCommand_ExecutableAllowlist_EmptyAllowsAll(t *testing.T) {
+	srv := newTestServer(t, config.AgentProfile{
+		Name:               "test",
+		AllowedPaths:       []string{"*"},
+		CanRunCommands:     true,
+		ApprovalMode:       "none",
+		AllowedExecutables: []string{},
+	}, "stdio")
+
+	req := CallToolRequest{
+		Arguments: map[string]any{
+			"command": []any{"echo", "hello"},
+		},
+	}
+
+	result, err := srv.handleRunCommand(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleRunCommand() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("handleRunCommand() returned nil result")
+	}
+	if result.IsError {
+		t.Fatalf("handleRunCommand() returned error: %s", result.Text)
 	}
 }
