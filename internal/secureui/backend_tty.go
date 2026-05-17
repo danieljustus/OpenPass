@@ -66,6 +66,9 @@ func (*ttyBackend) prompt(req PromptRequest) (string, error) {
 	defer func() { _ = dev.Close() }()
 
 	if out := dev.Output(); out != nil {
+		if warning := CapsLockWarning(); warning != "" {
+			_, _ = out.WriteString(warning)
+		}
 		if _, werr := out.WriteString(buildTTYPrompt(req)); werr != nil {
 			return "", fmt.Errorf("write tty: %w", werr)
 		}
