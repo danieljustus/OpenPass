@@ -130,8 +130,10 @@ func (s *Server) handleGetValue(ctx context.Context, req CallToolRequest) (*Call
 		return vaultServiceErrorResult(err)
 	}
 
-	if s.agent != nil && s.agent.RedactFields != nil && len(s.agent.RedactFields) > 0 {
-		entry = redactEntry(entry, s.agent.RedactFields)
+	if s.agent != nil {
+		if patterns := s.agent.EffectiveRedactFields("get_entry_value"); len(patterns) > 0 {
+			entry = redactEntry(entry, patterns)
+		}
 	}
 
 	// Sanitize tags to prevent prompt injection via tag metadata.
