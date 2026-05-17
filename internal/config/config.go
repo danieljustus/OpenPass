@@ -312,9 +312,11 @@ func Load(path string) (*Config, error) {
 				current.RedactFields = append([]string(nil), profile.RedactFields...)
 			}
 			if profile.PerToolRedactFields != nil {
-				current.PerToolRedactFields = make(map[string][]string, len(profile.PerToolRedactFields))
+				if current.PerToolRedactFields == nil {
+					current.PerToolRedactFields = make(map[string][]string, len(profile.PerToolRedactFields))
+				}
 				for tool, fields := range profile.PerToolRedactFields {
-					current.PerToolRedactFields[tool] = append([]string(nil), fields...)
+					current.PerToolRedactFields[tool] = append(current.PerToolRedactFields[tool], fields...)
 				}
 			}
 			if profile.AllowedTools != nil {
