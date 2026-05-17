@@ -11,6 +11,7 @@ import (
 
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/importer"
+	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 	vaultsvc "github.com/danieljustus/OpenPass/internal/vaultsvc"
 )
 
@@ -115,9 +116,10 @@ var importCmd = &cobra.Command{
 					}
 				}
 
-				if err := svc.SetFields(entryPath, entry.Data); err != nil {
-					return fmt.Errorf("cannot write entry: %w", err)
-				}
+			record := vaultpkg.WriteRecord{Action: "import"}
+			if err := svc.SetFieldsWithProvenance(entryPath, entry.Data, record); err != nil {
+				return fmt.Errorf("cannot write entry: %w", err)
+			}
 				printQuietAware("Imported: %s\n", entryPath)
 				imported++
 			}

@@ -12,8 +12,9 @@ type MockService struct {
 	VaultFunc       func() *vaultpkg.Vault
 	GetFieldFunc    func(path, field string) (any, error)
 	SetFieldFunc    func(path, field string, value any) error
-	SetFieldsFunc   func(path string, data map[string]any) error
-	DeleteFunc      func(path string) error
+	SetFieldsFunc             func(path string, data map[string]any) error
+	SetFieldsWithProvenanceFunc func(path string, data map[string]any, record vaultpkg.WriteRecord) error
+	DeleteFunc                func(path string) error
 	ListFunc        func(prefix string) ([]string, error)
 	FindFunc        func(query string, opts vaultpkg.FindOptions) ([]vaultpkg.Match, error)
 	GetEntryFunc    func(path string) (*vaultpkg.Entry, error)
@@ -35,6 +36,9 @@ func NewMockService() *MockService {
 			return nil
 		},
 		SetFieldsFunc: func(path string, data map[string]any) error {
+			return nil
+		},
+		SetFieldsWithProvenanceFunc: func(path string, data map[string]any, record vaultpkg.WriteRecord) error {
 			return nil
 		},
 		DeleteFunc: func(path string) error {
@@ -75,6 +79,10 @@ func (m *MockService) SetField(path, field string, value any) error {
 
 func (m *MockService) SetFields(path string, data map[string]any) error {
 	return m.SetFieldsFunc(path, data)
+}
+
+func (m *MockService) SetFieldsWithProvenance(path string, data map[string]any, record vaultpkg.WriteRecord) error {
+	return m.SetFieldsWithProvenanceFunc(path, data, record)
 }
 
 func (m *MockService) Delete(path string) error {

@@ -164,6 +164,43 @@ func TestSetFieldAndSetFields(t *testing.T) {
 	})
 }
 
+func TestSetFieldRejectsOverlengthValues(t *testing.T) {
+	svc := newTestService(t, false)
+	longValue := strings.Repeat("a", MaxFieldLength+1)
+	err := svc.SetField("github", "password", longValue)
+	if err == nil {
+		t.Fatal("expected error for overlength field value")
+	}
+	if !strings.Contains(err.Error(), "exceeds maximum length") {
+		t.Fatalf("error message = %q, want length exceeded", err.Error())
+	}
+
+	// Value exactly at limit should succeed.
+	atLimit := strings.Repeat("b", MaxFieldLength)
+	if err := svc.SetField("github", "notes", atLimit); err != nil {
+		t.Fatalf("SetField at limit: %v", err)
+	}
+}
+
+func TestSetFieldsWithProvenance(t *testing.T) {
+	svc := newTestService(t, false)
+	record := vaultpkg.WriteRecord{Action: "import"}
+	if err := svc.SetFieldsWithProvenance("github", map[string]any{"password": "secret"}, record); err != nil {
+		t.Fatalf("SetFieldsWithProvenance: %v", err)
+	}
+
+	entry, err := svc.GetEntry("github")
+	if err != nil {
+		t.Fatalf("GetEntry: %v", err)
+	}
+	if len(entry.Metadata.WriteHistory) != 1 {
+		t.Fatalf("write history len = %d, want 1", len(entry.Metadata.WriteHistory))
+	}
+	if entry.Metadata.WriteHistory[0].Action != "import" {
+		t.Errorf("action = %q, want %q", entry.Metadata.WriteHistory[0].Action, "import")
+	}
+}
+
 func TestDelete(t *testing.T) {
 	t.Run("delete existing entry commits", func(t *testing.T) {
 		svc := newTestService(t, true)
