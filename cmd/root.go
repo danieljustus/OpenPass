@@ -19,6 +19,7 @@ import (
 	configpkg "github.com/danieljustus/OpenPass/internal/config"
 	cryptopkg "github.com/danieljustus/OpenPass/internal/crypto"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
+	"github.com/danieljustus/OpenPass/internal/i18n"
 	"github.com/danieljustus/OpenPass/internal/metrics"
 	"github.com/danieljustus/OpenPass/internal/session"
 	"github.com/danieljustus/OpenPass/internal/ui/cliout"
@@ -156,6 +157,7 @@ Daily use:
 func Execute() {
 	cliout.SetQuiet(quietMode)
 	cliout.SetColorMode(cliout.ParseColorMode(colorMode))
+	i18n.ApplyFromEnv()
 	if themePreset != "" {
 		theme.ApplyPreset(theme.ParsePreset(themePreset))
 	} else {
