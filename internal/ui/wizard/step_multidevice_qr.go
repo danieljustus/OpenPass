@@ -102,7 +102,10 @@ func (s *PairingQRStep) View() string {
 
 	publicKey := s.state.VaultPublicKey
 	qrData := string(s.token) + ":" + publicKey
-	qrArt := ui.RenderQRCode(qrData)
+	qrArt, qrErr := ui.RenderQRCode(qrData)
+	if qrErr != nil {
+		qrArt = fmt.Sprintf("(QR rendering failed: %v — use the token below)", qrErr)
+	}
 
 	truncated := publicKey
 	if len(truncated) > 16 {

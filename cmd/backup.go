@@ -25,6 +25,11 @@ var backupCmd = &cobra.Command{
 
 The backup includes all vault files: identity.age, config.yaml, entries/, and mcp-token.
 Use --exclude-git to omit the .git/ directory from the backup.`,
+	Example: `  # Full backup to a tarball
+  openpass backup ~/openpass-2026-05-17.tar.gz
+
+  # Skip the Git history (smaller archive)
+  openpass backup --exclude-git ~/openpass.tar.gz`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vaultDir, err := vaultPath()

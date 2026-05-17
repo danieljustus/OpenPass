@@ -19,8 +19,9 @@ func SetVersionInfo(version, commit, date string) {
 }
 
 var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Print the version of OpenPass",
+	Use:     "version",
+	Short:   "Print the version of OpenPass",
+	Example: `  openpass version`,
 	Annotations: map[string]string{
 		requiresVaultAnnotation: "false",
 	},

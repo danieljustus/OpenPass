@@ -4,11 +4,23 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/mattn/go-tty"
 )
+
+// signalNotify is the indirection point so tests can drive cancellation
+// without delivering a real OS signal. Production code wires it to signal.Notify.
+var signalNotify = func(ch chan<- os.Signal, sigs ...os.Signal) {
+	signal.Notify(ch, sigs...)
+}
+
+var signalStop = func(ch chan<- os.Signal) {
+	signal.Stop(ch)
+}
 
 // ttyDevice abstracts a TTY for testability.
 type ttyDevice interface {
@@ -61,6 +73,12 @@ func (*ttyBackend) prompt(req PromptRequest) (string, error) {
 
 	value, rerr := readTTY(dev, req.Timeout)
 	if rerr != nil {
+		if errors.Is(rerr, ErrCanceled) {
+			if out := dev.Output(); out != nil {
+				_, _ = fmt.Fprintln(out, "\nAborted.")
+			}
+			return "", ErrCanceled
+		}
 		if isTimeout(rerr) {
 			return "", ErrTimeout
 		}
@@ -80,7 +98,32 @@ func readTTY(d ttyDevice, timeout time.Duration) (string, error) {
 		}
 		defer func() { _ = in.SetReadDeadline(time.Time{}) }()
 	}
-	return d.ReadString()
+
+	sigCh := make(chan os.Signal, 1)
+	signalNotify(sigCh, os.Interrupt, syscall.SIGTERM)
+	defer signalStop(sigCh)
+
+	type readResult struct {
+		value string
+		err   error
+	}
+	resultCh := make(chan readResult, 1)
+	go func() {
+		v, e := d.ReadString()
+		resultCh <- readResult{v, e}
+	}()
+
+	select {
+	case res := <-resultCh:
+		return res.value, res.err
+	case <-sigCh:
+		// Close the device to unblock the in-flight ReadString. The caller's
+		// own defer will Close() again, but Close on an already-closed handle
+		// is harmless (returns an error we discard).
+		_ = d.Close()
+		<-resultCh
+		return "", ErrCanceled
+	}
 }
 
 func isTimeout(err error) bool {
