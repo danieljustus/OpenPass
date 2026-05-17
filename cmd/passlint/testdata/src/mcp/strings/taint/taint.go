@@ -1,10 +1,4 @@
-// Package taint provides the Untrusted type for analysistest.
 package taint
-
-import (
-	"fmt"
-	"io"
-)
 
 type Provenance struct {
 	Source string
@@ -38,8 +32,4 @@ func (u Untrusted) Provenance() []Provenance {
 
 func (u Untrusted) Tags() map[string]string {
 	return nil
-}
-
-func (u Untrusted) Format(f fmt.State, verb rune) {
-	_, _ = io.WriteString(f, "<untrusted:source>")
 }
