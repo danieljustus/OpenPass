@@ -15,6 +15,11 @@ import (
 // fixedTime is a deterministic timestamp used in tests that check output.
 var fixedTime = time.Date(2026, 5, 17, 12, 0, 0, 0, time.UTC)
 
+// normalizeEOL converts CRLF to LF for cross-platform test consistency.
+func normalizeEOL(data []byte) []byte {
+	return bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
+}
+
 func testVars(overrides TemplateVars) TemplateVars {
 	v := TemplateVars{
 		AgentName:          "hermes",
@@ -133,6 +138,9 @@ func TestRenderGolden(t *testing.T) {
 				}
 				t.Fatalf("read golden file: %v", err)
 			}
+
+			got = normalizeEOL(got)
+			want = normalizeEOL(want)
 
 			if !bytes.Equal(got, want) {
 				// Show a useful diff by logging key differences.
@@ -373,7 +381,7 @@ func TestVerifyHash(t *testing.T) {
 		t.Fatalf("Render: %v", err)
 	}
 
-	if err := VerifyHash(rendered); err != nil {
+	if err := VerifyHash(normalizeEOL(rendered)); err != nil {
 		t.Errorf("VerifyHash failed for valid content: %v", err)
 	}
 
@@ -844,7 +852,7 @@ func TestInstall_RoundTrip(t *testing.T) {
 	}
 
 	// Verify hash integrity.
-	if err := VerifyHash(content); err != nil {
+	if err := VerifyHash(normalizeEOL(content)); err != nil {
 		t.Errorf("VerifyHash after install: %v", err)
 	}
 
@@ -872,10 +880,12 @@ func TestManifest_BodyHashConsistency(t *testing.T) {
 		t.Fatalf("Render: %v", err)
 	}
 
+	rendered = normalizeEOL(rendered)
 	body, err := ExtractBody(rendered)
 	if err != nil {
 		t.Fatalf("ExtractBody: %v", err)
 	}
+	body = normalizeEOL(body)
 
 	expectedHash := HashBytes(body)
 
