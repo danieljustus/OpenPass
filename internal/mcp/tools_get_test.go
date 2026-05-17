@@ -770,11 +770,11 @@ func TestGetValuePerToolRedact(t *testing.T) {
 			Identity: identity,
 		},
 		agent: &config.AgentProfile{
-			Name:         "restricted",
-			AllowedPaths: []string{"*"},
+			Name:          "restricted",
+			AllowedPaths:  []string{"*"},
 			CanReadValues: true,
-			ApprovalMode: "none",
-			AutoUnseal:   true,
+			ApprovalMode:  "none",
+			AutoUnseal:    true,
 			PerToolRedactFields: map[string][]string{
 				"get_entry_value": {"password"},
 			},

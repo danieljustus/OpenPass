@@ -467,7 +467,11 @@ func ComputeToolRegistryHash() string {
 	sort.Slice(defs, func(i, j int) bool { return defs[i].Name < defs[j].Name })
 	h := sha256.New()
 	for _, def := range defs {
-		schemaJSON, _ := json.Marshal(def.InputSchema) // stable: encoding/json sorts map keys
+		schemaJSON, err := json.Marshal(def.InputSchema) // stable: encoding/json sorts map keys
+		if err != nil {
+			// unreachable: InputSchema is always a plain map[string]any from static definitions
+			schemaJSON = []byte("{}")
+		}
 		_, _ = fmt.Fprintf(h, "%s|%s|%s\n", def.Name, def.Description, schemaJSON)
 	}
 	return hex.EncodeToString(h.Sum(nil))
