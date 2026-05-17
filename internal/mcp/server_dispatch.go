@@ -114,6 +114,22 @@ func (s *Server) executeTool(ctx context.Context, name string, args json.RawMess
 		token.UpdateLastUsed()
 	}
 
+	// Registry drift check: reject if binary was updated since this token was issued.
+	// Returns a user-visible tool error (not a protocol error) so the agent sees
+	// a descriptive message. Pattern: return callToolResultPayload(...), nil
+	// (contrast with the scope check above which returns nil, fmt.Errorf — a protocol error).
+	if token, ok := TokenFromContext(ctx); ok && token != nil {
+		if token.IsToolRegistryDriftDetected() {
+			span.SetStatus(codes.Error, "tool registry drift")
+			metrics.RecordMCPRequest(name, agentName, "error", time.Since(start))
+			s.logAudit(ctx, "tool_registry_drift", name, false)
+			return callToolResultPayload(toolError(
+				"tool registry has changed since this token was issued — " +
+					"re-issue the token with 'openpass mcp token create'",
+			)), nil
+		}
+	}
+
 	// Evaluate declarative policies before tool execution
 	if entryPath != "" {
 		if policyErr := s.checkPolicy(ctx, entryPath, toolActionType(name)); policyErr != nil {

@@ -1306,3 +1306,10 @@ func TestTokenDriftDetected(t *testing.T) {
 		t.Error("stale hash should report drift")
 	}
 }
+
+func TestIsToolRegistryDriftDetectedNilSafe(t *testing.T) {
+	var tok *ScopedToken
+	if tok.IsToolRegistryDriftDetected() {
+		t.Error("nil token should not report drift")
+	}
+}
