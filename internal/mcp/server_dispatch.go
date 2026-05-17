@@ -173,7 +173,7 @@ func (s *Server) executeTool(ctx context.Context, name string, args json.RawMess
 		span.SetAttributes(attribute.String("status", "error"))
 		metrics.RecordMCPRequest(name, agentName, "error", duration)
 		// Fire-and-forget anomaly detection (non-blocking)
-		s.detectAnomalyAsync(ctx, name, entryPath, reqID, agentName, duration, false)
+		s.detectAnomalyAsync(ctx, name, entryPath, reqID, agentName, duration, false, 0)
 		return nil, err
 	}
 
@@ -185,8 +185,14 @@ func (s *Server) executeTool(ctx context.Context, name string, args json.RawMess
 	span.SetAttributes(attribute.String("status", status))
 	metrics.RecordMCPRequest(name, agentName, status, duration)
 
+	// Compute field length for anomaly detection (read tools only)
+	fieldLength := 0
+	if !result.IsError && (name == "get_entry" || name == "get_entry_value") {
+		fieldLength = len(result.Text)
+	}
+
 	// Fire-and-forget anomaly detection (non-blocking)
-	s.detectAnomalyAsync(ctx, name, entryPath, reqID, agentName, duration, true)
+	s.detectAnomalyAsync(ctx, name, entryPath, reqID, agentName, duration, true, fieldLength)
 
 	return callToolResultPayload(result), nil
 }
@@ -194,7 +200,7 @@ func (s *Server) executeTool(ctx context.Context, name string, args json.RawMess
 // detectAnomalyAsync runs anomaly detection in a separate goroutine so it
 // NEVER blocks tool execution. It checks all detection patterns and handles
 // any alerts that are generated (logging, notifications, cache invalidation).
-func (s *Server) detectAnomalyAsync(_ context.Context, toolName, entryPath, reqID, agentName string, duration time.Duration, ok bool) {
+func (s *Server) detectAnomalyAsync(_ context.Context, toolName, entryPath, reqID, agentName string, duration time.Duration, ok bool, fieldLength int) {
 	if s == nil || s.anomalyDetector == nil {
 		return
 	}
@@ -204,14 +210,15 @@ func (s *Server) detectAnomalyAsync(_ context.Context, toolName, entryPath, reqI
 
 	go func() {
 		event := anomaly.ToolCallEvent{
-			Timestamp: time.Now(),
-			Agent:     agentName,
-			Tool:      toolName,
-			Path:      entryPath,
-			Duration:  duration,
-			OK:        ok,
-			IsCanary:  entryPath != "" && vault.IsCanaryPath(entryPath),
-			RequestID: reqID,
+			Timestamp:   time.Now(),
+			Agent:       agentName,
+			Tool:        toolName,
+			Path:        entryPath,
+			Duration:    duration,
+			OK:          ok,
+			IsCanary:    entryPath != "" && vault.IsCanaryPath(entryPath),
+			RequestID:   reqID,
+			FieldLength: fieldLength,
 		}
 
 		alert := s.anomalyDetector.Check(context.Background(), event)
