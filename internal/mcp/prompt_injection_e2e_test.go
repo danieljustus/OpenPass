@@ -21,8 +21,8 @@ import (
 // sub-category — the comment on each entry says which.
 
 type piPayload struct {
-	name   string
-	value  string
+	name               string
+	value              string
 	mustNotContainRune []rune
 	mustNotContain     []string
 }
