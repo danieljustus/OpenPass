@@ -33,7 +33,7 @@ func (m ColorMode) String() string {
 	case Color256:
 		return "256"
 	case ColorTrue:
-		return "truecolor"
+		return "truecolor" //nolint:goconst
 	default:
 		return "unknown"
 	}

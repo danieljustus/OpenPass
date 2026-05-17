@@ -111,12 +111,12 @@ var initCmd = &cobra.Command{
 
 		printQuietAware("Vault initialized at %s\n", vaultDir)
 		printQuietAware("Public key: %s\n", identity.Recipient().String())
-		printPostInitHints(vaultDir)
+		printPostInitHints()
 		return nil
 	},
 }
 
-func printPostInitHints(vaultDir string) {
+func printPostInitHints() {
 	if quietMode {
 		return
 	}

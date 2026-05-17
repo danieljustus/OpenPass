@@ -13,7 +13,7 @@ func init() {
 		"error.passphrase.mismatch":   "Passphrasen stimmen nicht überein",
 		"error.vault.locked":          "Vault ist gesperrt",
 		"error.vault.not_initialized": "Vault nicht initialisiert — führe 'openpass init' aus",
-		"hint.unlock":                 "Mit 'openpass unlock' entsperren, oder OPENPASS_PASSPHRASE für nicht-interaktive Nutzung setzen.",
+		"hint.unlock":                 "Mit 'openpass unlock' entsperren, oder OPENPASS_PASSPHRASE für nicht-interaktive Nutzung setzen.", //nolint:misspell
 		"hint.find":                   "Versuche: openpass find <Suchbegriff>",
 		"hint.first_run":              "Führe 'openpass init' für einen schnellen Start aus oder 'openpass setup' für den geführten Assistenten.",
 		"notify.security_alert":       "OpenPass Sicherheitswarnung",

@@ -17,7 +17,7 @@ func ScreenReaderMode() bool {
 	switch os.Getenv("OPENPASS_SCREEN_READER") {
 	case "1", "true", "yes":
 		return true
-	case "0", "false", "no":
+	case "0", "false", "no": //nolint:goconst
 		return false
 	}
 	return os.Getenv("NVDA_SCREEN_READER") != "" || os.Getenv("ORCA_RUNNING") != ""

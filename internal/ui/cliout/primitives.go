@@ -183,10 +183,10 @@ func (s *Spinner) start(label string) {
 		for {
 			select {
 			case <-s.stopCh:
-				fmt.Fprintf(s.out, "\r%s\r", strings.Repeat(" ", len(label)+3))
+				_, _ = fmt.Fprintf(s.out, "\r%s\r", strings.Repeat(" ", len(label)+3))
 				return
 			case <-ticker.C:
-				fmt.Fprintf(s.out, "\r%s %s", frames[i%len(frames)], label)
+				_, _ = fmt.Fprintf(s.out, "\r%s %s", frames[i%len(frames)], label)
 				i++
 			}
 		}

@@ -75,6 +75,8 @@ func currentColorMode() ColorMode {
 
 func noColor() bool {
 	switch currentColorMode() {
+	case ColorAuto:
+		// fall through to environment/terminal detection below
 	case ColorAlways:
 		return false
 	case ColorNever:

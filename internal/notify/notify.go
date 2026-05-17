@@ -131,6 +131,8 @@ func buildCommand(level Level, title, message string) *exec.Cmd {
 func buildWindowsCommand(level Level, title, message string) *exec.Cmd {
 	severity := "Information"
 	switch level {
+	case LevelInfo:
+		severity = "Information"
 	case LevelWarn:
 		severity = "Warning"
 	case LevelCritical:

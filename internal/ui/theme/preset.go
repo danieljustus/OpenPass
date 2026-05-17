@@ -14,7 +14,7 @@ type Preset int
 const (
 	// PresetDefault is the bundled magenta/cyan palette.
 	PresetDefault Preset = iota
-	// PresetHighContrast maximises foreground/background contrast for low-light
+	// PresetHighContrast maximizes foreground/background contrast for low-light
 	// environments and visual-impairment accessibility.
 	PresetHighContrast
 	// PresetColorblind avoids red/green pairings on the success/error axis,

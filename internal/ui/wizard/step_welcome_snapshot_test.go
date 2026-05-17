@@ -11,7 +11,7 @@ import (
 // in what's actually conveyed to the user.
 //
 // When teatest matures and we adopt full golden snapshots, drop these in
-// favour of testdata/*.txt files; until then this is the lightest possible
+// favor of testdata/*.txt files; until then this is the lightest possible
 // safety net for the wizard render path.
 func TestWelcomeStep_RenderTokens_NewVault(t *testing.T) {
 	t.TempDir() // ensure no vault is detected; vaultDir is empty below

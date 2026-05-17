@@ -30,8 +30,8 @@ const (
 
 var (
 	mu      sync.RWMutex
-	current Language = LangEN
-	catalog          = map[Language]map[string]string{
+	current = LangEN
+	catalog = map[Language]map[string]string{
 		LangEN: {},
 		LangDE: {},
 	}
@@ -65,7 +65,7 @@ func Current() Language {
 }
 
 // DetectFromEnv reads LC_ALL / LC_MESSAGES / LANG and picks a known locale
-// from the first non-empty match. Falls back to EN when nothing recognisable
+// from the first non-empty match. Falls back to EN when nothing recognizable
 // is set; ignores .UTF-8 / .ISO suffixes.
 func DetectFromEnv() Language {
 	for _, key := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {

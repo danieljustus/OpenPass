@@ -173,6 +173,8 @@ func Execute() {
 			cliout.Hintf("Run 'openpass init' for a quick start, or 'openpass setup' for the guided wizard.")
 		case errorspkg.ExitLocked:
 			cliout.Hintf("Unlock with 'openpass unlock', or set OPENPASS_PASSPHRASE for non-interactive use.")
+		case errorspkg.ExitSuccess, errorspkg.ExitGeneralError, errorspkg.ExitPermissionDenied, errorspkg.ExitDoctorWarn, errorspkg.ExitDoctorFail:
+			// no specific hint for these exit codes
 		}
 		osExit(int(exitCode))
 	}

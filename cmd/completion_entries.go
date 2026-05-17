@@ -39,7 +39,6 @@ func entryCompletionFunc(_ *cobra.Command, args []string, toComplete string) ([]
 // or nil if the vault cannot be opened without a passphrase. Shared by all
 // completion functions so behavior stays consistent.
 func entryPathSuggestions(toComplete string) ([]string, cobra.ShellCompDirective) {
-
 	vaultDir, err := vaultPath()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
