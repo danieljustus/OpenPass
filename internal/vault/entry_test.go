@@ -76,6 +76,62 @@ func TestWriteAndReadEntryRoundTrip(t *testing.T) {
 	}
 }
 
+func TestWriteEntryRecordsWriteHistory(t *testing.T) {
+	vaultDir := t.TempDir()
+	id := testutil.TempIdentity(t)
+
+	entry := &Entry{
+		Data: map[string]any{"password": "s3cr3t"},
+		PendingWrite: &WriteRecord{Field: "password", Action: "create"},
+	}
+
+	if err := WriteEntry(vaultDir, "test-entry", entry, id); err != nil {
+		t.Fatalf("write entry: %v", err)
+	}
+
+	got, err := ReadEntry(vaultDir, "test-entry", id)
+	if err != nil {
+		t.Fatalf("read entry: %v", err)
+	}
+
+	if len(got.Metadata.WriteHistory) != 1 {
+		t.Fatalf("write history len = %d, want 1", len(got.Metadata.WriteHistory))
+	}
+	rec := got.Metadata.WriteHistory[0]
+	if rec.Field != "password" {
+		t.Errorf("field = %q, want %q", rec.Field, "password")
+	}
+	if rec.Action != "create" {
+		t.Errorf("action = %q, want %q", rec.Action, "create")
+	}
+	if rec.Timestamp.IsZero() {
+		t.Error("timestamp must be set")
+	}
+
+	// Verify PendingWrite is consumed and not persisted.
+	if got.PendingWrite != nil {
+		t.Error("PendingWrite must be nil after persist")
+	}
+
+	// Second write should append to history.
+	got.PendingWrite = &WriteRecord{Field: "password", Action: "set"}
+	got.Data["password"] = "new-secret"
+	if err := WriteEntry(vaultDir, "test-entry", got, id); err != nil {
+		t.Fatalf("second write: %v", err)
+	}
+
+	got2, err := ReadEntry(vaultDir, "test-entry", id)
+	if err != nil {
+		t.Fatalf("read after second write: %v", err)
+	}
+	if len(got2.Metadata.WriteHistory) != 2 {
+		t.Fatalf("write history len = %d, want 2", len(got2.Metadata.WriteHistory))
+	}
+	if got2.Metadata.WriteHistory[1].Action != "set" {
+		t.Errorf("second action = %q, want %q", got2.Metadata.WriteHistory[1].Action, "set")
+	}
+}
+
 func TestDeleteEntryRemovesFile(t *testing.T) {
 	vaultDir := t.TempDir()
 	id := testutil.TempIdentity(t)

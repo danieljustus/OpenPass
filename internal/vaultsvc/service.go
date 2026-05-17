@@ -86,9 +86,18 @@ func (s *vaultService) SetFields(path string, data map[string]any) error {
 // setEntry is the internal upsert implementation shared by SetField and SetFields.
 func (s *vaultService) setEntry(path string, data map[string]any) error {
 	existing, readErr := vaultpkg.ReadEntry(s.vault.Dir, path, s.vault.Identity)
+	// Infer field name from single-key data maps (typical for set_entry_field).
+	field := ""
+	if len(data) == 1 {
+		for k := range data {
+			field = k
+			break
+		}
+	}
 	switch {
 	case readErr == nil && existing != nil:
 		// Entry exists — merge new data into it
+		existing.PendingWrite = &vaultpkg.WriteRecord{Field: field, Action: "set"}
 		if _, err := vaultpkg.MergeEntryWithRecipients(s.vault.Dir, path, data, s.vault.Identity); err != nil {
 			return errorspkg.WriteFailed(err, "cannot update entry %s: %v", path, err)
 		}
@@ -101,6 +110,7 @@ func (s *vaultService) setEntry(path string, data map[string]any) error {
 				Updated: time.Now().UTC(),
 				Version: 0,
 			},
+			PendingWrite: &vaultpkg.WriteRecord{Field: field, Action: "create"},
 		}
 		if pwd, ok := data["password"]; ok {
 			if pwdStr, ok := pwd.(string); ok && pwdStr != "" {
