@@ -311,6 +311,8 @@ func Load(path string) (*Config, error) {
 			if profile.RedactFields != nil {
 				current.RedactFields = append([]string(nil), profile.RedactFields...)
 			}
+			// PerToolRedactFields uses append semantics (unlike the scalar RedactFields replace)
+			// so that stacked profile overrides can each add per-tool patterns additively.
 			if profile.PerToolRedactFields != nil {
 				if current.PerToolRedactFields == nil {
 					current.PerToolRedactFields = make(map[string][]string, len(profile.PerToolRedactFields))

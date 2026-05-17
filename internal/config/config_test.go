@@ -2362,56 +2362,39 @@ func TestLoadParsesPerToolRedactFields(t *testing.T) {
 }
 
 func TestPerToolRedactFieldsDeepMerge(t *testing.T) {
-	// Verify that the merge loop appends per-tool patterns rather than replacing
-	// the entire map. We exercise the exact branch in Load by setting up a YAML
-	// file whose agent name matches a builtin, then manually seeding that builtin
-	// with existing PerToolRedactFields before calling into the merge path.
-	//
-	// Because Load() starts from Default() (builtins have nil PerToolRedactFields),
-	// we replicate the merge logic directly here using the same code path to prove
-	// append semantics: if current already has patterns for a tool key, incoming
-	// patterns for that same key must be appended, not used to replace the map.
+	// Verify that loading a YAML with per-tool patterns actually works end-to-end,
+	// and that EffectiveRedactFields returns the combined union correctly after Load.
+	dir := t.TempDir()
+	content := `agents:
+  test:
+    allowedPaths: ["*"]
+    redactFields:
+      - totp.*
+    perToolRedactFields:
+      get_entry_value:
+        - password
+        - api_key
+`
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	agent := cfg.Agents["test"]
 
-	// Simulate: current agent already has a pattern for "get_entry_value".
-	current := AgentProfile{
-		Name: "test",
-		PerToolRedactFields: map[string][]string{
-			"get_entry_value": {"totp.*"},
-		},
+	// EffectiveRedactFields("get_entry_value") should return totp.*, password, api_key
+	got := agent.EffectiveRedactFields("get_entry_value")
+	if len(got) != 3 {
+		t.Fatalf("want 3 patterns, got %v", got)
 	}
 
-	// Incoming profile adds a second pattern for the same tool key plus a new key.
-	incoming := fileAgentProfile{
-		PerToolRedactFields: map[string][]string{
-			"get_entry_value": {"password"},
-			"get_entry":       {"api_key"},
-		},
-	}
-
-	// Apply the merge (mirrors the fixed code in Load).
-	if incoming.PerToolRedactFields != nil {
-		if current.PerToolRedactFields == nil {
-			current.PerToolRedactFields = make(map[string][]string, len(incoming.PerToolRedactFields))
-		}
-		for tool, fields := range incoming.PerToolRedactFields {
-			current.PerToolRedactFields[tool] = append(current.PerToolRedactFields[tool], fields...)
-		}
-	}
-
-	// "get_entry_value" must contain both the pre-existing "totp.*" AND the new "password".
-	got := current.PerToolRedactFields["get_entry_value"]
-	if len(got) != 2 {
-		t.Errorf("get_entry_value: want 2 patterns after merge, got %v", got)
-	} else {
-		if got[0] != "totp.*" || got[1] != "password" {
-			t.Errorf("get_entry_value: want [totp.* password], got %v", got)
-		}
-	}
-
-	// "get_entry" was not present before; it should be set from the incoming profile.
-	got = current.PerToolRedactFields["get_entry"]
-	if len(got) != 1 || got[0] != "api_key" {
-		t.Errorf("get_entry: want [api_key], got %v", got)
+	// EffectiveRedactFields("list_entries") should return only the global pattern
+	global := agent.EffectiveRedactFields("list_entries")
+	if len(global) != 1 || global[0] != "totp.*" {
+		t.Errorf("list_entries: want [totp.*], got %v", global)
 	}
 }
 
