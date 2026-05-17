@@ -264,6 +264,175 @@ func TestImportQuarantinePath(t *testing.T) {
 	}
 }
 
+func TestImportReviewListEmpty(t *testing.T) {
+	vaultDir, passphrase := initVault(t)
+	setPassEnv(t, string(passphrase))
+	defer setupVaultFlag(t, vaultDir)()
+
+	if err := os.Setenv("OPENPASS_PASSPHRASE", string(passphrase)); err != nil {
+		t.Fatalf("set passphrase env: %v", err)
+	}
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "import", "review", "list"})
+	defer rootCmd.SetArgs(nil)
+
+	var execErr error
+	output := captureStdout(func() {
+		execErr = rootCmd.Execute()
+	})
+	if execErr != nil {
+		t.Fatalf("import review list failed: %v", execErr)
+	}
+	if !strings.Contains(output, "No quarantined imports found.") {
+		t.Errorf("expected empty message, got: %s", output)
+	}
+}
+
+func TestImportReviewList(t *testing.T) {
+	vaultDir, passphrase := initVault(t)
+	setPassEnv(t, string(passphrase))
+	defer setupVaultFlag(t, vaultDir)()
+
+	// First do a quarantine import to create an import batch
+	if err := os.Setenv("OPENPASS_PASSPHRASE", string(passphrase)); err != nil {
+		t.Fatalf("set passphrase env: %v", err)
+	}
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "import", "csv", csvImportFixture(t), "--quarantine"})
+	var importOutput string
+	var importErr error
+	importOutput = captureStdout(func() {
+		importErr = rootCmd.Execute()
+	})
+	rootCmd.SetArgs(nil)
+	if importErr != nil {
+		t.Fatalf("quarantine import failed: %v", importErr)
+	}
+
+	// Extract the import-id from the output
+	var importID string
+	for _, line := range strings.Split(importOutput, "\n") {
+		if strings.HasPrefix(line, "Quarantine import ID: ") {
+			importID = strings.TrimSpace(strings.TrimPrefix(line, "Quarantine import ID: "))
+		}
+	}
+	if importID == "" {
+		t.Fatalf("could not extract import-id from output: %s", importOutput)
+	}
+
+	// Re-set passphrase (unlockVault unsets it after each use)
+	if err := os.Setenv("OPENPASS_PASSPHRASE", string(passphrase)); err != nil {
+		t.Fatalf("set passphrase env: %v", err)
+	}
+
+	// Now run review list
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "import", "review", "list"})
+	var listErr error
+	listOutput := captureStdout(func() {
+		listErr = rootCmd.Execute()
+	})
+	rootCmd.SetArgs(nil)
+	if listErr != nil {
+		t.Fatalf("import review list failed: %v", listErr)
+	}
+	if !strings.Contains(listOutput, importID) {
+		t.Errorf("review list missing import-id %q: %s", importID, listOutput)
+	}
+	if !strings.Contains(listOutput, "(3 entries)") {
+		t.Errorf("review list missing entry count: %s", listOutput)
+	}
+}
+
+func TestImportReviewPromote(t *testing.T) {
+	vaultDir, passphrase := initVault(t)
+	setPassEnv(t, string(passphrase))
+	defer setupVaultFlag(t, vaultDir)()
+
+	// Quarantine import
+	if err := os.Setenv("OPENPASS_PASSPHRASE", string(passphrase)); err != nil {
+		t.Fatalf("set passphrase env: %v", err)
+	}
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "import", "csv", csvImportFixture(t), "--quarantine"})
+	var importOutput string
+	var importErr error
+	importOutput = captureStdout(func() {
+		importErr = rootCmd.Execute()
+	})
+	rootCmd.SetArgs(nil)
+	if importErr != nil {
+		t.Fatalf("quarantine import failed: %v", importErr)
+	}
+
+	// Extract the import-id
+	var importID string
+	for _, line := range strings.Split(importOutput, "\n") {
+		if strings.HasPrefix(line, "Quarantine import ID: ") {
+			importID = strings.TrimSpace(strings.TrimPrefix(line, "Quarantine import ID: "))
+		}
+	}
+	if importID == "" {
+		t.Fatalf("could not extract import-id from output: %s", importOutput)
+	}
+
+	// Re-set passphrase (unlockVault unsets it after each use)
+	if err := os.Setenv("OPENPASS_PASSPHRASE", string(passphrase)); err != nil {
+		t.Fatalf("set passphrase env: %v", err)
+	}
+
+	// Promote
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "import", "review", "promote", importID})
+	var promoteErr error
+	promoteOutput := captureStdout(func() {
+		promoteErr = rootCmd.Execute()
+	})
+	rootCmd.SetArgs(nil)
+	if promoteErr != nil {
+		t.Fatalf("import review promote failed: %v", promoteErr)
+	}
+
+	// All 3 CSV entries should be promoted
+	for _, p := range expectedCSVImportPaths {
+		if !strings.Contains(promoteOutput, "Promoted: "+p) {
+			t.Errorf("promote output missing %q: %s", p, promoteOutput)
+		}
+	}
+
+	// Verify entries now exist at final paths
+	svc := importTestVaultService(t, vaultDir, string(passphrase))
+	assertCSVImportedEntries(t, svc, "")
+
+	// Quarantine prefix should be empty
+	quarantined, err := svc.List("quarantine/")
+	if err != nil {
+		t.Fatalf("list quarantine: %v", err)
+	}
+	if len(quarantined) != 0 {
+		t.Errorf("quarantine not cleaned up: %v", quarantined)
+	}
+}
+
+func TestImportReviewPromoteNotFound(t *testing.T) {
+	vaultDir, passphrase := initVault(t)
+	setPassEnv(t, string(passphrase))
+	defer setupVaultFlag(t, vaultDir)()
+
+	if err := os.Setenv("OPENPASS_PASSPHRASE", string(passphrase)); err != nil {
+		t.Fatalf("set passphrase env: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "import", "review", "promote", "import-00000000-deadbeef"})
+	defer rootCmd.SetArgs(nil)
+
+	var execErr error
+	captureStdout(func() {
+		execErr = rootCmd.Execute()
+	})
+	if execErr == nil {
+		t.Fatal("expected error for unknown import-id, got nil")
+	}
+	if !strings.Contains(execErr.Error(), "no quarantined entries found") {
+		t.Errorf("unexpected error message: %v", execErr)
+	}
+}
+
 func snapshotImportEntries(t *testing.T, svc vaultsvc.Service, paths []string) map[string]*vaultpkg.Entry {
 	t.Helper()
 	snapshot := make(map[string]*vaultpkg.Entry, len(paths))
