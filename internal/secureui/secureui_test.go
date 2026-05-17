@@ -238,14 +238,16 @@ func TestPrompt_TTYBackend_SIGINTCancel(t *testing.T) {
 
 	// Capture the signal channel that readTTY registers so the test can
 	// inject a fake signal without delivering a real one to the process.
-	var registeredCh chan<- os.Signal
+	registered := make(chan chan<- os.Signal, 1)
 	oldNotify := signalNotify
 	oldStop := signalStop
 	defer func() {
 		signalNotify = oldNotify
 		signalStop = oldStop
 	}()
-	signalNotify = func(ch chan<- os.Signal, _ ...os.Signal) { registeredCh = ch }
+	signalNotify = func(ch chan<- os.Signal, _ ...os.Signal) {
+		registered <- ch
+	}
 	signalStop = func(_ chan<- os.Signal) {}
 
 	done := make(chan struct {
@@ -261,16 +263,14 @@ func TestPrompt_TTYBackend_SIGINTCancel(t *testing.T) {
 	}()
 
 	// Wait until readTTY has registered the signal handler.
-	deadline := time.After(2 * time.Second)
-	for registeredCh == nil {
-		select {
-		case <-deadline:
-			t.Fatal("signal handler never registered")
-		case <-time.After(5 * time.Millisecond):
-		}
+	var sigCh chan<- os.Signal
+	select {
+	case sigCh = <-registered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("signal handler never registered")
 	}
 
-	registeredCh <- os.Interrupt
+	sigCh <- os.Interrupt
 
 	select {
 	case res := <-done:
