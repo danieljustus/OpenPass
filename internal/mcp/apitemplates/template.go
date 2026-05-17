@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -63,6 +64,9 @@ func Load(name string, vaultDir string) (*APITemplate, error) {
 	if name == "" {
 		return nil, fmt.Errorf("template name is required")
 	}
+	if strings.ContainsAny(name, `/\`) || strings.Contains(name, "..") {
+		return nil, fmt.Errorf("invalid template name: %q", name)
+	}
 
 	// Check user override directory first
 	if vaultDir != "" {
@@ -116,7 +120,7 @@ func loadBuiltin(name string) (*APITemplate, error) {
 
 // loadFromFile loads a template from a file path.
 func loadFromFile(name, path string) (*APITemplate, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 — path constructed from validated name within vault templates dir
 	if err != nil {
 		return nil, fmt.Errorf("read template file %q: %w", path, err)
 	}

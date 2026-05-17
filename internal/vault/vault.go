@@ -116,7 +116,7 @@ func OpenWithPassphrase(vaultDir string, passphrase []byte) (*Vault, error) {
 		return nil, err
 	}
 	identityPath := filepath.Join(vaultDir, "identity.age")
-	raw, err := os.ReadFile(identityPath)
+	raw, err := os.ReadFile(identityPath) // #nosec G304 — identityPath constructed from validated vaultDir with a fixed filename
 	if err != nil {
 		return nil, fmt.Errorf("read identity file: %w", err)
 	}

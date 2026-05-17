@@ -224,6 +224,8 @@ func SaveIdentityWithArgon2id(id *age.X25519Identity, path string, passphrase []
 	if err := validateIdentityPath(path); err != nil {
 		return err
 	}
+	// #nosec G103 — intentional: unsafe.String avoids heap-copying the passphrase
+	// so that the subsequent Wipe() clears the only copy in memory.
 	recipient := NewArgon2idRecipient(unsafe.String(unsafe.SliceData(passphrase), len(passphrase)), params)
 	Wipe(passphrase)
 	var buf bytes.Buffer
@@ -251,10 +253,12 @@ func LoadIdentityWithArgon2id(path string, passphrase []byte) (*age.X25519Identi
 	if err := validateIdentityPath(path); err != nil {
 		return nil, err
 	}
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 — path validated by validateIdentityPath() above
 	if err != nil {
 		return nil, fmt.Errorf("read file: %w", err)
 	}
+	// #nosec G103 — intentional: unsafe.String avoids heap-copying the passphrase
+	// so that the subsequent Wipe() clears the only copy in memory.
 	identity := NewArgon2idIdentity(unsafe.String(unsafe.SliceData(passphrase), len(passphrase)))
 	Wipe(passphrase)
 	r, err := age.Decrypt(bytes.NewReader(raw), identity)

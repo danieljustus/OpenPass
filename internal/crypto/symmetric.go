@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strings"
 
 	"filippo.io/age"
@@ -152,7 +153,13 @@ func parseArgon2idParams(s string) (Argon2idParams, error) {
 		case 'p':
 			var tp uint32
 			tp, err = parseUint32(val)
-			params.Threads = uint8(tp)
+			if err == nil {
+				if tp > math.MaxUint8 {
+					err = fmt.Errorf("threads value %d exceeds maximum %d", tp, math.MaxUint8)
+				} else {
+					params.Threads = uint8(tp) // #nosec G115 — bounds-checked above
+				}
+			}
 		default:
 			err = fmt.Errorf("unknown param key: %c", key)
 		}

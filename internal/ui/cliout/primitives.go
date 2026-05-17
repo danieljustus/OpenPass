@@ -133,7 +133,7 @@ func Pager(text string) error {
 	}
 	// PAGER may include args (e.g. "less -R"); split on whitespace.
 	fields := strings.Fields(pager)
-	cmd := exec.Command(fields[0], fields[1:]...)
+	cmd := exec.Command(fields[0], fields[1:]...) // #nosec G204 — PAGER is a trusted user-supplied config, equivalent to running it in a shell
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = strings.NewReader(text)

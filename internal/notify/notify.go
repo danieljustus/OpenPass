@@ -101,11 +101,11 @@ func buildCommand(level Level, title, message string) *exec.Cmd {
 	switch runtime.GOOS {
 	case "darwin":
 		if level == LevelCritical {
-			return exec.Command("osascript", "-e",
+			return exec.Command("osascript", "-e", // #nosec G204 — binary hardcoded; title/message are %q-quoted in the AppleScript literal
 				fmt.Sprintf(`display notification %q with title %q subtitle %q sound name "default"`,
 					message, "SECURITY ALERT", title))
 		}
-		return exec.Command("osascript", "-e",
+		return exec.Command("osascript", "-e", // #nosec G204 — binary hardcoded; title/message are %q-quoted in the AppleScript literal
 			fmt.Sprintf(`display notification %q with title %q`, message, title))
 	case "linux":
 		urgency := "normal"
@@ -148,5 +148,5 @@ if (Get-Module -ListAvailable -Name BurntToast) {
     Add-Type -AssemblyName System.Windows.Forms | Out-Null
     [System.Windows.Forms.MessageBox]::Show($msg, $title, 'OK', '%s') | Out-Null
 }`, title, message, severity)
-	return exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script)
+	return exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script) // #nosec G204 — binary hardcoded; title/message embedded via %q in script
 }

@@ -226,7 +226,7 @@ func buildHTTPServerConfig(vDir, agentName string, dryRun bool) (map[string]any,
 		tokenID = token.ID
 	} else {
 		// Use a deterministic preview token so dry-run output is stable.
-		rawToken = "<dry-run-preview-token>"
+		rawToken = "<dry-run-preview-token>" // #nosec G101 — placeholder for dry-run mode, not a real credential
 		tokenID = "<not-generated-dry-run>"
 	}
 
