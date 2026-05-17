@@ -43,7 +43,7 @@ var findCmd = &cobra.Command{
 	Aliases:           []string{"search"},
 	ValidArgsFunction: entryCompletionFunc,
 	Short:             "Search for entries",
-	Long:    `Searches entry paths and contents for the given query.`,
+	Long:              `Searches entry paths and contents for the given query.`,
 	Example: `  # Search for entries containing "bank"
   openpass find bank
 

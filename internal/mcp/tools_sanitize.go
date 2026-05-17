@@ -41,6 +41,7 @@ func (s *Server) handleSanitizeOutput(ctx context.Context, req CallToolRequest) 
 //  1. Mask any known secret values from resolvedEnv with "***".
 //  2. Strip prompt-injection vectors (ANSI escapes, XML closing tags,
 //     bidi overrides, zero-width chars) via the MCP chokepoint.
+//
 // Pass (2) is defense-in-depth: the final callToolResultPayload step
 // also runs the chokepoint, but applying it here means stdout and
 // stderr can be embedded into structured responses (e.g. JSON fields)

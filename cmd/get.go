@@ -42,7 +42,7 @@ var getCmd = &cobra.Command{
 	Use:     "get <path[.field]>",
 	Aliases: []string{"show", "cat"},
 	Short:   "Get a password entry",
-	Long:  "Retrieves and displays a password entry. Use path.field syntax to get specific fields.",
+	Long:    "Retrieves and displays a password entry. Use path.field syntax to get specific fields.",
 	Example: `  # Get a specific field (auto-copies to clipboard on TTY)
   openpass get github.password
 
