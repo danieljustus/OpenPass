@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	gopath "path"
+	"strings"
 	"time"
 
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
@@ -108,6 +110,17 @@ func (s *Server) handleGetValue(ctx context.Context, req CallToolRequest) (*Call
 		s.logAudit(ctx, "get_value", path, false)
 		metrics.RecordAuthDenial("scope_denied", s.agent.Name)
 		return nil, fmt.Errorf("access denied: path %q outside allowed scope", path)
+	}
+
+	// Block value access for quarantined entries. Normalize path first to prevent
+	// traversal bypasses (e.g., "quarantine/../secrets/foo" normalizes to
+	// "secrets/foo", correctly bypassing the check — that path is not quarantined).
+	{
+		cleanedPath := gopath.Clean(path)
+		if cleanedPath == "quarantine" || strings.HasPrefix(cleanedPath, "quarantine/") {
+			s.logAudit(ctx, "quarantine_block", path, false)
+			return NewToolResultError("entry is in quarantine — run 'openpass import review promote' to make it accessible"), nil
+		}
 	}
 
 	if !s.canReadValues() {

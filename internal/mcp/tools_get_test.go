@@ -812,6 +812,58 @@ func TestGetValuePerToolRedact(t *testing.T) {
 	}
 }
 
+// TestGetValueBlocksQuarantinedPath verifies that handleGetValue returns an
+// error for any path inside the "quarantine/" namespace, preventing agents
+// from reading raw secret values of imported-but-unreviewed entries.
+func TestGetValueBlocksQuarantinedPath(t *testing.T) {
+	vaultDir, identity := mockVault(t)
+
+	// Write an entry under quarantine/ so the vault lookup would succeed
+	// if the quarantine check were not in place.
+	qEntry := &vault.Entry{
+		Data: map[string]any{
+			"password": "s3cr3t",
+		},
+	}
+	quarantinePath := "quarantine/import-20260517-ab12cd34/github.com"
+	if err := vault.WriteEntry(vaultDir, quarantinePath, qEntry, identity); err != nil {
+		t.Fatalf("WriteEntry quarantine: %v", err)
+	}
+
+	srv := &Server{
+		vault: &vault.Vault{
+			Dir:      vaultDir,
+			Identity: identity,
+		},
+		agent: &config.AgentProfile{
+			Name:          "test",
+			AllowedPaths:  []string{"*"},
+			CanReadValues: true,
+			ApprovalMode:  "none",
+			AutoUnseal:    true,
+		},
+		hookRegistry: NewHookRegistry(),
+	}
+
+	req := CallToolRequest{
+		Arguments: map[string]any{"path": quarantinePath},
+	}
+
+	result, err := srv.handleGetValue(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleGetValue() unexpected hard error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("handleGetValue() returned nil result")
+	}
+	if !result.IsError {
+		t.Fatalf("handleGetValue() expected error result for quarantined path, got success: %s", result.Text)
+	}
+	if !strings.Contains(result.Text, "quarantine") {
+		t.Errorf("error text should mention 'quarantine', got: %q", result.Text)
+	}
+}
+
 // F-1: buildSecretMetadataResponse must expose tags and route each tag
 // through the MCP sanitizer. Tags are user-controlled vault metadata
 // that become part of the JSON returned to the LLM by get_entry and
