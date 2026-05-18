@@ -112,12 +112,9 @@ func validateInstallOptions(opts InstallOpts) error {
 	return nil
 }
 
-// systemdEscape escapes a value for safe inclusion in a systemd unit file.
-// Backslashes, double-quotes, backticks, and $ are escaped per systemd.syntax rules.
 func systemdEscape(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, `"`, `\"`)
-	s = strings.ReplaceAll(s, "`", "`")
 	s = strings.ReplaceAll(s, "$", "$$")
 	return s
 }
