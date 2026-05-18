@@ -110,7 +110,7 @@ After saving, the profile is validated and you are prompted to apply changes.`,
 			return fmt.Errorf("editor exited with error: %w", runErr)
 		}
 
-		editedData, err := os.ReadFile(tmpPath) //nolint:gosec G304 — tmpPath is from os.CreateTemp, safe
+		editedData, err := os.ReadFile(filepath.Clean(tmpPath))
 		if err != nil {
 			return fmt.Errorf("read edited file: %w", err)
 		}
