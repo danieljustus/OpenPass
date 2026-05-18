@@ -154,7 +154,7 @@ func SaveConfigNode(path string, root *yaml.Node) error {
 	if err := encoder.Encode(root); err != nil {
 		return fmt.Errorf("cannot encode config: %w", err)
 	}
-	encoder.Close()
+	_ = encoder.Close()
 
 	return fileutil.AtomicWriteFile(path, buf.Bytes(), 0o600)
 }
@@ -164,7 +164,7 @@ func SaveConfigNode(path string, root *yaml.Node) error {
 // the indented YAML block.
 func NodeToString(node *yaml.Node) string {
 	switch node.Kind {
-	case yaml.ScalarNode:
+	case yaml.ScalarNode, yaml.AliasNode:
 		return node.Value
 	default:
 		var buf bytes.Buffer
@@ -173,7 +173,7 @@ func NodeToString(node *yaml.Node) string {
 		if err := encoder.Encode(node); err != nil {
 			return node.Value
 		}
-		encoder.Close()
+		_ = encoder.Close()
 		return strings.TrimSpace(buf.String())
 	}
 }
@@ -222,7 +222,7 @@ func walkConfigTree(node *yaml.Node, prefix string, keys *[]string) {
 			fullPath += key
 			walkConfigTree(val, fullPath, keys)
 		}
-	case yaml.ScalarNode, yaml.SequenceNode:
+	case yaml.ScalarNode, yaml.SequenceNode, yaml.AliasNode:
 		*keys = append(*keys, prefix)
 	}
 }
@@ -287,7 +287,7 @@ func setNodeAtPath(root *yaml.Node, parts []string, value string) error {
 			return fmt.Errorf("cannot set key %q: parent is a %s node", part, nodeKindName(current.Kind))
 		}
 
-		var foundIdx int = -1
+		foundIdx := -1
 		for j := 0; j < len(current.Content)-1; j += 2 {
 			if current.Content[j].Value == part {
 				foundIdx = j

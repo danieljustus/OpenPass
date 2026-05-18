@@ -111,7 +111,7 @@ If no path is given, validates the default config at ~/.openpass/config.yaml.`,
 	},
 }
 
-func resolveConfigPath(args []string) string {
+func resolveConfigPath(_ []string) string {
 	if configFile != "" {
 		return configFile
 	}
