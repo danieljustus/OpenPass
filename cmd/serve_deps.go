@@ -12,8 +12,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/config"
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/mcp"
 	"github.com/danieljustus/OpenPass/internal/mcp/serverbootstrap"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
