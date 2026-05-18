@@ -68,7 +68,7 @@ func rollback(backupPath, binaryPath string) error {
 		perm = fi.Mode().Perm()
 	}
 
-	dst, err := os.OpenFile(binaryPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm) //nolint:gosec G304 — binaryPath comes from os.Executable()
+	dst, err := os.OpenFile(filepath.Clean(binaryPath), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
 	if err != nil {
 		return fmt.Errorf("rollback: create %q: %w", binaryPath, err)
 	}
