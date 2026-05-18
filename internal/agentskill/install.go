@@ -23,7 +23,9 @@ func Install(agentName string, targetPath string, vars TemplateVars, force bool)
 		return fmt.Errorf("render skill: %w", err)
 	}
 
-	existing, err := os.ReadFile(targetPath) //nolint:gosec G304 — validated via HasTraversal at start of Install
+	targetPath = filepath.Clean(targetPath)
+
+	existing, err := os.ReadFile(targetPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("read existing skill: %w", err)
