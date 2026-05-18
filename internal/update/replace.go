@@ -34,7 +34,7 @@ func backupPath(binaryPath string) string {
 func createBackup(binaryPath string) (string, error) {
 	bp := backupPath(binaryPath)
 
-	src, err := os.Open(binaryPath) //nolint:gosec G304 — binaryPath comes from os.Executable()
+	src, err := os.Open(filepath.Clean(binaryPath))
 	if err != nil {
 		return "", fmt.Errorf("open source for backup: %w", err)
 	}
