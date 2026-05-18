@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -16,20 +17,22 @@ import (
 )
 
 var (
-	addValue       string
-	addGenerate    bool
-	addLength      int
-	addUsername    string
-	addURL         string
-	addNotes       string
-	addTOTPSecret  string
-	addTOTPIssuer  string
-	addTOTPAccount string
-	addForce       bool
-	addType        string
-	addUsageHint   string
-	addAutoRotate  bool
-	addExpiresAt   string
+	addValue         string
+	addStdinValue    bool
+	addStdinTOTP     bool
+	addGenerate      bool
+	addLength        int
+	addUsername      string
+	addURL           string
+	addNotes         string
+	addTOTPSecret    string
+	addTOTPIssuer    string
+	addTOTPAccount   string
+	addForce         bool
+	addType          string
+	addUsageHint     string
+	addAutoRotate    bool
+	addExpiresAt     string
 )
 
 var addCmd = &cobra.Command{
@@ -55,6 +58,54 @@ Interactive mode prompts for username, password, and URL.`,
 
 			if _, err := vaultpkg.ReadEntry(v.Dir, name, v.Identity); err == nil {
 				return fmt.Errorf("entry already exists: %s (use 'set' to update or 'edit' to modify)", name)
+			}
+
+			// Read values from stdin to avoid argv leaks
+			var stdinLines []string
+			if addStdinValue || addStdinTOTP {
+				stdinReader := bufio.NewReader(os.Stdin)
+				if addStdinValue {
+					line, err := stdinReader.ReadString('\n')
+					if err != nil {
+						return fmt.Errorf("read --stdin-value: %w", err)
+					}
+					stdinLines = append(stdinLines, strings.TrimRight(line, "\n\r"))
+				}
+				if addStdinTOTP {
+					line, err := stdinReader.ReadString('\n')
+					if err != nil {
+						return fmt.Errorf("read --stdin-totp-secret: %w", err)
+					}
+					stdinLines = append(stdinLines, strings.TrimRight(line, "\n\r"))
+				}
+			}
+			lineIdx := 0
+			if addStdinValue {
+				addValue = stdinLines[lineIdx]
+				lineIdx++
+			}
+			if addStdinTOTP {
+				addTOTPSecret = stdinLines[lineIdx]
+			}
+
+			// Warn about argv-exposed flags on interactive TTY
+			if addValue != "" {
+				fdRaw := os.Stdin.Fd()
+				if fdRaw <= uintptr(^uint(0)>>1) {
+					fd := int(fdRaw)
+					if isTerminalFunc(fd) {
+						fmt.Fprintf(os.Stderr, "Warning: --value is visible in process listings (ps aux). Use --stdin-value for secure input.\n")
+					}
+				}
+			}
+			if addTOTPSecret != "" && !addStdinTOTP {
+				fdRaw := os.Stdin.Fd()
+				if fdRaw <= uintptr(^uint(0)>>1) {
+					fd := int(fdRaw)
+					if isTerminalFunc(fd) {
+						fmt.Fprintf(os.Stderr, "Warning: --totp-secret is visible in process listings (ps aux). Use --stdin-totp-secret for secure input.\n")
+					}
+				}
 			}
 
 			data := map[string]any{}
@@ -230,13 +281,15 @@ Interactive mode prompts for username, password, and URL.`,
 }
 
 func init() {
-	addCmd.Flags().StringVar(&addValue, "value", "", "Password value (non-interactive)")
+	addCmd.Flags().StringVar(&addValue, "value", "", "Password value (non-interactive, visible in process listings)")
+	addCmd.Flags().BoolVar(&addStdinValue, "stdin-value", false, "Read password value from stdin (prevents argv leak)")
+	addCmd.Flags().BoolVar(&addStdinTOTP, "stdin-totp-secret", false, "Read TOTP secret from stdin (prevents argv leak)")
 	addCmd.Flags().BoolVar(&addGenerate, "generate", false, "Generate a secure password (non-interactive)")
 	addCmd.Flags().IntVar(&addLength, "length", 20, "Generated password length for --generate")
 	addCmd.Flags().StringVar(&addUsername, "username", "", "Username (non-interactive)")
 	addCmd.Flags().StringVar(&addURL, "url", "", "URL (non-interactive)")
 	addCmd.Flags().StringVar(&addNotes, "notes", "", "Notes (non-interactive)")
-	addCmd.Flags().StringVar(&addTOTPSecret, "totp-secret", "", "TOTP secret key (base32 encoded)")
+	addCmd.Flags().StringVar(&addTOTPSecret, "totp-secret", "", "TOTP secret key (base32 encoded, visible in process listings)")
 	addCmd.Flags().StringVar(&addTOTPIssuer, "totp-issuer", "", "TOTP issuer/service name")
 	addCmd.Flags().StringVar(&addTOTPAccount, "totp-account", "", "TOTP account name/username")
 	addCmd.Flags().BoolVar(&addForce, "force", false, "Skip password strength validation")
