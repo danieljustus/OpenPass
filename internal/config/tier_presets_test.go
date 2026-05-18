@@ -32,7 +32,7 @@ func TestTierPresets_ApplyPresetValues(t *testing.T) {
 			wantCanReadValues:    false,
 			wantExposeValueTools: false,
 			wantAutoUnseal:       false,
-			wantApprovalMode:     "none",
+			wantApprovalMode:     "deny",
 			wantRequireApproval:  false,
 		},
 		{
@@ -237,7 +237,7 @@ func TestApplyTierPreset_TableDriven(t *testing.T) {
 		wantCanReadValues bool
 		wantApprovalMode  string
 	}{
-		{name: "read-only", tier: "read-only", wantOK: true, wantCanWrite: false, wantCanRunCmds: false, wantCanClip: false, wantCanAuto: false, wantCanReadValues: false, wantApprovalMode: "none"},
+		{name: "read-only", tier: "read-only", wantOK: true, wantCanWrite: false, wantCanRunCmds: false, wantCanClip: false, wantCanAuto: false, wantCanReadValues: false, wantApprovalMode: "deny"},
 		{name: "standard", tier: "standard", wantOK: true, wantCanWrite: false, wantCanRunCmds: false, wantCanClip: true, wantCanAuto: true, wantCanReadValues: true, wantApprovalMode: "prompt"},
 		{name: "admin", tier: "admin", wantOK: true, wantCanWrite: true, wantCanRunCmds: true, wantCanClip: true, wantCanAuto: true, wantCanReadValues: true, wantApprovalMode: "prompt"},
 		{name: "unknown", tier: "bogus", wantOK: false, wantCanWrite: false, wantCanRunCmds: false, wantCanClip: false, wantCanAuto: false, wantCanReadValues: false, wantApprovalMode: ""},

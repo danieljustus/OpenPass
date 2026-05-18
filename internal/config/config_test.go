@@ -31,12 +31,12 @@ func TestDefaultReturnsSensibleConfig(t *testing.T) {
 		canWrite     bool
 	}
 	wantProfiles := map[string]wantProfile{
-		"default":     {canWrite: false, approvalMode: "none"},
-		"claude-code": {canWrite: true, approvalMode: "none"},
-		"codex":       {canWrite: false, approvalMode: "none"},
-		"hermes":      {canWrite: true, approvalMode: "none"},
-		"openclaw":    {canWrite: true, approvalMode: "none"},
-		"opencode":    {canWrite: false, approvalMode: "none"},
+		"default":     {canWrite: false, approvalMode: "deny"},
+		"claude-code": {canWrite: true, approvalMode: "deny"},
+		"codex":       {canWrite: false, approvalMode: "deny"},
+		"hermes":      {canWrite: true, approvalMode: "deny"},
+		"openclaw":    {canWrite: true, approvalMode: "deny"},
+		"opencode":    {canWrite: false, approvalMode: "deny"},
 	}
 	for name, want := range wantProfiles {
 		got, ok := cfg.Agents[name]
@@ -320,8 +320,8 @@ func TestNewDefaultAgentProfile(t *testing.T) {
 	if profile.CanWrite {
 		t.Error("CanWrite should be false")
 	}
-	if profile.ApprovalMode != "none" {
-		t.Errorf("ApprovalMode = %q, want %q", profile.ApprovalMode, "none")
+	if profile.ApprovalMode != "deny" {
+		t.Errorf("ApprovalMode = %q, want %q", profile.ApprovalMode, "deny")
 	}
 }
 
@@ -1988,8 +1988,8 @@ func TestPresets_ApplyTierPreset_ReadOnly(t *testing.T) {
 	if p.ExposeValueTools {
 		t.Error("ExposeValueTools should be false for read-only")
 	}
-	if p.ApprovalMode != "none" {
-		t.Errorf("ApprovalMode = %q, want none", p.ApprovalMode)
+	if p.ApprovalMode != "deny" {
+		t.Errorf("ApprovalMode = %q, want deny", p.ApprovalMode)
 	}
 	// AllowedPaths should be preserved
 	if len(p.AllowedPaths) != 1 || p.AllowedPaths[0] != "*" {
