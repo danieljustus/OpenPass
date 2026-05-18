@@ -67,7 +67,9 @@ func Refresh(agentName string, targetPath string, vars TemplateVars) error {
 		return fmt.Errorf("target path contains traversal: %s", targetPath)
 	}
 
-	existing, err := os.ReadFile(targetPath) //nolint:gosec G304 — validated via HasTraversal above
+	targetPath = filepath.Clean(targetPath)
+
+	existing, err := os.ReadFile(targetPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("skill not installed: %w", err)
