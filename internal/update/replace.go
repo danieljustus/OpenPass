@@ -16,13 +16,14 @@ const (
 
 	// windowsBackupSuffix is used on Windows to avoid confusion with .backup.
 	windowsBackupSuffix = ".old"
+
 )
 
 // backupPath returns the backup file path for the given binary, using the
 // platform-appropriate suffix.
 func backupPath(binaryPath string) string {
 	suffix := backupSuffix
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windowsOS {
 		suffix = windowsBackupSuffix
 	}
 	return binaryPath + suffix
@@ -171,7 +172,7 @@ func Replace(binaryPath string, newBinaryData []byte) (err error) {
 		return
 	}
 
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windowsOS {
 		if rmErr := os.Remove(binaryPath); rmErr != nil {
 			err = fmt.Errorf("replace: remove original for rename on windows: %w", rmErr)
 			return

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -307,6 +308,9 @@ func TestRecordAuditWithLogger(t *testing.T) {
 // TestRecordAuditFallback verifies that RecordAudit falls back to file logging
 // when the audit logger is unavailable (manually nil out the logger).
 func TestRecordAuditFallback(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: audit fallback test requires Unix file semantics")
+	}
 	dir := t.TempDir()
 	writeTestConfig(t, dir, map[string]string{"fallback-agent": "safe"})
 	ctx, err := Load("fallback-agent", dir)

@@ -3,6 +3,7 @@ package installmethod
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -19,6 +20,9 @@ func TestDetectEmptyPath(t *testing.T) {
 
 func TestDetectHomebrewPaths(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: Unix-specific path test")
+	}
 	tests := []struct {
 		name string
 		path string
@@ -42,6 +46,9 @@ func TestDetectHomebrewPaths(t *testing.T) {
 
 func TestDetectDirectDownloadPaths(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: Unix-specific path test")
+	}
 	tests := []struct {
 		name string
 		path string
@@ -63,6 +70,9 @@ func TestDetectDirectDownloadPaths(t *testing.T) {
 
 func TestDetectPackageManagerPath(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: Unix-specific path test")
+	}
 	method, err := Detect("/usr/bin/openpass")
 	if err != nil {
 		t.Fatalf("Detect() error = %v", err)
@@ -176,6 +186,9 @@ func TestDetectEnvVars(t *testing.T) {
 
 func TestDetectGoCacheMarkers(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: Unix-specific path test")
+	}
 	method, err := Detect("/go/pkg/mod/github.com/danieljustus/OpenPass@v1.0.0/bin/openpass")
 	if err != nil {
 		t.Fatalf("Detect() error = %v", err)
@@ -187,6 +200,9 @@ func TestDetectGoCacheMarkers(t *testing.T) {
 
 func TestDetectGoInstallAtSign(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: Unix-specific path test")
+	}
 	method, err := Detect("/tmp/gopath/pkg/mod/example.com/openpass@latest/bin/openpass")
 	if err != nil {
 		t.Fatalf("Detect() error = %v", err)
@@ -226,6 +242,9 @@ func TestDetectUserLocalBins(t *testing.T) {
 
 func TestDetectHomebrewSymlink(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: Unix-specific path test")
+	}
 	tmp := t.TempDir()
 
 	realBin := filepath.Join(tmp, "Cellar", "openpass", "1.0.0", "bin", "openpass")
@@ -276,6 +295,9 @@ func TestDetectUnknownPath(t *testing.T) {
 
 func TestDetectNonExistentPath(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: Unix-specific path test")
+	}
 	method, err := Detect("/nonexistent/openpass")
 	if err != nil {
 		t.Fatalf("Detect() error = %v", err)

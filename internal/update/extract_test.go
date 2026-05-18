@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -260,6 +261,9 @@ func TestExtractTarGz_ReadsLargeBinary(t *testing.T) {
 }
 
 func TestExtractTarGz_PreservesMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows: file mode preservation not supported")
+	}
 	dir := t.TempDir()
 
 	var buf bytes.Buffer
