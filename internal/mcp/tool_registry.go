@@ -337,6 +337,32 @@ func toolDefinitions() []toolDefinition {
 			Handler:   (*Server).handleListShares,
 			RiskLevel: RiskLevelLow,
 		},
+		{
+			Name:        "openpass_whoami",
+			Description: "Return the agent's profile, available/unavailable tools, quotas, and vault status",
+			InputSchema: objectSchema(nil, map[string]schemaProperty{}),
+			Handler:     (*Server).handleWhoami,
+			RiskLevel:   RiskLevelLow,
+		},
+		{
+			Name:        "openpass_audit_self",
+			Description: "Return recent audit events for this agent",
+			InputSchema: objectSchema(nil, map[string]schemaProperty{
+				"limit": {Type: "number", Description: "Maximum number of events to return (default 50, max 100)"},
+			}),
+			Handler:   (*Server).handleAuditSelf,
+			RiskLevel: RiskLevelLow,
+		},
+		{
+			Name:        "openpass_search",
+			Description: "Discover tools by intent matching. Returns tools whose name or description matches the intent.",
+			InputSchema: objectSchema([]string{"intent"}, map[string]schemaProperty{
+				"intent": {Type: "string", Description: "Natural language intent or keyword to search for"},
+				"return": {Type: "string", Description: "Output format: \"spec\" (full tool specs) or \"names\" (just tool names). Default: \"spec\"."},
+			}),
+			Handler:   (*Server).handleSearch,
+			RiskLevel: RiskLevelLow,
+		},
 	}
 }
 
