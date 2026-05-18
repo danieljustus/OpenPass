@@ -183,8 +183,13 @@ func (h *ProtocolHandler) handleToolsList(_ context.Context, msg *Message) (*Mes
 		return NewErrorResponse(msg.ID, ErrCodeServerError, "Server not initialized", nil), nil
 	}
 
+	tools := toolsListPayload(h.tools)
+	if !includeAllTools(msg) {
+		tools = filterLeanTools(tools)
+	}
+
 	return NewResponse(msg.ID, map[string]any{
-		"tools": toolsListPayload(h.tools),
+		"tools": tools,
 	})
 }
 

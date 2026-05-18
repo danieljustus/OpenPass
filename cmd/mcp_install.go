@@ -3,11 +3,11 @@ package cmd
 import (
 	"fmt"
 	"maps"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/mcp"
 	"github.com/danieljustus/OpenPass/internal/mcp/install"
 )
@@ -58,124 +58,9 @@ Examples:
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		dryRun, _ := cmd.Flags().GetBool("dry-run")
-		autoDetect, _ := cmd.Flags().GetBool("auto-detect")
-		httpMode, _ := cmd.Flags().GetBool("http")
-		stdioMode, _ := cmd.Flags().GetBool("stdio")
-		httpFlag := cmd.Flags().Lookup("http")
-		stdioFlag := cmd.Flags().Lookup("stdio")
-
-		// Determine transport mode: default to stdio unless --http is explicitly set.
-		useHTTP := false
-		if httpFlag != nil && httpFlag.Changed {
-			useHTTP = httpMode
-		} else if stdioFlag != nil && stdioFlag.Changed && !stdioMode {
-			useHTTP = true
-		}
-
-		if httpFlag != nil && httpFlag.Changed && stdioFlag != nil && stdioFlag.Changed {
-			return fmt.Errorf("--http and --stdio cannot be used together")
-		}
-
-		vDir, err := vaultPath()
-		if err != nil {
-			return err
-		}
-
-		if autoDetect {
-			return runAutoDetect(vDir, dryRun, useHTTP)
-		}
-
-		agentName := args[0]
-		agentType, err := install.ParseAgentType(agentName)
-		if err != nil {
-			return err
-		}
-
-		return runInstall(vDir, agentType, dryRun, useHTTP)
+		return errorspkg.NewCLIError(errorspkg.ExitNotFound,
+			"This command is deprecated in v4.0. Use: openpass agent install [agent]", nil)
 	},
-}
-
-func runInstall(vDir string, agentType install.AgentType, dryRun, httpMode bool) error {
-	def, err := install.GetAgentDefinition(agentType)
-	if err != nil {
-		return err
-	}
-
-	// Detect agent.
-	detectResult, err := install.DetectAgent(agentType)
-	if err != nil {
-		return err
-	}
-
-	if !detectResult.Detected {
-		return fmt.Errorf("agent %q not detected (checked binary in PATH and config files)", def.DisplayName)
-	}
-
-	// Generate server config.
-	serverConfig, tokenID, err := buildServerConfig(vDir, string(agentType), httpMode, dryRun)
-	if err != nil {
-		return err
-	}
-
-	// Determine config path.
-	configPath := detectResult.ConfigPath
-	if configPath == "" {
-		configPath, err = install.ResolveConfigPath(agentType)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Backup existing config before modifying.
-	var backupPath string
-	if !dryRun {
-		backupPath, _ = install.BackupConfig(configPath)
-	}
-
-	// Run install.
-	result, err := install.Install(install.InstallOptions{
-		AgentType:    agentType,
-		ServerConfig: serverConfig,
-		Format:       def.Format,
-		ConfigPath:   configPath,
-		DryRun:       dryRun,
-	})
-	if err != nil {
-		return fmt.Errorf("install failed for %s: %w", def.DisplayName, err)
-	}
-
-	result.TokenID = tokenID
-
-	// Print result.
-	printInstallResult(result, dryRun, backupPath)
-	return nil
-}
-
-func runAutoDetect(vDir string, dryRun, httpMode bool) error {
-	detected := install.DetectAllAgents()
-	if len(detected) == 0 {
-		printlnQuietAware("No supported agents detected.")
-		return nil
-	}
-
-	var errors []string
-	for agentType, detectResult := range detected {
-		if !detectResult.Detected {
-			continue
-		}
-		def, _ := install.GetAgentDefinition(agentType)
-		printQuietAware("Detected %s\n", def.DisplayName)
-
-		if err := runInstall(vDir, agentType, dryRun, httpMode); err != nil {
-			errors = append(errors, fmt.Sprintf("%s: %v", def.DisplayName, err))
-		}
-	}
-
-	if len(errors) > 0 {
-		return fmt.Errorf("errors during auto-detect:\n  %s", strings.Join(errors, "\n  "))
-	}
-	return nil
 }
 
 func buildServerConfig(vDir, agentName string, httpMode, dryRun bool) (map[string]any, string, error) {
@@ -249,38 +134,6 @@ func buildHTTPServerConfig(vDir, agentName string, dryRun bool) (map[string]any,
 	}
 
 	return config, tokenID, nil
-}
-
-func printInstallResult(result *install.Result, dryRun bool, backupPath string) {
-	def, _ := install.GetAgentDefinition(result.AgentType)
-
-	if result.WasUnchanged {
-		printQuietAware("%s is already configured for OpenPass MCP (no changes needed)\n", def.DisplayName)
-		return
-	}
-
-	action := "Configured"
-	if dryRun {
-		action = "[DRY-RUN] Would configure"
-	}
-
-	if result.WasCreated {
-		printQuietAware("%s %s for OpenPass MCP (new config file)\n", action, def.DisplayName)
-	} else if result.WasUpdated {
-		printQuietAware("%s %s for OpenPass MCP (updated existing config)\n", action, def.DisplayName)
-	}
-
-	printQuietAware("  Config path: %s\n", result.ConfigPath)
-	if backupPath != "" {
-		printQuietAware("  Backup:      %s\n", backupPath)
-	}
-	if result.TokenID != "" {
-		if result.TokenID == "<not-generated-dry-run>" {
-			printQuietAware("  Token ID:    <not generated (dry-run)>\n")
-		} else {
-			printQuietAware("  Token ID:    %s\n", result.TokenID)
-		}
-	}
 }
 
 func init() {

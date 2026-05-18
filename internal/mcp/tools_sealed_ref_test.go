@@ -539,7 +539,7 @@ func TestSecretUnseal_NotBlockedByExposeValueTools(t *testing.T) {
 		ExposeValueTools: false,
 	}, "stdio", "")
 
-	if isToolBlockedByAgent(srv.agent, "secret_unseal") {
+	if isToolBlockedByAgent(srv.agent, "secret_unseal") != nil {
 		t.Error("secret_unseal should not be blocked when ExposeValueTools=false")
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -14,7 +15,8 @@ import (
 )
 
 var (
-	migrateYes bool
+	migrateYes      bool
+	migrateV4DryRun bool
 )
 
 var migrateCmd = &cobra.Command{
@@ -132,6 +134,113 @@ func runPseudonymizeMigration(v *vaultpkg.Vault) error {
 	return nil
 }
 
+var migrateV4Cmd = &cobra.Command{
+	Use:   "v4",
+	Short: "Migrate agent profiles and config to v4.0 format",
+	Long: `Migrate agent profiles to the v4.0 format by assigning tier fields.
+
+Agent profiles without a tier field are automatically assigned a tier based
+on their existing capabilities:
+
+  - Profiles with CanRunCommands=true  → admin tier
+  - Profiles with CanWrite=true        → standard tier
+  - All other profiles                 → safe tier
+
+The original config is backed up as config.yaml.v3-backup-<timestamp>
+before any changes are written.
+
+This migration is idempotent — running it multiple times is safe for
+profiles that already have a tier field.`,
+	Example: `  openpass migrate v4
+  openpass migrate v4 --dry-run
+  openpass migrate v4 --yes`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		vaultDir, err := vaultPath()
+		if err != nil {
+			return err
+		}
+
+		cfg, err := configpkg.Load(filepath.Join(vaultDir, "config.yaml"))
+		if err != nil {
+			return fmt.Errorf("load config: %w", err)
+		}
+
+		type pendingTier struct {
+			name string
+			tier string
+		}
+		var pending []pendingTier
+
+		for name, profile := range cfg.Agents {
+			if profile.Tier != "" {
+				continue
+			}
+			var tier string
+			switch {
+			case profile.CanRunCommands:
+				tier = "admin"
+			case profile.CanWrite:
+				tier = "standard"
+			default:
+				tier = "safe"
+			}
+			pending = append(pending, pendingTier{name: name, tier: tier})
+		}
+
+		if len(pending) == 0 {
+			printlnQuietAware("All profiles already have tier fields.")
+			return nil
+		}
+
+		printlnQuietAware(fmt.Sprintf("Found %d agent profile(s) without tier fields:", len(pending)))
+		for _, p := range pending {
+			printlnQuietAware(fmt.Sprintf("  %s → %s", p.name, p.tier))
+		}
+
+		if migrateV4DryRun {
+			printlnQuietAware("Dry-run: no changes written.")
+			return nil
+		}
+
+		confirmed, err := confirmInteractive(
+			"Migrate agent profiles to v4.0 format",
+			migrateYes,
+		)
+		if err != nil {
+			return err
+		}
+		if !confirmed {
+			fmt.Fprintln(os.Stderr, "Canceled")
+			return nil
+		}
+
+		// Backup original config
+		configPath := filepath.Join(vaultDir, "config.yaml")
+		backupPath := filepath.Join(vaultDir, fmt.Sprintf("config.yaml.v3-backup-%d", time.Now().Unix()))
+		input, err := os.ReadFile(configPath)
+		if err != nil {
+			return fmt.Errorf("read config for backup: %w", err)
+		}
+		if err := os.WriteFile(backupPath, input, 0o600); err != nil {
+			return fmt.Errorf("write backup: %w", err)
+		}
+		printlnQuietAware(fmt.Sprintf("Backup created: %s", backupPath))
+
+		for _, p := range pending {
+			profile := cfg.Agents[p.name]
+			profile.Tier = p.tier
+			cfg.Agents[p.name] = profile
+		}
+
+		if err := cfg.SaveTo(configPath); err != nil {
+			return fmt.Errorf("save migrated config: %w", err)
+		}
+
+		printlnQuietAware(fmt.Sprintf("Migrated %d agent profile(s) to v4.0 format.", len(pending)))
+		return nil
+	},
+}
+
 var migrateKDFCmd = &cobra.Command{
 	Use:   "kdf",
 	Short: "Migrate vault KDF from scrypt to argon2id",
@@ -181,5 +290,8 @@ func init() {
 	migrateCmd.AddCommand(migratePseudonymizeCmd)
 	migratePseudonymizeCmd.Flags().BoolVarP(&migrateYes, "yes", "y", false, "Skip confirmation prompt")
 	migrateCmd.AddCommand(migrateKDFCmd)
+	migrateCmd.AddCommand(migrateV4Cmd)
+	migrateV4Cmd.Flags().BoolVarP(&migrateYes, "yes", "y", false, "Skip confirmation prompt")
+	migrateV4Cmd.Flags().BoolVar(&migrateV4DryRun, "dry-run", false, "Preview changes without writing")
 	rootCmd.AddCommand(migrateCmd)
 }
