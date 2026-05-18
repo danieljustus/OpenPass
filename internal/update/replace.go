@@ -57,7 +57,7 @@ func createBackup(binaryPath string) (string, error) {
 // The backup file is preserved after the operation. If the binary file still
 // exists at the time of rollback, its existing permissions are preserved.
 func rollback(backupPath, binaryPath string) error {
-	src, err := os.Open(backupPath) //nolint:gosec G304 — backupPath is derived from os.Executable() + fixed suffix
+	src, err := os.Open(filepath.Clean(backupPath))
 	if err != nil {
 		return fmt.Errorf("rollback: open backup %q: %w", backupPath, err)
 	}
