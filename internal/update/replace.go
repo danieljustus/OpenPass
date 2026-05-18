@@ -16,7 +16,6 @@ const (
 
 	// windowsBackupSuffix is used on Windows to avoid confusion with .backup.
 	windowsBackupSuffix = ".old"
-
 )
 
 // backupPath returns the backup file path for the given binary, using the
