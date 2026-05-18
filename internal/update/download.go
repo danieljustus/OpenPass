@@ -26,14 +26,17 @@ var (
 	mu             sync.Mutex
 )
 
-const downloadTimeout = 60 * time.Second
+const (
+	downloadTimeout = 60 * time.Second
+	windowsOS       = "windows"
+)
 
 // archiveName returns the release archive filename for the given version, OS,
 // and architecture. Matches the GoReleaser name_template convention.
 func archiveName(version, os, arch string) string {
 	v := strings.TrimPrefix(version, "v")
 	ext := "tar.gz"
-	if os == "windows" {
+	if os == windowsOS {
 		ext = "zip"
 	}
 	return fmt.Sprintf("OpenPass_%s_%s_%s.%s", v, os, arch, ext)

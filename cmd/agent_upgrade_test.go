@@ -95,7 +95,7 @@ func TestApplyTierUpgrade(t *testing.T) {
 		t.Fatalf("save config error: %v", err)
 	}
 
-	if err := applyTierUpgrade(vaultDir, "test-agent", "standard", false); err != nil {
+	if err := applyTierUpgrade(vaultDir, "test-agent", false); err != nil {
 		t.Fatalf("applyTierUpgrade error: %v", err)
 	}
 
@@ -129,7 +129,7 @@ func TestApplyTierUpgrade_DryRun(t *testing.T) {
 		t.Fatalf("save config error: %v", err)
 	}
 
-	if err := applyTierUpgrade(vaultDir, "test-agent", "standard", true); err != nil {
+	if err := applyTierUpgrade(vaultDir, "test-agent", true); err != nil {
 		t.Fatalf("applyTierUpgrade dry-run error: %v", err)
 	}
 
@@ -152,7 +152,7 @@ func TestApplyTierUpgrade_MissingAgent(t *testing.T) {
 		t.Fatalf("save config error: %v", err)
 	}
 
-	err := applyTierUpgrade(vaultDir, "nonexistent-agent", "standard", false)
+	err := applyTierUpgrade(vaultDir, "nonexistent-agent", false)
 	if err == nil {
 		t.Fatal("expected error for nonexistent agent")
 	}
@@ -161,7 +161,7 @@ func TestApplyTierUpgrade_MissingAgent(t *testing.T) {
 func TestApplyTierUpgrade_NoConfig(t *testing.T) {
 	vaultDir := t.TempDir()
 
-	err := applyTierUpgrade(vaultDir, "test-agent", "standard", false)
+	err := applyTierUpgrade(vaultDir, "test-agent", false)
 	if err == nil {
 		t.Fatal("expected error when no config file exists")
 	}

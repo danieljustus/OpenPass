@@ -218,10 +218,12 @@ or a package manager, self-update is disabled and guidance is shown instead.`,
 				if wantJSONOutput(updateApplyJSON) {
 					encoder := json.NewEncoder(cmd.OutOrStdout())
 					encoder.SetIndent("", "  ")
-					_ = encoder.Encode(map[string]string{
+					if encodeErr := encoder.Encode(map[string]string{
 						"error":    err.Error(),
 						"guidance": unsupported.Guidance,
-					})
+					}); encodeErr != nil {
+						_ = encodeErr
+					}
 				} else {
 					cmd.PrintErrln("Error: " + err.Error())
 					cmd.PrintErrln("Guidance: " + unsupported.Guidance)

@@ -38,7 +38,7 @@ func (s *Server) handleAuditSelf(ctx context.Context, req CallToolRequest) (*Cal
 		}
 		return NewToolResultError(fmt.Sprintf("cannot read audit log: %v", err)), nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var events []auditEvent
 	scanner := bufio.NewScanner(f)
@@ -48,7 +48,7 @@ func (s *Server) handleAuditSelf(ctx context.Context, req CallToolRequest) (*Cal
 			continue
 		}
 		var entry audit.LogEntry
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+		if unmarshalErr := json.Unmarshal([]byte(line), &entry); unmarshalErr != nil {
 			continue
 		}
 		event := auditEvent{
@@ -67,8 +67,8 @@ func (s *Server) handleAuditSelf(ctx context.Context, req CallToolRequest) (*Cal
 		events = append(events, event)
 	}
 
-	if err := scanner.Err(); err != nil {
-		return NewToolResultError(fmt.Sprintf("error reading audit log: %v", err)), nil
+	if scanErr := scanner.Err(); scanErr != nil {
+		return NewToolResultError(fmt.Sprintf("error reading audit log: %v", scanErr)), nil
 	}
 
 	start := 0

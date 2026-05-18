@@ -53,7 +53,7 @@ func ExtractTarGz(data []byte, destDir, expectedBinaryName string) (string, erro
 	if err != nil {
 		return "", fmt.Errorf("decompress gzip: %w", err)
 	}
-	defer gr.Close()
+	defer func() { _ = gr.Close() }()
 
 	tr := tar.NewReader(gr)
 	var binaryPath string
@@ -129,14 +129,14 @@ func ExtractZip(data []byte, destDir, expectedBinaryName string) (string, error)
 		}
 
 		if f.FileInfo().IsDir() {
-			if err := os.MkdirAll(safePath, 0o755); err != nil {
-				return "", fmt.Errorf("create directory %q: %w", safePath, err)
+			if mkdirErr := os.MkdirAll(safePath, 0o755); mkdirErr != nil {
+				return "", fmt.Errorf("create directory %q: %w", safePath, mkdirErr)
 			}
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(safePath), 0o755); err != nil {
-			return "", fmt.Errorf("create parent dir for %q: %w", safePath, err)
+		if mkdirErr := os.MkdirAll(filepath.Dir(safePath), 0o755); mkdirErr != nil {
+			return "", fmt.Errorf("create parent dir for %q: %w", safePath, mkdirErr)
 		}
 
 		rc, err := f.Open()

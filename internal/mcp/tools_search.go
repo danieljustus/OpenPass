@@ -79,9 +79,9 @@ func (s *Server) handleSearch(ctx context.Context, req CallToolRequest) (*CallTo
 		for _, def := range matched {
 			names = append(names, def.Name)
 		}
-		resultJSON, err := json.Marshal(names)
-		if err != nil {
-			return nil, err
+		resultJSON, marshalErr := json.Marshal(names)
+		if marshalErr != nil {
+			return nil, marshalErr
 		}
 		return NewToolResultText(string(resultJSON)), nil
 	}

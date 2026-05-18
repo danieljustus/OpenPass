@@ -210,8 +210,8 @@ The new raw token is printed exactly once.`,
 
 		regPath := mcp.TokenRegistryFilePath(vDir)
 		reg := mcp.NewTokenRegistry(regPath)
-		if err := reg.Load(); err != nil {
-			return fmt.Errorf("load token registry: %w", err)
+		if loadErr := reg.Load(); loadErr != nil {
+			return fmt.Errorf("load token registry: %w", loadErr)
 		}
 
 		allTokens := reg.List()

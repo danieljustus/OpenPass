@@ -37,7 +37,7 @@ func (r AgentListResult) String() string {
 		return "No agents configured."
 	}
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("%-14s %-10s %-10s %-12s %s\n", "AGENT", "TIER", "TOKEN", "SKILL", "LAST SEEN"))
+	fmt.Fprintf(&b, "%-14s %-10s %-10s %-12s %s\n", "AGENT", "TIER", "TOKEN", "SKILL", "LAST SEEN")
 	b.WriteString(strings.Repeat("-", 70) + "\n")
 	for _, a := range r.Agents {
 		tokenStatus := "none"
@@ -59,8 +59,8 @@ func (r AgentListResult) String() string {
 			lastSeen = "-"
 		}
 
-		b.WriteString(fmt.Sprintf("%-14s %-10s %-10s %-12s %s\n",
-			a.Name, a.Tier, tokenStatus, skillStatus, lastSeen))
+		fmt.Fprintf(&b, "%-14s %-10s %-10s %-12s %s\n",
+			a.Name, a.Tier, tokenStatus, skillStatus, lastSeen)
 	}
 	return b.String()
 }

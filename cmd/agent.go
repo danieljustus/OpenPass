@@ -12,7 +12,6 @@ import (
 
 	configpkg "github.com/danieljustus/OpenPass/internal/config"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
-	"github.com/danieljustus/OpenPass/internal/mcp"
 )
 
 var agentWriteConfig bool
@@ -52,51 +51,6 @@ a token file, and outputs a ready-to-paste stdio MCP client configuration snippe
 		return errorspkg.NewCLIError(errorspkg.ExitNotFound,
 			"This command is deprecated in v4.0. Use: openpass agent install <name>", nil)
 	},
-}
-
-func promptSecurityTier(reader *bufio.Reader) string {
-	for {
-		fmt.Fprint(os.Stderr, "\nSelect security tier:\n")
-		fmt.Fprint(os.Stderr, "1) read-only — can list entries and read metadata only\n")
-		fmt.Fprint(os.Stderr, "2) standard — recommended, clipboard + autotype + approvals\n")
-		fmt.Fprint(os.Stderr, "3) admin — full access including commands and config\n")
-		fmt.Fprint(os.Stderr, "Choice [1-3] (default: 2): ")
-
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
-			continue
-		}
-		input = strings.TrimSpace(input)
-		if input == "" {
-			return "standard"
-		}
-
-		switch input {
-		case "1":
-			return "read-only"
-		case "2":
-			return "standard"
-		case "3":
-			return "admin"
-		default:
-			fmt.Fprint(os.Stderr, "Invalid choice. Please enter a number between 1 and 3.\n")
-		}
-	}
-}
-
-func promptVaultPathGlob(reader *bufio.Reader) string {
-	fmt.Fprint(os.Stderr, "\nAllowed vault path glob [*]: ")
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
-		return "*"
-	}
-	input = strings.TrimSpace(input)
-	if input == "" {
-		return "*"
-	}
-	return input
 }
 
 func promptApprovalMode(reader *bufio.Reader) string {
@@ -174,28 +128,6 @@ func saveAgentConfig(vaultDir, name string, profile configpkg.AgentProfile) erro
 	}
 	cfg.Agents[name] = profile
 	return cfg.SaveTo(configPath)
-}
-
-func createAgentToken(vaultDir, name string) (string, string, error) {
-	if err := validateAgentName(name); err != nil {
-		return "", "", err
-	}
-	regPath := mcp.TokenRegistryFilePath(vaultDir)
-	reg := mcp.NewTokenRegistry(regPath)
-	if err := reg.Load(); err != nil {
-		return "", "", fmt.Errorf("load token registry: %w", err)
-	}
-
-	token, rawToken, err := reg.Create(name, []string{"*"}, name, 0)
-	if err != nil {
-		return "", "", fmt.Errorf("create token: %w", err)
-	}
-
-	if err := reg.Save(); err != nil {
-		return "", "", fmt.Errorf("save token registry: %w", err)
-	}
-
-	return token.ID, rawToken, nil
 }
 
 func writeAgentTokenFile(vaultDir, name, rawToken string) (string, error) {

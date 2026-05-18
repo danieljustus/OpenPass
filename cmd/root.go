@@ -128,8 +128,6 @@ var noPipeWarning bool
 var colorMode string
 var themePreset string
 
-var agentCtx *agentctx.AgentContext
-
 var rootCmd = &cobra.Command{
 	Use:   "openpass",
 	Short: "OpenPass is a Go CLI password manager",
@@ -159,12 +157,11 @@ Daily use:
 
 		// Agent mode: if OPENPASS_AGENT is set, load agent context from config.
 		if agentName := os.Getenv("OPENPASS_AGENT"); agentName != "" {
-			ctx, loadErr := agentctx.Load(agentName, vDir)
+			_, loadErr := agentctx.Load(agentName, vDir)
 			if loadErr != nil {
 				return errorspkg.NewCLIError(errorspkg.ExitPermissionDenied,
 					fmt.Sprintf("agent mode: %s", loadErr.Error()), loadErr)
 			}
-			agentCtx = ctx
 		}
 
 		return nil
@@ -473,19 +470,4 @@ func commandRequiresVault(cmd *cobra.Command) bool {
 		}
 	}
 	return true
-}
-
-// agentContext returns the loaded agent context, or nil if not in agent mode.
-func agentContext() *agentctx.AgentContext {
-	return agentCtx
-}
-
-// requireAgentContext returns the loaded agent context or an error if not in
-// agent mode. Command handlers use this to enforce agent-only operations.
-func requireAgentContext() (*agentctx.AgentContext, error) {
-	if agentCtx == nil {
-		return nil, errorspkg.NewCLIError(errorspkg.ExitPermissionDenied,
-			"not running in agent mode (OPENPASS_AGENT not set)", nil)
-	}
-	return agentCtx, nil
 }

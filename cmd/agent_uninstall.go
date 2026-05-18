@@ -71,7 +71,7 @@ agent's profile in config.yaml. Use --yes to skip the confirmation prompt.`,
 		}
 
 		if !agentUninstallYes && !confirmUninstall(agentName) {
-			fmt.Fprintln(os.Stderr, "Uninstall cancelled.")
+			fmt.Fprintln(os.Stderr, "Uninstall canceled.")
 			return nil
 		}
 

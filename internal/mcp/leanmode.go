@@ -15,15 +15,6 @@ var LeanToolSet = []string{
 	"openpass_audit_self",
 }
 
-func isLeanTool(name string) bool {
-	for _, t := range LeanToolSet {
-		if t == name {
-			return true
-		}
-	}
-	return false
-}
-
 func filterLeanTools(tools []map[string]any) []map[string]any {
 	leanSet := make(map[string]bool, len(LeanToolSet))
 	for _, t := range LeanToolSet {

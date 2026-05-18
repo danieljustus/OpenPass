@@ -97,8 +97,8 @@ func Apply(ctx context.Context, currentVersion string, force, dryRun bool) (*App
 	}
 
 	an := archiveName(result.LatestVersion, runtime.GOOS, runtime.GOARCH)
-	if err := VerifyChecksum(archiveData, checksums, an); err != nil {
-		return nil, fmt.Errorf("verify checksum: %w", err)
+	if verifyErr := VerifyChecksum(archiveData, checksums, an); verifyErr != nil {
+		return nil, fmt.Errorf("verify checksum: %w", verifyErr)
 	}
 
 	newBinaryData, err := extractBinaryFromArchive(archiveData)
@@ -121,7 +121,7 @@ func Apply(ctx context.Context, currentVersion string, force, dryRun bool) (*App
 	}
 
 	bp := binaryPath + backupSuffix
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windowsOS {
 		bp = binaryPath + windowsBackupSuffix
 	}
 
@@ -142,12 +142,12 @@ func extractBinaryFromArchive(archiveData []byte) ([]byte, error) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	binName := binaryName
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windowsOS {
 		binName += ".exe"
 	}
 
 	var extractedPath string
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windowsOS {
 		extractedPath, err = ExtractZip(archiveData, tmpDir, binName)
 	} else {
 		extractedPath, err = ExtractTarGz(archiveData, tmpDir, binName)

@@ -352,7 +352,7 @@ func createAgentTokenInRegistry(vDir, name string, dryRun bool) (string, error) 
 	return token.ID, nil
 }
 
-func installMCPConfig(vDir string, agentType install.AgentType, agentName string, httpMode, dryRun bool) (string, string, error) {
+func installMCPConfig(vDir string, agentType install.AgentType, _ string, httpMode, dryRun bool) (string, string, error) {
 	def, err := install.GetAgentDefinition(agentType)
 	if err != nil {
 		return "", "", err

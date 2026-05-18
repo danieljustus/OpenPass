@@ -53,7 +53,7 @@ var agentProfileShowCmd = &cobra.Command{
 		default:
 			enc := yaml.NewEncoder(cmd.OutOrStdout())
 			enc.SetIndent(2)
-			defer enc.Close()
+			defer func() { _ = enc.Close() }()
 			return enc.Encode(profile)
 		}
 	},
@@ -88,26 +88,26 @@ After saving, the profile is validated and you are prompted to apply changes.`,
 			return fmt.Errorf("create temp file: %w", err)
 		}
 		tmpPath := tmpFile.Name()
-		defer os.Remove(tmpPath)
+		defer func() { _ = os.Remove(tmpPath) }()
 
 		section, err := extractAgentSection(data, agentName)
 		if err != nil {
-			tmpFile.Close()
+			_ = tmpFile.Close()
 			return fmt.Errorf("extract agent section: %w", err)
 		}
 
-		if _, err := tmpFile.Write(section); err != nil {
-			tmpFile.Close()
-			return fmt.Errorf("write temp file: %w", err)
+		if _, writeErr := tmpFile.Write(section); writeErr != nil {
+			_ = tmpFile.Close()
+			return fmt.Errorf("write temp file: %w", writeErr)
 		}
-		tmpFile.Close()
+		_ = tmpFile.Close()
 
 		editorCmd := exec.Command(editor, tmpPath)
 		editorCmd.Stdin = os.Stdin
 		editorCmd.Stdout = os.Stdout
 		editorCmd.Stderr = os.Stderr
-		if err := editorCmd.Run(); err != nil {
-			return fmt.Errorf("editor exited with error: %w", err)
+		if runErr := editorCmd.Run(); runErr != nil {
+			return fmt.Errorf("editor exited with error: %w", runErr)
 		}
 
 		editedData, err := os.ReadFile(tmpPath)
@@ -116,8 +116,8 @@ After saving, the profile is validated and you are prompted to apply changes.`,
 		}
 
 		var editedProfile configpkg.AgentProfile
-		if err := yaml.Unmarshal(editedData, &editedProfile); err != nil {
-			return fmt.Errorf("invalid YAML in edited profile: %w", err)
+		if unmarshalErr := yaml.Unmarshal(editedData, &editedProfile); unmarshalErr != nil {
+			return fmt.Errorf("invalid YAML in edited profile: %w", unmarshalErr)
 		}
 
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Edited profile for %q:\n", agentName)
@@ -125,7 +125,7 @@ After saving, the profile is validated and you are prompted to apply changes.`,
 
 		_, _ = fmt.Fprint(cmd.ErrOrStderr(), "\nApply changes? [y/N] ")
 		var response string
-		fmt.Scanln(&response)
+		_, _ = fmt.Scanln(&response)
 		response = strings.TrimSpace(strings.ToLower(response))
 		if response != "y" && response != "yes" {
 			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Changes discarded.")
@@ -172,7 +172,7 @@ Output is in YAML format by default.`,
 			if err != nil {
 				return fmt.Errorf("create output file: %w", err)
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			out = f
 		} else {
 			out = os.Stdout
@@ -180,7 +180,7 @@ Output is in YAML format by default.`,
 
 		enc := yaml.NewEncoder(out)
 		enc.SetIndent(2)
-		defer enc.Close()
+		defer func() { _ = enc.Close() }()
 		return enc.Encode(profile)
 	},
 }
@@ -233,7 +233,7 @@ func extractAgentSection(data []byte, agentName string) ([]byte, error) {
 func showProfilePreview(cmd *cobra.Command, profile *configpkg.AgentProfile) {
 	enc := yaml.NewEncoder(cmd.OutOrStdout())
 	enc.SetIndent(2)
-	defer enc.Close()
+	defer func() { _ = enc.Close() }()
 	_ = enc.Encode(profile)
 }
 

@@ -134,36 +134,36 @@ func countAgentTokens(vaultDir, agentName string) int {
 }
 
 func printWhoamiTable(cmd *cobra.Command, info whoamiInfo) {
-	fmt.Fprintf(cmd.OutOrStdout(), "Agent:      %s\n", info.Name)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Agent:      %s\n", info.Name)
 	if info.Tier != "" {
-		fmt.Fprintf(cmd.OutOrStdout(), "Tier:       %s\n", info.Tier)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Tier:       %s\n", info.Tier)
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Paths:      %s\n", strings.Join(info.AllowedPaths, ", "))
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Paths:      %s\n", strings.Join(info.AllowedPaths, ", "))
 	if len(info.AllowedTools) > 0 {
-		fmt.Fprintf(cmd.OutOrStdout(), "Tools:      %s\n", strings.Join(info.AllowedTools, ", "))
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Tools:      %s\n", strings.Join(info.AllowedTools, ", "))
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Write:      %t\n", info.CanWrite)
-	fmt.Fprintf(cmd.OutOrStdout(), "Read Vals:  %t\n", info.CanReadValues)
-	fmt.Fprintf(cmd.OutOrStdout(), "Clipboard:  %t\n", info.CanUseClipboard)
-	fmt.Fprintf(cmd.OutOrStdout(), "Autotype:   %t\n", info.CanUseAutotype)
-	fmt.Fprintf(cmd.OutOrStdout(), "Commands:   %t\n", info.CanRunCommands)
-	fmt.Fprintf(cmd.OutOrStdout(), "Config:     %t\n", info.CanManageConfig)
-	fmt.Fprintf(cmd.OutOrStdout(), "Approval:   %s\n", info.ApprovalMode)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Write:      %t\n", info.CanWrite)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Read Vals:  %t\n", info.CanReadValues)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Clipboard:  %t\n", info.CanUseClipboard)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Autotype:   %t\n", info.CanUseAutotype)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Commands:   %t\n", info.CanRunCommands)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Config:     %t\n", info.CanManageConfig)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Approval:   %s\n", info.ApprovalMode)
 	if info.Quotas.MaxReadsPerHour > 0 {
-		fmt.Fprintf(cmd.OutOrStdout(), "Quota/hr:   %d\n", info.Quotas.MaxReadsPerHour)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Quota/hr:   %d\n", info.Quotas.MaxReadsPerHour)
 	}
 	if info.Quotas.MaxReadsPerDay > 0 {
-		fmt.Fprintf(cmd.OutOrStdout(), "Quota/day:  %d\n", info.Quotas.MaxReadsPerDay)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Quota/day:  %d\n", info.Quotas.MaxReadsPerDay)
 	}
 	if info.Quotas.MaxSecretsInSession > 0 {
-		fmt.Fprintf(cmd.OutOrStdout(), "Quota/sess: %d\n", info.Quotas.MaxSecretsInSession)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Quota/sess: %d\n", info.Quotas.MaxSecretsInSession)
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Tokens:     %d active\n", info.TokenCount)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Tokens:     %d active\n", info.TokenCount)
 	if info.TokenFile != "" {
-		fmt.Fprintf(cmd.OutOrStdout(), "Token File: %s\n", info.TokenFile)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Token File: %s\n", info.TokenFile)
 	}
 	if info.SkillPath != "" {
-		fmt.Fprintf(cmd.OutOrStdout(), "Skill:      %s\n", info.SkillPath)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Skill:      %s\n", info.SkillPath)
 	}
 }
 

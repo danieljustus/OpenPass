@@ -16,11 +16,12 @@ import (
 )
 
 var (
-	agentUpgradeTier   string
-	agentUpgradeDryRun bool
-	agentUpgradeYes    bool
-	agentUpgradeReason string
-	agentUpgradeRotate bool
+	agentUpgradeTier       string
+	agentUpgradeDryRun     bool
+	agentUpgradeYes        bool
+	agentUpgradeReason     string
+	agentUpgradeRotate     bool
+	agentUpgradeValidTiers = map[string]bool{"read-only": true, "standard": true, "admin": true}
 )
 
 type tierDiff struct {
@@ -77,7 +78,7 @@ func computeTierDiff(old, new configpkg.AgentProfile) []tierDiff {
 	return diffs
 }
 
-func applyTierUpgrade(vaultDir, agentName, targetTier string, dryRun bool) error {
+func applyTierUpgrade(vaultDir, agentName string, dryRun bool) error {
 	configPath := filepath.Join(vaultDir, "config.yaml")
 	cfg, err := configpkg.Load(configPath)
 	if err != nil {
@@ -89,8 +90,9 @@ func applyTierUpgrade(vaultDir, agentName, targetTier string, dryRun bool) error
 		return fmt.Errorf("agent %q not found in config", agentName)
 	}
 
-	configpkg.ApplyTierPreset(&profile, targetTier)
-	profile.Tier = targetTier
+	const standardTier = "standard"
+	configpkg.ApplyTierPreset(&profile, standardTier)
+	profile.Tier = standardTier
 
 	if dryRun {
 		return nil
@@ -156,8 +158,7 @@ an audit trail.`,
 			return fmt.Errorf("--reason is required when using --yes")
 		}
 
-		validTiers := map[string]bool{"read-only": true, "standard": true, "admin": true}
-		if !validTiers[agentUpgradeTier] {
+		if !agentUpgradeValidTiers[agentUpgradeTier] {
 			return fmt.Errorf("invalid tier %q: valid values are read-only, standard, admin", agentUpgradeTier)
 		}
 
@@ -203,7 +204,7 @@ an audit trail.`,
 		}
 
 		if !agentUpgradeYes && !confirmUpgrade(agentName, agentUpgradeTier) {
-			fmt.Fprintln(os.Stderr, "Upgrade cancelled.")
+			fmt.Fprintln(os.Stderr, "Upgrade canceled.")
 			return nil
 		}
 

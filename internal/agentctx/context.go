@@ -64,7 +64,7 @@ type AgentContext struct {
 }
 
 // Load loads an agent profile from config.yaml in vaultDir for the given agentName.
-// It initialises the audit logger and returns an error if the config cannot be
+// It initializes the audit logger and returns an error if the config cannot be
 // loaded or the agent is not found.
 func Load(agentName, vaultDir string) (*AgentContext, error) {
 	if vaultDir == "" {
@@ -236,7 +236,7 @@ func normalizeTier(tier string) string {
 	case tierAdmin:
 		return tierAdmin
 	default:
-		// Default to standard for unrecognised tiers — the strictest
+		// Default to standard for unrecognized tiers — the strictest
 		// common-sense default outside explicit safe/admin.
 		return tierStandard
 	}
@@ -305,7 +305,7 @@ func (ctx *AgentContext) writeFallbackAudit(action, path, reason string, ok bool
 	if err != nil {
 		return fmt.Errorf("open audit file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	_, err = f.Write(data)
 	return err
