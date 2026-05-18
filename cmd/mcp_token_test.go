@@ -61,6 +61,7 @@ func TestMCPTokenCreate_Defaults(t *testing.T) {
 	}
 }
 
+//nolint:dupl
 func TestMCPTokenCreate_WithToolsAndAgent(t *testing.T) {
 	vaultDir := t.TempDir()
 	_ = os.Setenv("OPENPASS_VAULT", vaultDir)
@@ -96,6 +97,7 @@ func TestMCPTokenCreate_WithToolsAndAgent(t *testing.T) {
 	}
 }
 
+//nolint:dupl
 func TestMCPTokenCreate_MultipleToolFlags(t *testing.T) {
 	vaultDir := t.TempDir()
 	_ = os.Setenv("OPENPASS_VAULT", vaultDir)
@@ -565,6 +567,7 @@ func TestResolveTokenTTL_DefaultFallback(t *testing.T) {
 	}
 }
 
+//nolint:dupl
 func TestMCPTokenCreate_ZeroTTL(t *testing.T) {
 	vaultDir := t.TempDir()
 	_ = os.Setenv("OPENPASS_VAULT", vaultDir)
@@ -647,6 +650,7 @@ func TestMCPTokenList_ExpiredTokenExcluded(t *testing.T) {
 	}
 }
 
+//nolint:dupl
 func TestMCPTokenCreate_PreservesInRegistry(t *testing.T) {
 	vaultDir := t.TempDir()
 	_ = os.Setenv("OPENPASS_VAULT", vaultDir)
@@ -757,6 +761,7 @@ func TestMCPTokenCreate_ToolsLongOutput(t *testing.T) {
 	}
 }
 
+//nolint:dupl
 func TestMCPTokenList_HeaderFormat(t *testing.T) {
 	vaultDir := t.TempDir()
 	_ = os.Setenv("OPENPASS_VAULT", vaultDir)
@@ -812,6 +817,7 @@ func TestMCPCmdRegistration(t *testing.T) {
 	}
 }
 
+//nolint:dupl
 //nolint:dupl
 func TestMCPTokenCreate_NegativeDayTTL(t *testing.T) {
 	vaultDir := t.TempDir()
@@ -1011,6 +1017,7 @@ func TestMCPTokenCreate_WithDaySuffixTTL(t *testing.T) {
 	}
 }
 
+//nolint:dupl
 func TestMCPTokenList_EmptyAgentAndLabel(t *testing.T) {
 	vaultDir := t.TempDir()
 	_ = os.Setenv("OPENPASS_VAULT", vaultDir)

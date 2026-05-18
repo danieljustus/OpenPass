@@ -37,12 +37,13 @@ func openQuotaFile(path string) (*os.File, error) {
 
 // lock acquires an exclusive byte-range lock (LockFileEx) on the quota file.
 func (qc *QuotaCounter) lock() error {
+	var ol windows.Overlapped
 	if err := windows.LockFileEx(
 		windows.Handle(qc.file.Fd()),
 		windows.LOCKFILE_EXCLUSIVE_LOCK,
 		0,
 		1, 0, // lock 1 byte
-		nil,
+		&ol,
 	); err != nil {
 		return fmt.Errorf("LockFileEx: %w", err)
 	}
@@ -51,11 +52,12 @@ func (qc *QuotaCounter) lock() error {
 
 // unlock releases the byte-range lock (UnlockFileEx) on the quota file.
 func (qc *QuotaCounter) unlock() error {
+	var ol windows.Overlapped
 	if err := windows.UnlockFileEx(
 		windows.Handle(qc.file.Fd()),
 		0,
 		1, 0, // must match the byte range used in lock()
-		nil,
+		&ol,
 	); err != nil {
 		return fmt.Errorf("UnlockFileEx: %w", err)
 	}
