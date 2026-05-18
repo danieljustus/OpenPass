@@ -7,6 +7,9 @@ import (
 	"sync"
 	"syscall"
 
+	"net"
+	"strings"
+
 	"github.com/spf13/cobra"
 
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
@@ -23,6 +26,17 @@ var runHTTPServerFunc = func(ctx context.Context, bind string, port int, vault *
 	return serverbootstrap.RunHTTPServer(ctx, bind, port, vault, vaultDir, Version, mcp.New)
 }
 var findAvailablePortFunc = findAvailablePort
+
+// isLocalhostBind returns true if bind refers to the loopback interface
+// (127.0.0.1, localhost, ::1, or similar).
+func isLocalhostBind(bind string) bool {
+	bind = strings.TrimSpace(bind)
+	if bind == "127.0.0.1" || bind == "localhost" || bind == "::1" {
+		return true
+	}
+	ip := net.ParseIP(bind)
+	return ip != nil && ip.IsLoopback()
+}
 var serveUnlockVault = unlockVault
 
 //nolint:gocyclo // Complex CLI orchestration: vault unlock + server bootstrap + signal handling
@@ -45,6 +59,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 	if bind == "" {
 		return fmt.Errorf("--bind must not be empty; use '127.0.0.1' for localhost-only")
+	}
+	if !isLocalhostBind(bind) {
+		fmt.Fprintf(os.Stderr, "Warning: binding to %s without TLS — traffic will be unencrypted. Use --tls-cert/--tls-key for secure connections.\n", bind)
 	}
 	if stdioFlag && agentName == "" {
 		return fmt.Errorf("--agent is required in --stdio mode")
