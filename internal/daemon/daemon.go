@@ -76,7 +76,7 @@ type InstallOpts struct {
 // hasDisallowedChars returns true if s contains characters that would allow
 // template injection in plist XML or systemd unit files.
 func hasDisallowedChars(s string) bool {
-	return strings.ContainsAny(s, "\n\r<>\"'")
+	return strings.ContainsAny(s, "\n\r<>\"'$`;&|")
 }
 
 // validateInstallOptions validates that all user-supplied options are safe
@@ -87,19 +87,19 @@ func validateInstallOptions(opts InstallOpts) error {
 	if !filepath.IsAbs(opts.BinaryPath) {
 		errs = append(errs, "binary path must be an absolute path")
 	} else if hasDisallowedChars(opts.BinaryPath) {
-		errs = append(errs, "binary path contains disallowed characters (newlines or <>\"')")
+		errs = append(errs, "binary path contains disallowed characters (newlines, <>\"'$`;&|)")
 	}
 
 	if !filepath.IsAbs(opts.VaultDir) {
 		errs = append(errs, "vault directory must be an absolute path")
 	} else if hasDisallowedChars(opts.VaultDir) {
-		errs = append(errs, "vault directory contains disallowed characters (newlines or <>\"')")
+		errs = append(errs, "vault directory contains disallowed characters (newlines, <>\"'$`;&|)")
 	}
 
 	if opts.Bind == "" {
 		errs = append(errs, "bind address must not be empty")
 	} else if hasDisallowedChars(opts.Bind) {
-		errs = append(errs, "bind address contains disallowed characters (newlines or <>\"')")
+		errs = append(errs, "bind address contains disallowed characters (newlines, <>\"'$`;&|)")
 	}
 
 	if opts.Port < 1 || opts.Port > 65535 {
@@ -112,11 +112,10 @@ func validateInstallOptions(opts InstallOpts) error {
 	return nil
 }
 
-// systemdEscape escapes a value for safe inclusion in a systemd unit file.
-// Backslashes and double-quotes are escaped per systemd.syntax rules.
 func systemdEscape(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, `"`, `\"`)
+	s = strings.ReplaceAll(s, "$", "$$")
 	return s
 }
 

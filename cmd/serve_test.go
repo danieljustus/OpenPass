@@ -1232,6 +1232,96 @@ func TestServe_HTTPSignalShutdown(t *testing.T) {
 	}
 }
 
+func TestIsLocalhostBind(t *testing.T) {
+	tests := []struct {
+		bind string
+		want bool
+	}{
+		{"127.0.0.1", true},
+		{"localhost", true},
+		{"::1", true},
+		{"0.0.0.0", false},
+		{"192.168.1.1", false},
+		{"10.0.0.1", false},
+		{"", false},
+		{"::", false},
+	}
+	for _, tt := range tests {
+		got := isLocalhostBind(tt.bind)
+		if got != tt.want {
+			t.Errorf("isLocalhostBind(%q) = %v, want %v", tt.bind, got, tt.want)
+		}
+	}
+}
+
+func TestCmdServe_NonLoopbackWarning(t *testing.T) {
+	vaultDir := t.TempDir()
+	identity := testutil.TempIdentity(t)
+	cfg := config.Default()
+	cfg.VaultDir = vaultDir
+	if err := vaultpkg.Init(vaultDir, identity, cfg); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+	vaultFlagReset(t)
+
+	const port = 18181
+	httpDone := make(chan struct{}, 1)
+
+	origFindAvailablePort := findAvailablePortFunc
+	findAvailablePortFunc = func(bind string, preferredPort int) (int, bool, error) {
+		return preferredPort, true, nil
+	}
+	defer func() { findAvailablePortFunc = origFindAvailablePort }()
+
+	serveSignals := make(chan chan<- os.Signal, 1)
+	origNotify := serveSignalNotify
+	serveSignalNotify = func(c chan<- os.Signal, sigs ...os.Signal) {
+		serveSignals <- c
+	}
+	defer func() { serveSignalNotify = origNotify }()
+
+	origUnlock := serveUnlockVault
+	serveUnlockVault = func(vaultDir string, interactive bool) (*vaultpkg.Vault, error) {
+		return &vaultpkg.Vault{Dir: vaultDir, Identity: identity, Config: cfg}, nil
+	}
+	defer func() { serveUnlockVault = origUnlock }()
+
+	origHTTP := runHTTPServerFunc
+	runHTTPServerFunc = func(ctx context.Context, bind string, gotPort int, v *vaultpkg.Vault) error {
+		<-ctx.Done()
+		httpDone <- struct{}{}
+		return nil
+	}
+	defer func() { runHTTPServerFunc = origHTTP }()
+
+	_ = serveCmd.Flags().Set("stdio", "false")
+	_ = serveCmd.Flags().Set("agent", "")
+	_ = serveCmd.Flags().Set("port", fmt.Sprintf("%d", port))
+	_ = serveCmd.Flags().Set("bind", "0.0.0.0")
+
+	rootCmd.SetArgs([]string{"--vault", vaultDir, "serve", "--bind", "0.0.0.0", "--port", fmt.Sprintf("%d", port)})
+	t.Cleanup(func() {
+		rootCmd.SetArgs(nil)
+		_ = serveCmd.Flags().Set("bind", "127.0.0.1")
+	})
+
+	done := make(chan struct{})
+	stderr := captureStderr(func() {
+		go func() {
+			_ = rootCmd.Execute()
+			close(done)
+		}()
+		sigCh := <-serveSignals
+		sigCh <- syscall.SIGINT
+		<-httpDone
+		<-done
+	})
+
+	if !strings.Contains(stderr, "Warning:") || !strings.Contains(stderr, "unencrypted") {
+		t.Errorf("expected TLS warning on stderr for non-loopback bind, got: %s", stderr)
+	}
+}
+
 func TestServe_StdioError(t *testing.T) {
 	resetVaultState(t)
 

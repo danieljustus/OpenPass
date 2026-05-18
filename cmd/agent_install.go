@@ -303,7 +303,7 @@ func createAgentProfileConfig(vDir, name, tier string, force, dryRun bool) (stri
 func buildInstallProfile(name, tier string) configpkg.AgentProfile {
 	profile := configpkg.AgentProfile{
 		Name:         name,
-		AllowedPaths: []string{"*"},
+		AllowedPaths: []string{},
 		Tier:         tier,
 	}
 

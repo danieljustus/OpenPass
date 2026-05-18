@@ -314,6 +314,8 @@ func TestSystemdEscape(t *testing.T) {
 		{`path"with"quotes`, `path\"with\"quotes`},
 		{`path\with\backslashes`, `path\\with\\backslashes`},
 		{`mixed\and"quotes`, `mixed\\and\"quotes`},
+		{"path`with`backticks", "path`with`backticks"},
+		{"path$with$dollars", "path$$with$$dollars"},
 		{"normal/path", "normal/path"},
 		{"", ""},
 	}
@@ -369,6 +371,32 @@ func TestValidateInstallOptions_DisallowedCharsInVaultDir(t *testing.T) {
 			}
 			if err := validateInstallOptions(opts); err == nil {
 				t.Errorf("expected error for vaultDir with %s", tt.name)
+			}
+		})
+	}
+}
+
+func TestValidateInstallOptions_DisallowedShellMetacharacters(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{"dollar sign", "/usr/bin/$openpass"},
+		{"backtick", "/usr/bin/`openpass`"},
+		{"semicolon", "/usr/bin/openpass;rm"},
+		{"ampersand", "/usr/bin/openpass&"},
+		{"pipe", "/usr/bin/openpass|"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := InstallOpts{
+				BinaryPath: tt.value,
+				VaultDir:   "/home/user/.openpass",
+				Bind:       "127.0.0.1",
+				Port:       8080,
+			}
+			if err := validateInstallOptions(opts); err == nil {
+				t.Errorf("expected error for binaryPath with %s", tt.name)
 			}
 		})
 	}

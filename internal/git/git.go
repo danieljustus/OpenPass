@@ -12,6 +12,8 @@ import (
 	gogit "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
+	gossh "golang.org/x/crypto/ssh"
 )
 
 var errStopIter = errors.New("stop iteration")
@@ -303,6 +305,51 @@ func AutoCommit(vaultDir string, message string) error {
 	return AutoCommitWithOptions(vaultDir, CommitOptions{Message: message})
 }
 
+// isSSHURL returns true if the remote URL uses SSH protocol (git@ or ssh://).
+func isSSHURL(url string) bool {
+	return strings.HasPrefix(url, "git@") || strings.HasPrefix(url, "ssh://")
+}
+
+// getSSHAuth creates an SSH agent auth method with known_hosts verification.
+func getSSHAuth() (*ssh.PublicKeysCallback, error) {
+	auth, err := ssh.NewSSHAgentAuth("git")
+	if err != nil {
+		return nil, err
+	}
+	khFile := filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")
+	cb, err := ssh.NewKnownHostsCallback(khFile)
+	if err == nil {
+		auth.HostKeyCallback = cb
+	} else {
+		auth.HostKeyCallback = gossh.InsecureIgnoreHostKey()
+	}
+	return auth, nil
+}
+
+// pushWithSSHAuth performs a push with SSH auth when the remote uses SSH protocol.
+func pushWithSSHAuth(repo *gogit.Repository, remoteURL string) error {
+	opts := &gogit.PushOptions{RemoteName: "origin"}
+	if isSSHURL(remoteURL) {
+		auth, err := getSSHAuth()
+		if err == nil {
+			opts.Auth = auth
+		}
+	}
+	return repo.Push(opts)
+}
+
+// pullWithSSHAuth performs a pull with SSH auth when the remote uses SSH protocol.
+func pullWithSSHAuth(w *gogit.Worktree, remoteURL string) error {
+	opts := &gogit.PullOptions{RemoteName: "origin"}
+	if isSSHURL(remoteURL) {
+		auth, err := getSSHAuth()
+		if err == nil {
+			opts.Auth = auth
+		}
+	}
+	return w.Pull(opts)
+}
+
 // PushWithResult pushes to origin and returns detailed result
 func PushWithResult(vaultDir string) PushResult {
 	result := PushResult{Success: false, Skipped: false}
@@ -338,7 +385,7 @@ func PushWithResult(vaultDir string) PushResult {
 		return result
 	}
 
-	err = repo.Push(&gogit.PushOptions{RemoteName: "origin"}) // #nosec G106 — push uses user's configured git remote with standard git-go auth
+	err = pushWithSSHAuth(repo, originRemote.Config().URLs[0])
 	if err == nil {
 		result.Success = true
 		return result
@@ -475,7 +522,7 @@ func PullWithResult(vaultDir string) PullResult {
 		return result
 	}
 
-	pullErr := w.Pull(&gogit.PullOptions{RemoteName: "origin"})
+	pullErr := pullWithSSHAuth(w, originRemote.Config().URLs[0])
 	if pullErr == nil || errors.Is(pullErr, gogit.NoErrAlreadyUpToDate) {
 		result.Success = true
 		return result
@@ -503,6 +550,25 @@ func PullWithResult(vaultDir string) PullResult {
 			Cause:   pullErr,
 		}
 		return result
+	}
+
+	// Auto-resolve conflicts: save local changes as .conflict-<hostname> variants
+	hostname, _ := os.Hostname()
+	if hostname == "" {
+		hostname = "unknown"
+	}
+	resolveErr := ResolveConflicts(vaultDir, hostname)
+	if resolveErr == nil {
+		w2, wtErr := repo.Worktree()
+		if wtErr == nil {
+			if s, _ := w2.Status(); s != nil {
+				for path := range s {
+					if strings.Contains(path, ".conflict-") {
+						result.Conflicts = append(result.Conflicts, path)
+					}
+				}
+			}
+		}
 	}
 
 	result.Error = &PushError{

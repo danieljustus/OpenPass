@@ -22,7 +22,7 @@ var TierPresets = map[TierPreset]AgentProfile{
 		CanReadValues:    false,
 		ExposeValueTools: false,
 		AutoUnseal:       false,
-		ApprovalMode:     "none",
+		ApprovalMode:     "deny",
 		RequireApproval:  false,
 		AllowedPaths:     []string{},
 	},
