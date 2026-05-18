@@ -164,6 +164,8 @@ func writeSkill(targetPath string, data []byte) error {
 }
 
 func backupFile(path string) error {
+	path = filepath.Clean(path)
+
 	src, err := os.ReadFile(path)
 	if err != nil {
 		return err
