@@ -177,6 +177,17 @@ func TestTierPresetMapping(t *testing.T) {
 	}
 }
 
+func TestBuildInstallProfile_AllowedPathsDefault(t *testing.T) {
+	for _, tier := range []string{"safe", "standard", "admin"} {
+		t.Run(tier, func(t *testing.T) {
+			profile := buildInstallProfile("test", tier)
+			if len(profile.AllowedPaths) != 0 {
+				t.Errorf("AllowedPaths = %v, want empty (deny-all)", profile.AllowedPaths)
+			}
+		})
+	}
+}
+
 func TestCreateAgentProfileConfig_PreservesSkillPath(t *testing.T) {
 	vaultDir := t.TempDir()
 	configPath := filepath.Join(vaultDir, "config.yaml")
