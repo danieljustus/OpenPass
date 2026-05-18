@@ -697,14 +697,16 @@ func LoadOrCreateToken(path string) (string, error) {
 	if err == nil {
 		token := strings.TrimSpace(string(data))
 		if token != "" {
-			if envToken := os.Getenv("OPENPASS_MCP_TOKEN"); envToken != "" {
-				fmt.Fprintf(os.Stderr, "Warning: OPENPASS_MCP_TOKEN is set but file token exists at %s; using file token\n", path)
-			}
+	if envToken := os.Getenv("OPENPASS_MCP_TOKEN"); envToken != "" {
+			fmt.Fprintf(os.Stderr, "Warning: OPENPASS_MCP_TOKEN is set but file token exists at %s; using file token\n", path)
+			_ = os.Unsetenv("OPENPASS_MCP_TOKEN")
+		}
 			return token, nil
 		}
 	}
 
 	if envToken := os.Getenv("OPENPASS_MCP_TOKEN"); envToken != "" {
+		_ = os.Unsetenv("OPENPASS_MCP_TOKEN")
 		return envToken, nil
 	}
 
