@@ -317,9 +317,9 @@ func writeEntryLocked(vaultDir, path string, entry *Entry, identity *age.X25519I
 	if err := SafeWriteFile(filePath, ciphertext, 0o600); err != nil {
 		return err
 	}
-	if err := UpdateManifestEntry(vaultDir, path, ciphertext, identity); err != nil {
-		return fmt.Errorf("update manifest: %w", err)
-	}
+	// Defer manifest update — will be processed by background worker
+	// after the write lock is released.
+	queueManifestUpdate(vaultDir, path, ciphertext, identity)
 	return nil
 }
 
@@ -408,10 +408,7 @@ func DeleteEntry(vaultDir, path string, identity *age.X25519Identity) error {
 			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
-		if err := RemoveManifestEntry(vaultDir, path, identity); err != nil {
-			span.SetStatus(codes.Error, err.Error())
-			return fmt.Errorf("remove from manifest: %w", err)
-		}
+		queueManifestRemove(vaultDir, path, identity)
 		return nil
 	}
 
@@ -425,10 +422,7 @@ func DeleteEntry(vaultDir, path string, identity *age.X25519Identity) error {
 			return err
 		}
 	}
-	if err := RemoveManifestEntry(vaultDir, path, identity); err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return fmt.Errorf("remove from manifest: %w", err)
-	}
+	queueManifestRemove(vaultDir, path, identity)
 	return nil
 }
 

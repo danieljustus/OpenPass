@@ -92,9 +92,6 @@ func reencryptFile(vaultDir string, path string, identity *age.X25519Identity, r
 	}
 
 	relPath := strings.TrimSuffix(strings.TrimPrefix(path, filepath.Join(vaultDir, "entries")+string(filepath.Separator)), ".age")
-	if err := UpdateManifestEntry(vaultDir, filepath.ToSlash(relPath), ciphertext, identity); err != nil {
-		return fmt.Errorf("update manifest: %w", err)
-	}
-
+	queueManifestUpdate(vaultDir, filepath.ToSlash(relPath), ciphertext, identity)
 	return nil
 }
