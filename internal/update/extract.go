@@ -162,7 +162,7 @@ func ExtractZip(data []byte, destDir, expectedBinaryName string) (string, error)
 			return "", fmt.Errorf("open zip entry %q: %w", f.Name, err)
 		}
 
-		out, err := os.OpenFile(safePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, f.Mode()) //nolint:gosec G304 — safePath is validated by safeArchivePath
+		out, err := os.OpenFile(filepath.Clean(safePath), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, f.Mode())
 		if err != nil {
 			_ = rc.Close()
 			return "", fmt.Errorf("create file %q: %w", safePath, err)
