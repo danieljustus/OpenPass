@@ -205,7 +205,7 @@ func New(agentName string, vaultDir string) (*Logger, error) {
 		return nil, fmt.Errorf("open audit log: %w", err)
 	}
 
-	ks := NewKeystore(cleanAuditDir)
+	ks := NewKeystore(cleanAuditDir, nil)
 	hmacKey, err := ks.LoadOrCreateHMACKey()
 	if err != nil {
 		_ = file.Close()
