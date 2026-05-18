@@ -35,4 +35,6 @@ func init() {
 	serveCmd.Flags().Int("port", 8080, "Server port")
 	serveCmd.Flags().Bool("stdio", false, "Enable stdio transport (for MCP)")
 	serveCmd.Flags().String("bind", "127.0.0.1", "Bind address for HTTP server")
+	serveCmd.Flags().String("tls-cert", "", "TLS certificate file path (overrides config)")
+	serveCmd.Flags().String("tls-key", "", "TLS key file path (overrides config)")
 }

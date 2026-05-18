@@ -1322,6 +1322,176 @@ func TestCmdServe_NonLoopbackWarning(t *testing.T) {
 	}
 }
 
+func TestCmdServe_TLSFlagsOverride(t *testing.T) {
+	vaultDir := t.TempDir()
+	identity := testutil.TempIdentity(t)
+	cfg := config.Default()
+	cfg.VaultDir = vaultDir
+	if err := vaultpkg.Init(vaultDir, identity, cfg); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+	vaultFlagReset(t)
+
+	serveSignals := make(chan chan<- os.Signal, 1)
+	origNotify := serveSignalNotify
+	serveSignalNotify = func(c chan<- os.Signal, sigs ...os.Signal) {
+		serveSignals <- c
+	}
+	defer func() { serveSignalNotify = origNotify }()
+
+	origFindAvailablePort := findAvailablePortFunc
+	findAvailablePortFunc = func(bind string, preferredPort int) (int, bool, error) {
+		return preferredPort, true, nil
+	}
+	defer func() { findAvailablePortFunc = origFindAvailablePort }()
+
+	origUnlock := serveUnlockVault
+	serveUnlockVault = func(vaultDir string, interactive bool) (*vaultpkg.Vault, error) {
+		return &vaultpkg.Vault{Dir: vaultDir, Identity: identity, Config: cfg}, nil
+	}
+	defer func() { serveUnlockVault = origUnlock }()
+
+	var capturedVault *vaultpkg.Vault
+	httpDone := make(chan struct{}, 1)
+	origHTTP := runHTTPServerFunc
+	runHTTPServerFunc = func(ctx context.Context, bind string, gotPort int, v *vaultpkg.Vault) error {
+		capturedVault = v
+		<-ctx.Done()
+		httpDone <- struct{}{}
+		return nil
+	}
+	defer func() { runHTTPServerFunc = origHTTP }()
+
+	const port = 18182
+	_ = serveCmd.Flags().Set("stdio", "false")
+	_ = serveCmd.Flags().Set("agent", "")
+	_ = serveCmd.Flags().Set("port", fmt.Sprintf("%d", port))
+
+	rootCmd.SetArgs([]string{
+		"--vault", vaultDir,
+		"serve",
+		"--bind", "127.0.0.1",
+		"--port", fmt.Sprintf("%d", port),
+		"--tls-cert", "/path/to/cert.pem",
+		"--tls-key", "/path/to/key.pem",
+	})
+	t.Cleanup(func() {
+		rootCmd.SetArgs(nil)
+		_ = serveCmd.Flags().Set("bind", "127.0.0.1")
+		_ = serveCmd.Flags().Set("tls-cert", "")
+		_ = serveCmd.Flags().Set("tls-key", "")
+	})
+
+	done := make(chan struct{})
+	go func() {
+		_ = rootCmd.Execute()
+		close(done)
+	}()
+
+	sigCh := <-serveSignals
+	sigCh <- syscall.SIGINT
+	<-httpDone
+	<-done
+
+	if capturedVault == nil {
+		t.Fatal("vault was not passed to HTTP server")
+	}
+	if capturedVault.Config.MCP == nil {
+		t.Fatal("MCP config is nil")
+	}
+	if capturedVault.Config.MCP.TLSCertFile != "/path/to/cert.pem" {
+		t.Errorf("TLSCertFile = %q, want %q", capturedVault.Config.MCP.TLSCertFile, "/path/to/cert.pem")
+	}
+	if capturedVault.Config.MCP.TLSKeyFile != "/path/to/key.pem" {
+		t.Errorf("TLSKeyFile = %q, want %q", capturedVault.Config.MCP.TLSKeyFile, "/path/to/key.pem")
+	}
+}
+
+func TestCmdServe_TLSFlagsOnlyCert(t *testing.T) {
+	vaultDir := t.TempDir()
+	identity := testutil.TempIdentity(t)
+	cfg := config.Default()
+	cfg.VaultDir = vaultDir
+	if err := vaultpkg.Init(vaultDir, identity, cfg); err != nil {
+		t.Fatalf("init vault: %v", err)
+	}
+	vaultFlagReset(t)
+
+	serveSignals := make(chan chan<- os.Signal, 1)
+	origNotify := serveSignalNotify
+	serveSignalNotify = func(c chan<- os.Signal, sigs ...os.Signal) {
+		serveSignals <- c
+	}
+	defer func() { serveSignalNotify = origNotify }()
+
+	origFindAvailablePort := findAvailablePortFunc
+	findAvailablePortFunc = func(bind string, preferredPort int) (int, bool, error) {
+		return preferredPort, true, nil
+	}
+	defer func() { findAvailablePortFunc = origFindAvailablePort }()
+
+	origUnlock := serveUnlockVault
+	serveUnlockVault = func(vaultDir string, interactive bool) (*vaultpkg.Vault, error) {
+		return &vaultpkg.Vault{Dir: vaultDir, Identity: identity, Config: cfg}, nil
+	}
+	defer func() { serveUnlockVault = origUnlock }()
+
+	var capturedVault *vaultpkg.Vault
+	httpDone := make(chan struct{}, 1)
+	origHTTP := runHTTPServerFunc
+	runHTTPServerFunc = func(ctx context.Context, bind string, gotPort int, v *vaultpkg.Vault) error {
+		capturedVault = v
+		<-ctx.Done()
+		httpDone <- struct{}{}
+		return nil
+	}
+	defer func() { runHTTPServerFunc = origHTTP }()
+
+	const port = 18183
+	_ = serveCmd.Flags().Set("stdio", "false")
+	_ = serveCmd.Flags().Set("agent", "")
+	_ = serveCmd.Flags().Set("port", fmt.Sprintf("%d", port))
+
+	// Only set --tls-cert, leave --tls-key as default
+	rootCmd.SetArgs([]string{
+		"--vault", vaultDir,
+		"serve",
+		"--bind", "127.0.0.1",
+		"--port", fmt.Sprintf("%d", port),
+		"--tls-cert", "/path/to/cert.pem",
+	})
+	t.Cleanup(func() {
+		rootCmd.SetArgs(nil)
+		_ = serveCmd.Flags().Set("bind", "127.0.0.1")
+		_ = serveCmd.Flags().Set("tls-cert", "")
+		_ = serveCmd.Flags().Set("tls-key", "")
+	})
+
+	done := make(chan struct{})
+	go func() {
+		_ = rootCmd.Execute()
+		close(done)
+	}()
+
+	sigCh := <-serveSignals
+	sigCh <- syscall.SIGINT
+	<-httpDone
+	<-done
+
+	if capturedVault == nil {
+		t.Fatal("vault was not passed to HTTP server")
+	}
+	if capturedVault.Config.MCP == nil {
+		t.Fatal("MCP config is nil")
+	}
+	if capturedVault.Config.MCP.TLSCertFile != "/path/to/cert.pem" {
+		t.Errorf("TLSCertFile = %q, want %q", capturedVault.Config.MCP.TLSCertFile, "/path/to/cert.pem")
+	}
+	if capturedVault.Config.MCP.TLSKeyFile != "" {
+		t.Errorf("TLSKeyFile = %q, want empty string", capturedVault.Config.MCP.TLSKeyFile)
+	}
+}
+
 func TestServe_StdioError(t *testing.T) {
 	resetVaultState(t)
 
