@@ -90,12 +90,23 @@ func TestExecuteTool_BlocksGetEntryValue_WhenExposeValueToolsFalse(t *testing.T)
 	}, "stdio", "")
 
 	args := json.RawMessage(`{"path": "test"}`)
-	_, err := srv.executeTool(context.Background(), "get_entry_value", args)
-	if err == nil {
-		t.Fatal("executeTool() expected error for get_entry_value when ExposeValueTools=false, got nil")
+	payload, err := srv.executeTool(context.Background(), "get_entry_value", args)
+	if err != nil {
+		t.Fatalf("executeTool() should return payload with isError, not Go error; got %v", err)
 	}
-	if !strings.Contains(err.Error(), "unknown tool") {
-		t.Fatalf("executeTool() error = %v, want 'unknown tool'", err)
+	if payload == nil {
+		t.Fatal("executeTool() returned nil payload for blocked tool")
+	}
+	isError, _ := payload["isError"].(bool)
+	if !isError {
+		t.Fatal("executeTool() payload.isError should be true for blocked get_entry_value")
+	}
+	if content, ok := payload["content"].([]map[string]any); ok && len(content) > 0 {
+		if text, ok := content[0]["text"].(string); ok {
+			if !strings.Contains(text, "requires tier") && !strings.Contains(text, "not allowed") {
+				t.Fatalf("executeTool() error text = %q, want tier/not-allowed message", text)
+			}
+		}
 	}
 }
 

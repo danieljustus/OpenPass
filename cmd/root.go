@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/pflag"
 	"golang.org/x/term"
 
+	agentctx "github.com/danieljustus/OpenPass/internal/agentctx"
 	configpkg "github.com/danieljustus/OpenPass/internal/config"
 	cryptopkg "github.com/danieljustus/OpenPass/internal/crypto"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
@@ -127,16 +128,18 @@ var noPipeWarning bool
 var colorMode string
 var themePreset string
 
+var agentCtx *agentctx.AgentContext
+
 var rootCmd = &cobra.Command{
 	Use:   "openpass",
 	Short: "OpenPass is a Go CLI password manager",
 	Long: `OpenPass is a Go CLI password manager with an interactive TUI, multi-device
 sync via Git, and an MCP server for AI-agent integration.
-
+ 
 First-time setup:
-  1. openpass init         create a vault and identity (non-interactive)
-  2. openpass setup        same, plus guided wizard for sync/agents (TTY only)
-  3. openpass doctor       health-check and self-heal
+   1. openpass init         create a vault and identity (non-interactive)
+   2. openpass setup        same, plus guided wizard for sync/agents (TTY only)
+   3. openpass doctor       health-check and self-heal
 
 Daily use:
   openpass add <name>      add a credential (interactive form)
@@ -149,8 +152,22 @@ Daily use:
 		if !commandRequiresVault(cmd) {
 			return nil
 		}
-		_, err := vaultPath()
-		return err
+		vDir, err := vaultPath()
+		if err != nil {
+			return err
+		}
+
+		// Agent mode: if OPENPASS_AGENT is set, load agent context from config.
+		if agentName := os.Getenv("OPENPASS_AGENT"); agentName != "" {
+			ctx, loadErr := agentctx.Load(agentName, vDir)
+			if loadErr != nil {
+				return errorspkg.NewCLIError(errorspkg.ExitPermissionDenied,
+					fmt.Sprintf("agent mode: %s", loadErr.Error()), loadErr)
+			}
+			agentCtx = ctx
+		}
+
+		return nil
 	},
 }
 
@@ -456,4 +473,19 @@ func commandRequiresVault(cmd *cobra.Command) bool {
 		}
 	}
 	return true
+}
+
+// agentContext returns the loaded agent context, or nil if not in agent mode.
+func agentContext() *agentctx.AgentContext {
+	return agentCtx
+}
+
+// requireAgentContext returns the loaded agent context or an error if not in
+// agent mode. Command handlers use this to enforce agent-only operations.
+func requireAgentContext() (*agentctx.AgentContext, error) {
+	if agentCtx == nil {
+		return nil, errorspkg.NewCLIError(errorspkg.ExitPermissionDenied,
+			"not running in agent mode (OPENPASS_AGENT not set)", nil)
+	}
+	return agentCtx, nil
 }

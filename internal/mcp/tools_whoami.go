@@ -114,11 +114,11 @@ func (s *Server) handleWhoami(ctx context.Context, req CallToolRequest) (*CallTo
 			})
 			continue
 		}
-		if isToolBlockedByAgent(s.agent, def.Name) {
+		if agentErr := isToolBlockedByAgent(s.agent, def.Name); agentErr != nil {
 			unavailable = append(unavailable, whoamiUnavailable{
 				Name:   def.Name,
 				Code:   "blocked_by_agent",
-				Reason: "Agent profile does not have permission for this tool",
+				Reason: agentErr.Error(),
 			})
 			continue
 		}

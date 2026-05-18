@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	"github.com/danieljustus/OpenPass/internal/config"
+	"github.com/danieljustus/OpenPass/internal/mcp/errors"
 )
 
 type toolHandler func(*Server, context.Context, CallToolRequest) (*CallToolResult, error)
@@ -373,7 +374,7 @@ func availableToolDefinitions(s *Server) []toolDefinition {
 		if def.Available != nil && !def.Available(s) {
 			continue
 		}
-		if s != nil && isToolBlockedByAgent(s.agent, def.Name) {
+		if s != nil && isToolBlockedByAgent(s.agent, def.Name) != nil {
 			continue
 		}
 		available = append(available, def)
@@ -381,17 +382,80 @@ func availableToolDefinitions(s *Server) []toolDefinition {
 	return available
 }
 
-// isToolBlockedByAgent returns true when the tool should be hidden/unavailable
-// based on the agent's profile capabilities. This is used both at list-time
-// (availableToolDefinitions) and at call-time (executeTool) for defense-in-depth.
-func isToolBlockedByAgent(agent *config.AgentProfile, toolName string) bool {
+// isToolBlockedByAgent returns nil if the tool is allowed, or an *errors.MCPError
+// describing why the tool is blocked based on the agent's profile and tier.
+// This is used both at list-time (availableToolDefinitions) and at call-time
+// (executeTool) for defense-in-depth.
+//
+// Returns nil (not blocked) when agent is nil (non-agent mode).
+func isToolBlockedByAgent(agent *config.AgentProfile, toolName string) *errors.MCPError {
 	if agent == nil {
-		return false
+		return nil
 	}
+
+	// Tier-based blocking (primary defense)
+	if agent.Tier != "" {
+		if err := checkToolBlockedByTier(agent, toolName); err != nil {
+			return err
+		}
+	}
+
+	// Additional safeguard: ExposeValueTools specifically controls get_entry_value
+	// regardless of tier. This preserves backward compatibility and provides
+	// an extra layer of defense if tier-based rules are bypassed.
 	if !agent.ExposeValueTools && toolName == "get_entry_value" {
-		return true
+		return errors.ToolNotAllowed(toolName, "standard", upgradeCmdForAgent(agent))
 	}
-	return false
+
+	return nil
+}
+
+// checkToolBlockedByTier applies tier-based tool blocking rules.
+// Returns an *errors.MCPError describing the block, or nil if allowed.
+func checkToolBlockedByTier(agent *config.AgentProfile, toolName string) *errors.MCPError {
+	switch agent.Tier {
+	case "read-only":
+		blocked := map[string]bool{
+			"set_entry_field":     true,
+			"delete_entry":        true,
+			"run_command":         true,
+			"execute_with_secret": true,
+			"execute_api_request": true,
+			"secure_input":        true,
+			"request_credential":  true,
+			"copy_to_clipboard":   true,
+			"autotype":            true,
+		}
+		if blocked[toolName] {
+			return errors.ToolNotAllowed(toolName, "standard", upgradeCmdForAgent(agent))
+		}
+
+	case "standard":
+		blocked := map[string]bool{
+			"delete_entry":        true,
+			"run_command":         true,
+			"execute_with_secret": true,
+			"execute_api_request": true,
+		}
+		if blocked[toolName] {
+			return errors.ToolNotAllowed(toolName, "admin", upgradeCmdForAgent(agent))
+		}
+
+	case "admin":
+		return nil
+	}
+
+	return nil
+}
+
+// upgradeCmdForAgent returns a CLI command string to guide the user toward
+// upgrading the agent's tier. When the agent name is unknown or generic it
+// returns a template with placeholders.
+func upgradeCmdForAgent(agent *config.AgentProfile) string {
+	if agent == nil || agent.Name == "" || agent.Name == "default" {
+		return "openpass config set agents.<name>.tier <tier>"
+	}
+	return fmt.Sprintf("openpass config set agents.%s.tier <tier>", agent.Name)
 }
 
 func findToolDefinition(name string) (toolDefinition, bool) {

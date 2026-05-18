@@ -163,6 +163,7 @@ func TestProtocolHandler_ToolsList_Success(t *testing.T) {
 		JSONRPC: "2.0",
 		ID:      json.RawMessage("2"),
 		Method:  "tools/list",
+		Params:  json.RawMessage(`{"include_all_tools":true}`),
 	}
 
 	resp, err := handler.HandleMessage(context.Background(), listMsg)
