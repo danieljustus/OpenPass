@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/danieljustus/OpenPass/internal/config"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/mcp"
 	"github.com/danieljustus/OpenPass/internal/mcp/serverbootstrap"
@@ -58,6 +59,14 @@ func runServe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("read bind flag: %w", err)
 	}
+	tlsCertFlag, err := cmd.Flags().GetString("tls-cert")
+	if err != nil {
+		return fmt.Errorf("read tls-cert flag: %w", err)
+	}
+	tlsKeyFlag, err := cmd.Flags().GetString("tls-key")
+	if err != nil {
+		return fmt.Errorf("read tls-key flag: %w", err)
+	}
 	if bind == "" {
 		return fmt.Errorf("--bind must not be empty; use '127.0.0.1' for localhost-only")
 	}
@@ -84,6 +93,19 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 		if err != nil {
 			return err
+		}
+	}
+	// Apply CLI TLS flag overrides to the vault config so they take
+	// precedence over config file values before the HTTP server starts.
+	if vault != nil && vault.Config != nil {
+		if vault.Config.MCP == nil {
+			vault.Config.MCP = &config.MCPConfig{}
+		}
+		if tlsCertFlag != "" {
+			vault.Config.MCP.TLSCertFile = tlsCertFlag
+		}
+		if tlsKeyFlag != "" {
+			vault.Config.MCP.TLSKeyFile = tlsKeyFlag
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
