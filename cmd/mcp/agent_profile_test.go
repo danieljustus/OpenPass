@@ -14,11 +14,11 @@ func TestLoadAgentProfile(t *testing.T) {
 	cfg := configpkg.Default()
 	cfg.VaultDir = vaultDir
 	cfg.Agents["test-agent"] = configpkg.AgentProfile{
-		Tier:         "standard",
+		Tier:         configpkg.StrPtr("standard"),
 		AllowedPaths: []string{"test/*"},
-		CanWrite:     true,
+		CanWrite:     configpkg.BoolPtr(true),
 	}
-	if err := cfg.SaveTo(filepath.Join(vaultDir, "config.yaml")); err != nil {
+	if err := cfg.SaveTo(filepath.Join(vaultDir, "configpkg.yaml")); err != nil {
 		t.Fatalf("save config error: %v", err)
 	}
 
@@ -32,10 +32,10 @@ func TestLoadAgentProfile(t *testing.T) {
 	if profile.Name != "test-agent" {
 		t.Errorf("Name = %q, want %q", profile.Name, "test-agent")
 	}
-	if profile.Tier != "standard" {
-		t.Errorf("Tier = %q, want %q", profile.Tier, "standard")
+	if *profile.Tier != "standard" {
+		t.Errorf("Tier = %q, want %q", *profile.Tier, "standard")
 	}
-	if !profile.CanWrite {
+	if profile.CanWrite == nil || !*profile.CanWrite {
 		t.Error("CanWrite should be true")
 	}
 }
@@ -45,7 +45,7 @@ func TestLoadAgentProfile_NotFound(t *testing.T) {
 
 	cfg := configpkg.Default()
 	cfg.VaultDir = vaultDir
-	if err := cfg.SaveTo(filepath.Join(vaultDir, "config.yaml")); err != nil {
+	if err := cfg.SaveTo(filepath.Join(vaultDir, "configpkg.yaml")); err != nil {
 		t.Fatalf("save config error: %v", err)
 	}
 

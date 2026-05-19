@@ -80,8 +80,8 @@ var initCmd = &cobra.Command{
 			"cli": {
 				Name:            "cli",
 				AllowedPaths:    []string{"*"},
-				CanWrite:        true,
-				RequireApproval: false,
+				CanWrite:        config.BoolPtr(true),
+				RequireApproval: config.BoolPtr(false),
 			},
 		}
 

@@ -10,7 +10,7 @@ func TestBuildWhoamiInfo(t *testing.T) {
 	vaultDir := t.TempDir()
 	profile := configpkg.AgentProfile{
 		Name:         "test-agent",
-		Tier:         "safe",
+		Tier:         configpkg.StrPtr("safe"),
 		AllowedPaths: []string{"test/*"},
 	}
 
@@ -43,21 +43,21 @@ func TestBuildWhoamiInfo_FullProfile(t *testing.T) {
 	vaultDir := t.TempDir()
 	profile := configpkg.AgentProfile{
 		Name:                "power-agent",
-		Tier:                "standard",
+		Tier:                configpkg.StrPtr("standard"),
 		AllowedPaths:        []string{"prod/*", "dev/*"},
 		AllowedTools:        []string{"list_entries", "get_entry"},
-		CanWrite:            true,
-		CanReadValues:       true,
-		CanUseClipboard:     true,
-		CanUseAutotype:      false,
-		CanRunCommands:      true,
-		CanManageConfig:     false,
-		ApprovalMode:        "prompt",
-		RequireApproval:     true,
-		MaxReadsPerHour:     100,
-		MaxReadsPerDay:      500,
-		MaxSecretsInSession: 10,
-		SkillPath:           "/path/to/skill",
+		CanWrite:            configpkg.BoolPtr(true),
+		CanReadValues:       configpkg.BoolPtr(true),
+		CanUseClipboard:     configpkg.BoolPtr(true),
+		CanUseAutotype:      configpkg.BoolPtr(false),
+		CanRunCommands:      configpkg.BoolPtr(true),
+		CanManageConfig:     configpkg.BoolPtr(false),
+		ApprovalMode:        configpkg.StrPtr("prompt"),
+		RequireApproval:     configpkg.BoolPtr(true),
+		MaxReadsPerHour:     configpkg.IntPtr(100),
+		MaxReadsPerDay:      configpkg.IntPtr(500),
+		MaxSecretsInSession: configpkg.IntPtr(10),
+		SkillPath:           configpkg.StrPtr("/path/to/skill"),
 	}
 
 	info := buildWhoamiInfo("power-agent", vaultDir, &profile)

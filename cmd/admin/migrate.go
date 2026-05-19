@@ -173,14 +173,14 @@ profiles that already have a tier field.`,
 		var pending []pendingTier
 
 		for name, profile := range cfg.Agents {
-			if profile.Tier != "" {
+			if profile.Tier != nil && *profile.Tier != "" {
 				continue
 			}
 			var tier string
 			switch {
-			case profile.CanRunCommands:
+			case profile.CanRunCommands != nil && *profile.CanRunCommands:
 				tier = "admin"
-			case profile.CanWrite:
+			case profile.CanWrite != nil && *profile.CanWrite:
 				tier = "standard"
 			default:
 				tier = "safe"
@@ -229,7 +229,7 @@ profiles that already have a tier field.`,
 
 		for _, p := range pending {
 			profile := cfg.Agents[p.name]
-			profile.Tier = p.tier
+			profile.Tier = configpkg.StrPtr(p.tier)
 			cfg.Agents[p.name] = profile
 		}
 

@@ -38,9 +38,16 @@ Reports structured results; exits 0 if all checks pass.`,
 			return fmt.Errorf("agent %q not configured", agentName)
 		}
 
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\u2713 Profile found: %s (tier=%s)\n", agentName, profile.Tier)
+		tierStr := ""
+		if profile.Tier != nil {
+			tierStr = *profile.Tier
+		}
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\u2713 Profile found: %s (tier=%s)\n", agentName, tierStr)
 
-		targetPath := profile.SkillPath
+		targetPath := ""
+		if profile.SkillPath != nil {
+			targetPath = *profile.SkillPath
+		}
 		if targetPath == "" {
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\u26a0 No skill path configured for agent %q\n", agentName)
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "   Run: openpass agent install %s --skill-only\n", agentName)

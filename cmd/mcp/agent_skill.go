@@ -105,8 +105,8 @@ func getSkillTargetPath(agentName string) string {
 		return ""
 	}
 
-	if profile, ok := cfg.Agents[agentName]; ok {
-		return profile.SkillPath
+	if profile, ok := cfg.Agents[agentName]; ok && profile.SkillPath != nil {
+		return *profile.SkillPath
 	}
 	return ""
 }

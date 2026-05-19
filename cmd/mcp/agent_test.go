@@ -18,10 +18,10 @@ func TestBuildProfile(t *testing.T) {
 	if profile.Name != "test-agent" {
 		t.Errorf("Name = %q, want %q", profile.Name, "test-agent")
 	}
-	if profile.ApprovalMode != "prompt" {
-		t.Errorf("ApprovalMode = %q, want %q", profile.ApprovalMode, "prompt")
+	if *profile.ApprovalMode != "prompt" {
+		t.Errorf("ApprovalMode = %q, want %q", *profile.ApprovalMode, "prompt")
 	}
-	if !profile.RequireApproval {
+	if profile.RequireApproval == nil || !*profile.RequireApproval {
 		t.Error("RequireApproval should be true")
 	}
 }
@@ -53,10 +53,10 @@ func TestBuildProfileDefaults(t *testing.T) {
 	if profile.Name != "readonly-agent" {
 		t.Errorf("Name = %q", profile.Name)
 	}
-	if profile.ApprovalMode != "deny" {
-		t.Errorf("ApprovalMode = %q, want %q", profile.ApprovalMode, "deny")
+	if *profile.ApprovalMode != "deny" {
+		t.Errorf("ApprovalMode = %q, want %q", *profile.ApprovalMode, "deny")
 	}
-	if profile.RequireApproval {
+	if profile.RequireApproval != nil && *profile.RequireApproval {
 		t.Error("RequireApproval should be false")
 	}
 	if len(profile.AllowedPaths) != 1 || profile.AllowedPaths[0] != "bank/*" {
@@ -107,8 +107,8 @@ func TestSaveAgentConfigCreatesMissingConfig(t *testing.T) {
 	if len(got.AllowedPaths) != 1 || got.AllowedPaths[0] != "team/*" {
 		t.Fatalf("AllowedPaths = %v, want [team/*]", got.AllowedPaths)
 	}
-	if got.ApprovalMode != "prompt" {
-		t.Fatalf("ApprovalMode = %q, want prompt", got.ApprovalMode)
+	if *got.ApprovalMode != "prompt" {
+		t.Fatalf("ApprovalMode = %q, want prompt", *got.ApprovalMode)
 	}
 }
 

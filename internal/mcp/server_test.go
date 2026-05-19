@@ -39,8 +39,8 @@ func TestNew_WithConfig(t *testing.T) {
 			"test": {
 				Name:         "test",
 				AllowedPaths: []string{"*"},
-				CanWrite:     true,
-				ApprovalMode: "none",
+				CanWrite:     config.BoolPtr(true),
+				ApprovalMode: config.StrPtr("none"),
 			},
 		},
 	}
@@ -80,8 +80,8 @@ func TestNew_LoadConfig(t *testing.T) {
 			"test": {
 				Name:         "test",
 				AllowedPaths: []string{"*"},
-				CanWrite:     true,
-				ApprovalMode: "none",
+				CanWrite:     config.BoolPtr(true),
+				ApprovalMode: config.StrPtr("none"),
 			},
 		},
 	}
@@ -118,8 +118,8 @@ func TestNew_EmptyAgentName(t *testing.T) {
 			"default-agent": {
 				Name:         "default-agent",
 				AllowedPaths: []string{"*"},
-				CanWrite:     false,
-				ApprovalMode: "none",
+				CanWrite:     config.BoolPtr(false),
+				ApprovalMode: config.StrPtr("none"),
 			},
 		},
 	}
@@ -153,8 +153,8 @@ func TestNew_UnknownAgentRejected(t *testing.T) {
 			"default": {
 				Name:         "default",
 				AllowedPaths: []string{"*"},
-				CanWrite:     false,
-				ApprovalMode: "none",
+				CanWrite:     config.BoolPtr(false),
+				ApprovalMode: config.StrPtr("none"),
 			},
 		},
 	}
@@ -187,8 +187,8 @@ func TestNew_UnknownAgentRejected_HTTP(t *testing.T) {
 			"default": {
 				Name:         "default",
 				AllowedPaths: []string{"*"},
-				CanWrite:     false,
-				ApprovalMode: "none",
+				CanWrite:     config.BoolPtr(false),
+				ApprovalMode: config.StrPtr("none"),
 			},
 		},
 	}
@@ -221,8 +221,8 @@ func TestNew_UnknownAgentNoDefault(t *testing.T) {
 			"specific": {
 				Name:         "specific",
 				AllowedPaths: []string{"specific/"},
-				CanWrite:     true,
-				ApprovalMode: "none",
+				CanWrite:     config.BoolPtr(true),
+				ApprovalMode: config.StrPtr("none"),
 			},
 		},
 	}
@@ -252,8 +252,8 @@ func TestBuild(t *testing.T) {
 			"test": {
 				Name:         "test",
 				AllowedPaths: []string{"*"},
-				CanWrite:     true,
-				ApprovalMode: "none",
+				CanWrite:     config.BoolPtr(true),
+				ApprovalMode: config.StrPtr("none"),
 			},
 		},
 	}
@@ -458,8 +458,8 @@ func TestCanWrite(t *testing.T) {
 		expected bool
 	}{
 		{name: "nil agent", agent: nil, expected: false},
-		{name: "can write", agent: &config.AgentProfile{CanWrite: true}, expected: true},
-		{name: "cannot write", agent: &config.AgentProfile{CanWrite: false}, expected: false},
+		{name: "can write", agent: &config.AgentProfile{CanWrite: config.BoolPtr(true)}, expected: true},
+		{name: "cannot write", agent: &config.AgentProfile{CanWrite: config.BoolPtr(false)}, expected: false},
 	}
 
 	for _, tt := range tests {
@@ -479,12 +479,12 @@ func TestRequiresApproval(t *testing.T) {
 		expected bool
 	}{
 		{name: "nil agent", agent: nil, expected: false},
-		{name: "mode none", agent: &config.AgentProfile{ApprovalMode: "none"}, expected: false},
-		{name: "mode deny", agent: &config.AgentProfile{ApprovalMode: "deny"}, expected: true},
-		{name: "mode prompt", agent: &config.AgentProfile{ApprovalMode: "prompt"}, expected: true},
-		{name: "mode empty with RequireApproval true", agent: &config.AgentProfile{ApprovalMode: "", RequireApproval: true}, expected: true},
-		{name: "mode empty with RequireApproval false", agent: &config.AgentProfile{ApprovalMode: "", RequireApproval: false}, expected: false},
-		{name: "unknown mode", agent: &config.AgentProfile{ApprovalMode: "unknown"}, expected: false},
+		{name: "mode none", agent: &config.AgentProfile{ApprovalMode: config.StrPtr("none")}, expected: false},
+		{name: "mode deny", agent: &config.AgentProfile{ApprovalMode: config.StrPtr("deny")}, expected: true},
+		{name: "mode prompt", agent: &config.AgentProfile{ApprovalMode: config.StrPtr("prompt")}, expected: true},
+		{name: "mode empty with RequireApproval true", agent: &config.AgentProfile{ApprovalMode: config.StrPtr(""), RequireApproval: config.BoolPtr(true)}, expected: true},
+		{name: "mode empty with RequireApproval false", agent: &config.AgentProfile{ApprovalMode: config.StrPtr(""), RequireApproval: config.BoolPtr(false)}, expected: false},
+		{name: "unknown mode", agent: &config.AgentProfile{ApprovalMode: config.StrPtr("unknown")}, expected: false},
 	}
 
 	for _, tt := range tests {
@@ -524,8 +524,8 @@ func TestServer_LogAudit(t *testing.T) {
 			"test": {
 				Name:         "test",
 				AllowedPaths: []string{"*"},
-				CanWrite:     true,
-				ApprovalMode: "none",
+				CanWrite:     config.BoolPtr(true),
+				ApprovalMode: config.StrPtr("none"),
 			},
 		},
 	}
@@ -568,8 +568,8 @@ func TestAuthorize(t *testing.T) {
 			"test": {
 				Name:         "test",
 				AllowedPaths: []string{"work/"},
-				CanWrite:     true,
-				ApprovalMode: "none",
+				CanWrite:     config.BoolPtr(true),
+				ApprovalMode: config.StrPtr("none"),
 			},
 		},
 	}
@@ -613,8 +613,8 @@ func TestAuthorize_EmptyPath(t *testing.T) {
 			"test": {
 				Name:         "test",
 				AllowedPaths: []string{"*"},
-				CanWrite:     true,
-				ApprovalMode: "none",
+				CanWrite:     config.BoolPtr(true),
+				ApprovalMode: config.StrPtr("none"),
 			},
 		},
 	}
@@ -650,8 +650,8 @@ func TestAuthorize_WriteWithoutPermission(t *testing.T) {
 			"test": {
 				Name:         "test",
 				AllowedPaths: []string{"*"},
-				CanWrite:     false,
-				ApprovalMode: "none",
+				CanWrite:     config.BoolPtr(false),
+				ApprovalMode: config.StrPtr("none"),
 			},
 		},
 	}
@@ -687,8 +687,8 @@ func TestAuthorize_WriteWithApprovalDeny(t *testing.T) {
 			"test": {
 				Name:         "test",
 				AllowedPaths: []string{"*"},
-				CanWrite:     true,
-				ApprovalMode: "deny",
+				CanWrite:     config.BoolPtr(true),
+				ApprovalMode: config.StrPtr("deny"),
 			},
 		},
 	}
@@ -724,8 +724,8 @@ func TestAuthorize_WriteWithApprovalButNotApproved(t *testing.T) {
 			"test": {
 				Name:         "test",
 				AllowedPaths: []string{"*"},
-				CanWrite:     true,
-				ApprovalMode: "deny",
+				CanWrite:     config.BoolPtr(true),
+				ApprovalMode: config.StrPtr("deny"),
 			},
 		},
 	}
@@ -773,8 +773,8 @@ func TestExecuteTool_ParseError(t *testing.T) {
 	srv := newTestServerWithVault(t, config.AgentProfile{
 		Name:         "test",
 		AllowedPaths: []string{"*"},
-		CanWrite:     false,
-		ApprovalMode: "none",
+		CanWrite:     config.BoolPtr(false),
+		ApprovalMode: config.StrPtr("none"),
 	}, "stdio", "")
 
 	args := json.RawMessage(`{invalid json}`)
@@ -792,8 +792,8 @@ func TestExecuteTool_FindEntries(t *testing.T) {
 	srv := newTestServerWithVault(t, config.AgentProfile{
 		Name:         "test",
 		AllowedPaths: []string{"*"},
-		CanWrite:     false,
-		ApprovalMode: "none",
+		CanWrite:     config.BoolPtr(false),
+		ApprovalMode: config.StrPtr("none"),
 	}, "stdio", vaultDir)
 	srv.vault.Identity = identity
 
@@ -817,8 +817,8 @@ func TestExecuteTool_SetEntryField(t *testing.T) {
 	srv := newTestServerWithVault(t, config.AgentProfile{
 		Name:         "test",
 		AllowedPaths: []string{"*"},
-		CanWrite:     true,
-		ApprovalMode: "none",
+		CanWrite:     config.BoolPtr(true),
+		ApprovalMode: config.StrPtr("none"),
 	}, "stdio", vaultDir)
 	srv.vault.Identity = identity
 
@@ -844,8 +844,8 @@ func TestExecuteTool_GeneratePassword_Server(t *testing.T) {
 	srv := newTestServerWithVault(t, config.AgentProfile{
 		Name:         "test",
 		AllowedPaths: []string{"*"},
-		CanWrite:     false,
-		ApprovalMode: "none",
+		CanWrite:     config.BoolPtr(false),
+		ApprovalMode: config.StrPtr("none"),
 	}, "stdio", "")
 
 	args := json.RawMessage(`{}`)
@@ -868,8 +868,8 @@ func TestExecuteTool_OpenpassDelete(t *testing.T) {
 	srv := newTestServerWithVault(t, config.AgentProfile{
 		Name:         "test",
 		AllowedPaths: []string{"*"},
-		CanWrite:     true,
-		ApprovalMode: "none",
+		CanWrite:     config.BoolPtr(true),
+		ApprovalMode: config.StrPtr("none"),
 	}, "stdio", vaultDir)
 	srv.vault.Identity = identity
 
@@ -896,8 +896,8 @@ func TestExecuteTool_DeleteEntryCanonicalName(t *testing.T) {
 	srv := newTestServerWithVault(t, config.AgentProfile{
 		Name:         "test",
 		AllowedPaths: []string{"*"},
-		CanWrite:     true,
-		ApprovalMode: "none",
+		CanWrite:     config.BoolPtr(true),
+		ApprovalMode: config.StrPtr("none"),
 	}, "stdio", vaultDir)
 	srv.vault.Identity = identity
 
@@ -915,8 +915,8 @@ func TestExecuteTool_Health(t *testing.T) {
 	srv := newTestServerWithVault(t, config.AgentProfile{
 		Name:         "test",
 		AllowedPaths: []string{"*"},
-		CanWrite:     false,
-		ApprovalMode: "none",
+		CanWrite:     config.BoolPtr(false),
+		ApprovalMode: config.StrPtr("none"),
 	}, "stdio", "")
 
 	result, err := srv.executeTool(context.Background(), "health", nil)
@@ -933,8 +933,8 @@ func TestExecuteTool_HandlerError(t *testing.T) {
 	srv := newTestServerWithVault(t, config.AgentProfile{
 		Name:         "test",
 		AllowedPaths: []string{"*"},
-		CanWrite:     false,
-		ApprovalMode: "none",
+		CanWrite:     config.BoolPtr(false),
+		ApprovalMode: config.StrPtr("none"),
 	}, "stdio", vaultDir)
 	srv.vault.Identity = identity
 
@@ -961,8 +961,8 @@ func TestServeStdio(t *testing.T) {
 			"test": {
 				Name:         "test",
 				AllowedPaths: []string{"*"},
-				CanWrite:     true,
-				ApprovalMode: "none",
+				CanWrite:     config.BoolPtr(true),
+				ApprovalMode: config.StrPtr("none"),
 			},
 		},
 	}
@@ -993,8 +993,8 @@ func TestServer_Authorize_ReadsCorrectly(t *testing.T) {
 			"test": {
 				Name:         "test",
 				AllowedPaths: []string{"work/", "work/sub/"},
-				CanWrite:     true,
-				ApprovalMode: "none",
+				CanWrite:     config.BoolPtr(true),
+				ApprovalMode: config.StrPtr("none"),
 			},
 		},
 	}
@@ -1035,8 +1035,8 @@ func TestServer_Authorization_AuditLogging(t *testing.T) {
 			"test": {
 				Name:         "test",
 				AllowedPaths: []string{"*"},
-				CanWrite:     false,
-				ApprovalMode: "none",
+				CanWrite:     config.BoolPtr(false),
+				ApprovalMode: config.StrPtr("none"),
 			},
 		},
 	}
@@ -1293,8 +1293,8 @@ func TestCheckPolicy_AllowsWhenNoEngine(t *testing.T) {
 	srv := newTestServerWithVault(t, config.AgentProfile{
 		Name:         "test",
 		AllowedPaths: []string{"*"},
-		CanWrite:     false,
-		ApprovalMode: "none",
+		CanWrite:     config.BoolPtr(false),
+		ApprovalMode: config.StrPtr("none"),
 	}, "stdio", "")
 
 	err := srv.checkPolicy(context.Background(), "test/path", "read")
@@ -1307,8 +1307,8 @@ func TestCheckPolicy_DeniesByRule(t *testing.T) {
 	srv := newTestServerWithVault(t, config.AgentProfile{
 		Name:         "test",
 		AllowedPaths: []string{"*"},
-		CanWrite:     false,
-		ApprovalMode: "none",
+		CanWrite:     config.BoolPtr(false),
+		ApprovalMode: config.StrPtr("none"),
 	}, "stdio", "")
 
 	p := &policy.Policy{
@@ -1337,8 +1337,8 @@ func TestCheckPolicy_AllowsByRule(t *testing.T) {
 	srv := newTestServerWithVault(t, config.AgentProfile{
 		Name:         "test",
 		AllowedPaths: []string{"*"},
-		CanWrite:     false,
-		ApprovalMode: "none",
+		CanWrite:     config.BoolPtr(false),
+		ApprovalMode: config.StrPtr("none"),
 	}, "stdio", "")
 
 	p := &policy.Policy{
@@ -1364,8 +1364,8 @@ func TestCheckPolicy_RequiresBiometry(t *testing.T) {
 	srv := newTestServerWithVault(t, config.AgentProfile{
 		Name:         "test",
 		AllowedPaths: []string{"*"},
-		CanWrite:     false,
-		ApprovalMode: "none",
+		CanWrite:     config.BoolPtr(false),
+		ApprovalMode: config.StrPtr("none"),
 	}, "stdio", "")
 
 	p := &policy.Policy{
@@ -1394,8 +1394,8 @@ func TestCheckPolicy_Prompt(t *testing.T) {
 	srv := newTestServerWithVault(t, config.AgentProfile{
 		Name:         "test",
 		AllowedPaths: []string{"*"},
-		CanWrite:     false,
-		ApprovalMode: "none",
+		CanWrite:     config.BoolPtr(false),
+		ApprovalMode: config.StrPtr("none"),
 	}, "stdio", "")
 
 	p := &policy.Policy{

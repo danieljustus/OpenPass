@@ -116,7 +116,10 @@ agent's profile in config.yaml. Use --yes to skip the confirmation prompt.`,
 		}
 
 		if !agentUninstallKeepSkill {
-			skillPath := profile.SkillPath
+			var skillPath string
+			if profile.SkillPath != nil {
+				skillPath = *profile.SkillPath
+			}
 			if skillPath != "" {
 				expanded := expandTilde(skillPath)
 				expanded = filepath.Clean(expanded)

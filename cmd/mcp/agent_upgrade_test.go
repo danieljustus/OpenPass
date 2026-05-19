@@ -88,7 +88,7 @@ func TestApplyTierUpgrade(t *testing.T) {
 	cfg.VaultDir = vaultDir
 	cfg.Agents["test-agent"] = configpkg.AgentProfile{
 		Name:         "test-agent",
-		Tier:         "safe",
+		Tier:         configpkg.StrPtr("safe"),
 		AllowedPaths: []string{"*"},
 	}
 	if err := cfg.SaveTo(filepath.Join(vaultDir, "config.yaml")); err != nil {
@@ -105,14 +105,14 @@ func TestApplyTierUpgrade(t *testing.T) {
 	}
 
 	profile := cfg.Agents["test-agent"]
-	if profile.Tier != "standard" {
-		t.Errorf("tier = %q, want \"standard\"", profile.Tier)
+	if *profile.Tier != "standard" {
+		t.Errorf("tier = %q, want \"standard\"", *profile.Tier)
 	}
-	if !profile.RequireApproval {
+	if profile.RequireApproval == nil || !*profile.RequireApproval {
 		t.Error("standard tier should have RequireApproval=true")
 	}
-	if profile.ApprovalMode != "prompt" {
-		t.Errorf("approvalMode = %q, want \"prompt\"", profile.ApprovalMode)
+	if *profile.ApprovalMode != "prompt" {
+		t.Errorf("approvalMode = %q, want \"prompt\"", *profile.ApprovalMode)
 	}
 }
 
@@ -123,7 +123,7 @@ func TestApplyTierUpgrade_DryRun(t *testing.T) {
 	cfg.VaultDir = vaultDir
 	cfg.Agents["test-agent"] = configpkg.AgentProfile{
 		Name: "test-agent",
-		Tier: "safe",
+		Tier: configpkg.StrPtr("safe"),
 	}
 	if err := cfg.SaveTo(filepath.Join(vaultDir, "config.yaml")); err != nil {
 		t.Fatalf("save config error: %v", err)
@@ -138,7 +138,7 @@ func TestApplyTierUpgrade_DryRun(t *testing.T) {
 		t.Fatalf("load config error: %v", err)
 	}
 
-	if cfg.Agents["test-agent"].Tier != "safe" {
+	if *cfg.Agents["test-agent"].Tier != "safe" {
 		t.Error("dry-run should not modify tier")
 	}
 }

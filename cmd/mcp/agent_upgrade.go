@@ -33,17 +33,22 @@ type tierDiff struct {
 }
 
 func computeTierDiff(old, new configpkg.AgentProfile) []tierDiff {
+	boolVal := func(p *bool) bool { return p != nil && *p }
+	boolStr := func(p *bool) string { return fmt.Sprintf("%t", boolVal(p)) }
+	intStr := func(p *int) string { if p != nil { return fmt.Sprintf("%d", *p) }; return "0" }
+	strVal := func(p *string) string { if p != nil { return *p }; return "" }
+
 	diffs := []tierDiff{
-		{Field: "canWrite", OldValue: fmt.Sprintf("%t", old.CanWrite), NewValue: fmt.Sprintf("%t", new.CanWrite), Changed: old.CanWrite != new.CanWrite},
-		{Field: "canRunCommands", OldValue: fmt.Sprintf("%t", old.CanRunCommands), NewValue: fmt.Sprintf("%t", new.CanRunCommands), Changed: old.CanRunCommands != new.CanRunCommands},
-		{Field: "canManageConfig", OldValue: fmt.Sprintf("%t", old.CanManageConfig), NewValue: fmt.Sprintf("%t", new.CanManageConfig), Changed: old.CanManageConfig != new.CanManageConfig},
-		{Field: "canUseClipboard", OldValue: fmt.Sprintf("%t", old.CanUseClipboard), NewValue: fmt.Sprintf("%t", new.CanUseClipboard), Changed: old.CanUseClipboard != new.CanUseClipboard},
-		{Field: "canUseAutotype", OldValue: fmt.Sprintf("%t", old.CanUseAutotype), NewValue: fmt.Sprintf("%t", new.CanUseAutotype), Changed: old.CanUseAutotype != new.CanUseAutotype},
-		{Field: "canReadValues", OldValue: fmt.Sprintf("%t", old.CanReadValues), NewValue: fmt.Sprintf("%t", new.CanReadValues), Changed: old.CanReadValues != new.CanReadValues},
-		{Field: "exposeValueTools", OldValue: fmt.Sprintf("%t", old.ExposeValueTools), NewValue: fmt.Sprintf("%t", new.ExposeValueTools), Changed: old.ExposeValueTools != new.ExposeValueTools},
-		{Field: "autoUnseal", OldValue: fmt.Sprintf("%t", old.AutoUnseal), NewValue: fmt.Sprintf("%t", new.AutoUnseal), Changed: old.AutoUnseal != new.AutoUnseal},
-		{Field: "requireApproval", OldValue: fmt.Sprintf("%t", old.RequireApproval), NewValue: fmt.Sprintf("%t", new.RequireApproval), Changed: old.RequireApproval != new.RequireApproval},
-		{Field: "approvalMode", OldValue: old.ApprovalMode, NewValue: new.ApprovalMode, Changed: old.ApprovalMode != new.ApprovalMode},
+		{Field: "canWrite", OldValue: boolStr(old.CanWrite), NewValue: boolStr(new.CanWrite), Changed: boolVal(old.CanWrite) != boolVal(new.CanWrite)},
+		{Field: "canRunCommands", OldValue: boolStr(old.CanRunCommands), NewValue: boolStr(new.CanRunCommands), Changed: boolVal(old.CanRunCommands) != boolVal(new.CanRunCommands)},
+		{Field: "canManageConfig", OldValue: boolStr(old.CanManageConfig), NewValue: boolStr(new.CanManageConfig), Changed: boolVal(old.CanManageConfig) != boolVal(new.CanManageConfig)},
+		{Field: "canUseClipboard", OldValue: boolStr(old.CanUseClipboard), NewValue: boolStr(new.CanUseClipboard), Changed: boolVal(old.CanUseClipboard) != boolVal(new.CanUseClipboard)},
+		{Field: "canUseAutotype", OldValue: boolStr(old.CanUseAutotype), NewValue: boolStr(new.CanUseAutotype), Changed: boolVal(old.CanUseAutotype) != boolVal(new.CanUseAutotype)},
+		{Field: "canReadValues", OldValue: boolStr(old.CanReadValues), NewValue: boolStr(new.CanReadValues), Changed: boolVal(old.CanReadValues) != boolVal(new.CanReadValues)},
+		{Field: "exposeValueTools", OldValue: boolStr(old.ExposeValueTools), NewValue: boolStr(new.ExposeValueTools), Changed: boolVal(old.ExposeValueTools) != boolVal(new.ExposeValueTools)},
+		{Field: "autoUnseal", OldValue: boolStr(old.AutoUnseal), NewValue: boolStr(new.AutoUnseal), Changed: boolVal(old.AutoUnseal) != boolVal(new.AutoUnseal)},
+		{Field: "requireApproval", OldValue: boolStr(old.RequireApproval), NewValue: boolStr(new.RequireApproval), Changed: boolVal(old.RequireApproval) != boolVal(new.RequireApproval)},
+		{Field: "approvalMode", OldValue: strVal(old.ApprovalMode), NewValue: strVal(new.ApprovalMode), Changed: strVal(old.ApprovalMode) != strVal(new.ApprovalMode)},
 	}
 
 	oldExec := strings.Join(old.AllowedExecutables, ", ")
@@ -66,14 +71,38 @@ func computeTierDiff(old, new configpkg.AgentProfile) []tierDiff {
 	}
 	diffs = append(diffs, tierDiff{Field: "allowedTools", OldValue: oldTools, NewValue: newTools, Changed: oldTools != newTools})
 
-	if old.MaxReadsPerHour != new.MaxReadsPerHour {
-		diffs = append(diffs, tierDiff{Field: "maxReadsPerHour", OldValue: fmt.Sprintf("%d", old.MaxReadsPerHour), NewValue: fmt.Sprintf("%d", new.MaxReadsPerHour), Changed: true})
+	oldMRPH := 0
+	if old.MaxReadsPerHour != nil {
+		oldMRPH = *old.MaxReadsPerHour
 	}
-	if old.MaxReadsPerDay != new.MaxReadsPerDay {
-		diffs = append(diffs, tierDiff{Field: "maxReadsPerDay", OldValue: fmt.Sprintf("%d", old.MaxReadsPerDay), NewValue: fmt.Sprintf("%d", new.MaxReadsPerDay), Changed: true})
+	newMRPH := 0
+	if new.MaxReadsPerHour != nil {
+		newMRPH = *new.MaxReadsPerHour
 	}
-	if old.MaxSecretsInSession != new.MaxSecretsInSession {
-		diffs = append(diffs, tierDiff{Field: "maxSecretsInSession", OldValue: fmt.Sprintf("%d", old.MaxSecretsInSession), NewValue: fmt.Sprintf("%d", new.MaxSecretsInSession), Changed: true})
+	if oldMRPH != newMRPH {
+		diffs = append(diffs, tierDiff{Field: "maxReadsPerHour", OldValue: intStr(old.MaxReadsPerHour), NewValue: intStr(new.MaxReadsPerHour), Changed: true})
+	}
+	oldMRPD := 0
+	if old.MaxReadsPerDay != nil {
+		oldMRPD = *old.MaxReadsPerDay
+	}
+	newMRPD := 0
+	if new.MaxReadsPerDay != nil {
+		newMRPD = *new.MaxReadsPerDay
+	}
+	if oldMRPD != newMRPD {
+		diffs = append(diffs, tierDiff{Field: "maxReadsPerDay", OldValue: intStr(old.MaxReadsPerDay), NewValue: intStr(new.MaxReadsPerDay), Changed: true})
+	}
+	oldMSIS := 0
+	if old.MaxSecretsInSession != nil {
+		oldMSIS = *old.MaxSecretsInSession
+	}
+	newMSIS := 0
+	if new.MaxSecretsInSession != nil {
+		newMSIS = *new.MaxSecretsInSession
+	}
+	if oldMSIS != newMSIS {
+		diffs = append(diffs, tierDiff{Field: "maxSecretsInSession", OldValue: intStr(old.MaxSecretsInSession), NewValue: intStr(new.MaxSecretsInSession), Changed: true})
 	}
 
 	return diffs
@@ -91,9 +120,8 @@ func applyTierUpgrade(vaultDir, agentName string, dryRun bool) error {
 		return fmt.Errorf("agent %q not found in config", agentName)
 	}
 
-	const standardTier = "standard"
-	configpkg.ApplyTierPreset(&profile, standardTier)
-	profile.Tier = standardTier
+	configpkg.ApplyTierPreset(&profile, "standard")
+	profile.Tier = configpkg.StrPtr("standard")
 
 	if dryRun {
 		return nil
@@ -175,7 +203,10 @@ an audit trail.`,
 			return fmt.Errorf("agent %q not found in config", agentName)
 		}
 
-		currentTier := profile.Tier
+		currentTier := ""
+		if profile.Tier != nil {
+			currentTier = *profile.Tier
+		}
 		if currentTier == "" {
 			currentTier = "custom"
 		}
@@ -185,7 +216,7 @@ an audit trail.`,
 
 		oldProfile := profile
 		configpkg.ApplyTierPreset(&profile, agentUpgradeTier)
-		profile.Tier = agentUpgradeTier
+		profile.Tier = configpkg.StrPtr(agentUpgradeTier)
 		diffs := computeTierDiff(oldProfile, profile)
 
 		fmt.Fprintf(os.Stderr, "Agent:   %s\n", agentName)
@@ -248,7 +279,10 @@ an audit trail.`,
 			fmt.Fprintf(os.Stderr, "\u2713 Token rotated: %s (id=%s)\n", tokenPath, newTok.ID)
 		}
 
-		targetPath := profile.SkillPath
+		targetPath := ""
+		if profile.SkillPath != nil {
+			targetPath = *profile.SkillPath
+		}
 		if targetPath != "" {
 			expanded := expandTilde(targetPath)
 			vars := buildTemplateVars(agentName)

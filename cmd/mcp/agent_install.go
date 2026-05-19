@@ -305,7 +305,7 @@ func buildInstallProfile(name, tier string) configpkg.AgentProfile {
 	profile := configpkg.AgentProfile{
 		Name:         name,
 		AllowedPaths: []string{},
-		Tier:         tier,
+		Tier:         configpkg.StrPtr(tier),
 	}
 
 	presetName := tier
@@ -424,8 +424,8 @@ func resolveSkillPath(agentName string) string {
 		return path
 	}
 
-	if profile, ok := configpkg.Default().Agents[agentName]; ok && profile.SkillPath != "" {
-		return profile.SkillPath
+	if profile, ok := configpkg.Default().Agents[agentName]; ok && profile.SkillPath != nil && *profile.SkillPath != "" {
+		return *profile.SkillPath
 	}
 
 	return ""

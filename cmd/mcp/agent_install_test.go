@@ -10,51 +10,51 @@ import (
 
 func TestBuildInstallProfile_SafeTier(t *testing.T) {
 	profile := buildInstallProfile("test", "safe")
-	if profile.Tier != "safe" {
-		t.Errorf("Tier = %q, want safe", profile.Tier)
+	if *profile.Tier != "safe" {
+		t.Errorf("Tier = %q, want safe", *profile.Tier)
 	}
 	if profile.Name != "test" {
 		t.Errorf("Name = %q, want test", profile.Name)
 	}
-	if profile.CanWrite {
+	if profile.CanWrite != nil && *profile.CanWrite {
 		t.Error("safe tier should have CanWrite=false")
 	}
-	if profile.CanRunCommands {
+	if profile.CanRunCommands != nil && *profile.CanRunCommands {
 		t.Error("safe tier should have CanRunCommands=false")
 	}
-	if profile.CanUseClipboard {
+	if profile.CanUseClipboard != nil && *profile.CanUseClipboard {
 		t.Error("safe tier should have CanUseClipboard=false")
 	}
 }
 
 func TestBuildInstallProfile_StandardTier(t *testing.T) {
 	profile := buildInstallProfile("test", "standard")
-	if profile.Tier != "standard" {
-		t.Errorf("Tier = %q, want standard", profile.Tier)
+	if *profile.Tier != "standard" {
+		t.Errorf("Tier = %q, want standard", *profile.Tier)
 	}
 	if profile.Name != "test" {
 		t.Errorf("Name = %q, want test", profile.Name)
 	}
-	if !profile.CanUseClipboard {
+	if profile.CanUseClipboard == nil || !*profile.CanUseClipboard {
 		t.Error("standard tier should have CanUseClipboard=true")
 	}
-	if !profile.CanReadValues {
+	if profile.CanReadValues == nil || !*profile.CanReadValues {
 		t.Error("standard tier should have CanReadValues=true")
 	}
 }
 
 func TestBuildInstallProfile_AdminTier(t *testing.T) {
 	profile := buildInstallProfile("test", "admin")
-	if profile.Tier != "admin" {
-		t.Errorf("Tier = %q, want admin", profile.Tier)
+	if *profile.Tier != "admin" {
+		t.Errorf("Tier = %q, want admin", *profile.Tier)
 	}
-	if !profile.CanWrite {
+	if profile.CanWrite == nil || !*profile.CanWrite {
 		t.Error("admin tier should have CanWrite=true")
 	}
-	if !profile.CanRunCommands {
+	if profile.CanRunCommands == nil || !*profile.CanRunCommands {
 		t.Error("admin tier should have CanRunCommands=true")
 	}
-	if !profile.CanManageConfig {
+	if profile.CanManageConfig == nil || !*profile.CanManageConfig {
 		t.Error("admin tier should have CanManageConfig=true")
 	}
 }
@@ -75,10 +75,10 @@ func TestCreateAgentProfileConfig(t *testing.T) {
 	if !ok {
 		t.Fatal("custom-agent profile not found in config")
 	}
-	if profile.Tier != "safe" {
-		t.Errorf("Tier = %q, want safe", profile.Tier)
+	if *profile.Tier != "safe" {
+		t.Errorf("Tier = %q, want safe", *profile.Tier)
 	}
-	if profile.CanWrite {
+	if profile.CanWrite != nil && *profile.CanWrite {
 		t.Error("safe tier should have CanWrite=false")
 	}
 }
@@ -126,8 +126,8 @@ func TestCreateAgentProfileConfig_ExistsWithForce(t *testing.T) {
 	if !ok {
 		t.Fatal("custom-agent profile not found after force")
 	}
-	if profile.Tier != "standard" {
-		t.Errorf("after force Tier = %q, want standard", profile.Tier)
+	if *profile.Tier != "standard" {
+		t.Errorf("after force Tier = %q, want standard", *profile.Tier)
 	}
 }
 
@@ -196,8 +196,8 @@ func TestCreateAgentProfileConfig_PreservesSkillPath(t *testing.T) {
 	cfg.VaultDir = vaultDir
 	cfg.Agents["custom-agent"] = configpkg.AgentProfile{
 		Name:      "custom-agent",
-		Tier:      "safe",
-		SkillPath: "/custom/path/custom-agent.skill.md",
+		Tier:      configpkg.StrPtr("safe"),
+		SkillPath: configpkg.StrPtr("/custom/path/custom-agent.skill.md"),
 	}
 	if err := cfg.SaveTo(configPath); err != nil {
 		t.Fatalf("save initial config: %v", err)
@@ -213,7 +213,7 @@ func TestCreateAgentProfileConfig_PreservesSkillPath(t *testing.T) {
 		t.Fatalf("Load config error: %v", err)
 	}
 
-	if cfg.Agents["custom-agent"].SkillPath != "/custom/path/custom-agent.skill.md" {
-		t.Errorf("SkillPath = %q, want /custom/path/custom-agent.skill.md", cfg.Agents["custom-agent"].SkillPath)
+	if *cfg.Agents["custom-agent"].SkillPath != "/custom/path/custom-agent.skill.md" {
+		t.Errorf("SkillPath = %q, want /custom/path/custom-agent.skill.md", *cfg.Agents["custom-agent"].SkillPath)
 	}
 }

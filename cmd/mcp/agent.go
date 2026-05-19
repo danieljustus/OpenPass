@@ -101,8 +101,8 @@ func buildProfile(name, tier, glob, approvalMode string, requireApproval bool) c
 	configpkg.ApplyTierPreset(&profile, tier)
 
 	profile.AllowedPaths = []string{glob}
-	profile.ApprovalMode = approvalMode
-	profile.RequireApproval = requireApproval
+	profile.ApprovalMode = configpkg.StrPtr(approvalMode)
+	profile.RequireApproval = configpkg.BoolPtr(requireApproval)
 
 	return profile
 }

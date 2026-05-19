@@ -15,7 +15,7 @@ func TestAgentUninstallRemovesProfile(t *testing.T) {
 	cfg.VaultDir = vaultDir
 	cfg.Agents["test-agent"] = configpkg.AgentProfile{
 		Name: "test-agent",
-		Tier: "safe",
+		Tier: configpkg.StrPtr("safe"),
 	}
 	if err := cfg.SaveTo(configPath); err != nil {
 		t.Fatalf("save config: %v", err)
@@ -74,8 +74,8 @@ func TestAgentUninstallKeepsOtherAgents(t *testing.T) {
 
 	cfg := configpkg.Default()
 	cfg.VaultDir = vaultDir
-	cfg.Agents["agent-a"] = configpkg.AgentProfile{Name: "agent-a", Tier: "safe"}
-	cfg.Agents["agent-b"] = configpkg.AgentProfile{Name: "agent-b", Tier: "standard"}
+	cfg.Agents["agent-a"] = configpkg.AgentProfile{Name: "agent-a", Tier: configpkg.StrPtr("safe")}
+	cfg.Agents["agent-b"] = configpkg.AgentProfile{Name: "agent-b", Tier: configpkg.StrPtr("standard")}
 	if err := cfg.SaveTo(configPath); err != nil {
 		t.Fatalf("save config: %v", err)
 	}

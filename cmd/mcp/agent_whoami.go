@@ -89,24 +89,28 @@ type whoamiInfo struct {
 }
 
 func buildWhoamiInfo(agentName, vaultDir string, profile *configpkg.AgentProfile) whoamiInfo {
+	bv := func(p *bool) bool { return p != nil && *p }
+	sv := func(p *string) string { if p != nil { return *p }; return "" }
+	iv := func(p *int) int { if p != nil { return *p }; return 0 }
+
 	info := whoamiInfo{
 		Name:            agentName,
-		Tier:            profile.Tier,
+		Tier:            sv(profile.Tier),
 		AllowedPaths:    profile.AllowedPaths,
 		AllowedTools:    profile.AllowedTools,
-		CanWrite:        profile.CanWrite,
-		CanReadValues:   profile.CanReadValues,
-		CanUseClipboard: profile.CanUseClipboard,
-		CanUseAutotype:  profile.CanUseAutotype,
-		CanRunCommands:  profile.CanRunCommands,
-		CanManageConfig: profile.CanManageConfig,
-		ApprovalMode:    profile.ApprovalMode,
-		RequireApproval: profile.RequireApproval,
-		SkillPath:       profile.SkillPath,
+		CanWrite:        bv(profile.CanWrite),
+		CanReadValues:   bv(profile.CanReadValues),
+		CanUseClipboard: bv(profile.CanUseClipboard),
+		CanUseAutotype:  bv(profile.CanUseAutotype),
+		CanRunCommands:  bv(profile.CanRunCommands),
+		CanManageConfig: bv(profile.CanManageConfig),
+		ApprovalMode:    sv(profile.ApprovalMode),
+		RequireApproval: bv(profile.RequireApproval),
+		SkillPath:       sv(profile.SkillPath),
 	}
-	info.Quotas.MaxReadsPerHour = profile.MaxReadsPerHour
-	info.Quotas.MaxReadsPerDay = profile.MaxReadsPerDay
-	info.Quotas.MaxSecretsInSession = profile.MaxSecretsInSession
+	info.Quotas.MaxReadsPerHour = iv(profile.MaxReadsPerHour)
+	info.Quotas.MaxReadsPerDay = iv(profile.MaxReadsPerDay)
+	info.Quotas.MaxSecretsInSession = iv(profile.MaxSecretsInSession)
 
 	info.TokenCount = countAgentTokens(vaultDir, agentName)
 

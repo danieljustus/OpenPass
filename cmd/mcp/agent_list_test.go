@@ -113,7 +113,7 @@ func TestAgentListFromConfig(t *testing.T) {
 	cfg.VaultDir = vaultDir
 	cfg.Agents["test-agent"] = configpkg.AgentProfile{
 		Name: "test-agent",
-		Tier: "safe",
+		Tier: configpkg.StrPtr("safe"),
 	}
 	if err := cfg.SaveTo(configPath); err != nil {
 		t.Fatalf("save config: %v", err)
@@ -139,7 +139,7 @@ func TestAgentListFromConfig(t *testing.T) {
 	if !ok {
 		t.Fatal("test-agent missing from agents map")
 	}
-	if profile.Tier != "safe" {
-		t.Errorf("test-agent tier = %q, want safe", profile.Tier)
+	if *profile.Tier != "safe" {
+		t.Errorf("test-agent tier = %q, want safe", *profile.Tier)
 	}
 }

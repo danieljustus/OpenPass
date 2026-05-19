@@ -114,9 +114,13 @@ Output columns:
 		for _, name := range names {
 			profile := cfg.Agents[name]
 
+			tier := ""
+			if profile.Tier != nil {
+				tier = *profile.Tier
+			}
 			item := AgentListItem{
 				Name: name,
-				Tier: profile.Tier,
+				Tier: tier,
 			}
 
 			var lastSeen time.Time
@@ -133,7 +137,10 @@ Output columns:
 				item.LastSeen = lastSeen.Format("2006-01-02 15:04")
 			}
 
-			skillPath := profile.SkillPath
+			var skillPath string
+			if profile.SkillPath != nil {
+				skillPath = *profile.SkillPath
+			}
 			if skillPath != "" {
 				expanded := expandTilde(skillPath)
 				expanded = filepath.Clean(expanded)
