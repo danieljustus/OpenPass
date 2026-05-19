@@ -471,7 +471,8 @@ func migrateLegacyEntries(vaultDir string) error {
 		if err != nil {
 			return err
 		}
-		if filepath.ToSlash(rel) == "identity.age" { //nolint:goconst // filename literal
+		relSlash := filepath.ToSlash(rel)
+		if relSlash == "identity.age" || relSlash == "manifest.age" { //nolint:goconst // filename literal
 			return nil
 		}
 
