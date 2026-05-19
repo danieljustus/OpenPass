@@ -14,13 +14,13 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	configpkg "github.com/danieljustus/OpenPass/internal/config"
 	cryptopkg "github.com/danieljustus/OpenPass/internal/crypto"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	"github.com/danieljustus/OpenPass/internal/git"
 	"github.com/danieljustus/OpenPass/internal/pairing"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 )
 
 var (

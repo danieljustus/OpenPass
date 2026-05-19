@@ -1,8 +1,8 @@
 package auth
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"fmt"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"time"
 

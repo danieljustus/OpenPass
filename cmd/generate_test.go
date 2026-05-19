@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"github.com/danieljustus/OpenPass/internal/config"
 	"github.com/danieljustus/OpenPass/internal/crypto"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 )
 
 func TestGeneratePassword_ValidLengths(t *testing.T) {

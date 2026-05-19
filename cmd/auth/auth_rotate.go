@@ -1,10 +1,10 @@
 package auth
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"bufio"
 	"context"
 	"fmt"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
 	"strings"

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	auth "github.com/danieljustus/OpenPass/cmd/auth"
 	configpkg "github.com/danieljustus/OpenPass/internal/config"
 	"github.com/danieljustus/OpenPass/internal/session"
-	auth "github.com/danieljustus/OpenPass/cmd/auth"
 )
 
 type cmdMockBiometricStore struct {

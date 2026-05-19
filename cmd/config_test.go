@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	admin "github.com/danieljustus/OpenPass/cmd/admin"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
 	"strings"

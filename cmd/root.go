@@ -39,28 +39,28 @@ var rootCmd = cli.RootCmd
 
 // Aliases for functions that moved to internal/cli/ but are still used by staying cmd/ files
 var (
-	vaultPath              = cli.VaultPath
-	unlockVault            = cli.UnlockVault
-	unlockVaultWithTTL     = cli.UnlockVaultWithTTL
-	sessionLoadIdentity    = cli.SessionLoadIdentity
-	sessionLoadPassphrase  = cli.SessionLoadPassphrase
-	readHiddenInput        = cli.ReadHiddenInput
-	readLineFromStdin      = cli.ReadLineFromStdin
-	expandVaultDir         = cli.ExpandVaultDir
-	defaultSessionTTL      = cli.DefaultSessionTTL
-	sessionIsExpired       = cli.SessionIsExpired
-	sessionGetCacheStatus  = cli.SessionGetCacheStatus
-	sessionSavePassphrase  = cli.SessionSavePassphrase
-	sessionSaveBiometric   = cli.SessionSaveBiometric
-	sessionLoadBiometric   = cli.SessionLoadBiometric
-	sessionSaveIdentity    = cli.SessionSaveIdentity
-	getVaultDir            = cli.GetVaultDir
-	readVisibleInput       = cli.ReadVisibleInput
-	stdinIsTerminal        = cli.StdinIsTerminal
-	withVault              = cli.WithVault
-	withVaultRaw           = cli.WithVaultRaw
-	appVersionVar          = cli.AppVersion
-	Version                = cli.AppVersion
+	vaultPath             = cli.VaultPath
+	unlockVault           = cli.UnlockVault
+	unlockVaultWithTTL    = cli.UnlockVaultWithTTL
+	sessionLoadIdentity   = cli.SessionLoadIdentity
+	sessionLoadPassphrase = cli.SessionLoadPassphrase
+	readHiddenInput       = cli.ReadHiddenInput
+	readLineFromStdin     = cli.ReadLineFromStdin
+	expandVaultDir        = cli.ExpandVaultDir
+	defaultSessionTTL     = cli.DefaultSessionTTL
+	sessionIsExpired      = cli.SessionIsExpired
+	sessionGetCacheStatus = cli.SessionGetCacheStatus
+	sessionSavePassphrase = cli.SessionSavePassphrase
+	sessionSaveBiometric  = cli.SessionSaveBiometric
+	sessionLoadBiometric  = cli.SessionLoadBiometric
+	sessionSaveIdentity   = cli.SessionSaveIdentity
+	getVaultDir           = cli.GetVaultDir
+	readVisibleInput      = cli.ReadVisibleInput
+	stdinIsTerminal       = cli.StdinIsTerminal
+	withVault             = cli.WithVault
+	withVaultRaw          = cli.WithVaultRaw
+	appVersionVar         = cli.AppVersion
+	Version               = cli.AppVersion
 )
 
 func Execute() {
@@ -82,4 +82,3 @@ func printQuietAware(format string, args ...interface{}) {
 func printlnQuietAware(args ...interface{}) {
 	cli.PrintlnQuietAware(args...)
 }
-

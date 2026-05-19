@@ -10,9 +10,9 @@ import (
 )
 
 // Local helpers for pointer-type AgentProfile construction in tests.
-func bptr(v bool) *bool     { return &v }
-func sptr(v string) *string { return &v }
-func iptr(v int) *int       { return &v }
+func bptr(v bool) *bool                   { return &v }
+func sptr(v string) *string               { return &v }
+func iptr(v int) *int                     { return &v }
 func dptr(v time.Duration) *time.Duration { return &v }
 
 func TestDefaultReturnsSensibleConfig(t *testing.T) {
@@ -2480,13 +2480,13 @@ func TestRoundTrip_AllFieldsSet(t *testing.T) {
 				DynamicProviders: map[string][]string{
 					"postgres": {"readonly", "admin"},
 				},
-				AllowedEnvVars:     []string{"DATABASE_URL"},
-				AllowedExecutables: []string{"psql"},
+				AllowedEnvVars:      []string{"DATABASE_URL"},
+				AllowedExecutables:  []string{"psql"},
 				PromptInjectionMode: StrPtr("deny"),
-				PreCallHooks:       []string{"hook1"},
-				PostCallHooks:      []string{"hook2"},
-				SkillPath:          sptr("~/.skills/test/SKILL.md"),
-				SkillVersion:       sptr("1.0.0"),
+				PreCallHooks:        []string{"hook1"},
+				PostCallHooks:       []string{"hook2"},
+				SkillPath:           sptr("~/.skills/test/SKILL.md"),
+				SkillVersion:        sptr("1.0.0"),
 			},
 		},
 		Vault: &VaultConfig{
@@ -2784,18 +2784,18 @@ func TestRoundTrip_ExplicitZeroValues(t *testing.T) {
 		AuthMethod:     "passphrase",
 		Agents: map[string]AgentProfile{
 			"default": {
-				Name:            "default",
-				AllowedPaths:    []string{},
-				CanWrite:        bptr(false),
-				CanRunCommands:  bptr(false),
-				CanManageConfig: bptr(false),
-				CanUseClipboard: bptr(false),
-				CanUseAutotype:  bptr(false),
-				CanReadValues:   bptr(false),
+				Name:             "default",
+				AllowedPaths:     []string{},
+				CanWrite:         bptr(false),
+				CanRunCommands:   bptr(false),
+				CanManageConfig:  bptr(false),
+				CanUseClipboard:  bptr(false),
+				CanUseAutotype:   bptr(false),
+				CanReadValues:    bptr(false),
 				ExposeValueTools: bptr(false),
-				AutoUnseal:      bptr(false),
-				RequireApproval: bptr(false),
-				ApprovalMode:    sptr("deny"),
+				AutoUnseal:       bptr(false),
+				RequireApproval:  bptr(false),
+				ApprovalMode:     sptr("deny"),
 			},
 		},
 	}

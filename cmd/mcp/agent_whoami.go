@@ -1,9 +1,9 @@
 package mcp
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"encoding/json"
 	"fmt"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
 	"strings"
@@ -90,8 +90,18 @@ type whoamiInfo struct {
 
 func buildWhoamiInfo(agentName, vaultDir string, profile *configpkg.AgentProfile) whoamiInfo {
 	bv := func(p *bool) bool { return p != nil && *p }
-	sv := func(p *string) string { if p != nil { return *p }; return "" }
-	iv := func(p *int) int { if p != nil { return *p }; return 0 }
+	sv := func(p *string) string {
+		if p != nil {
+			return *p
+		}
+		return ""
+	}
+	iv := func(p *int) int {
+		if p != nil {
+			return *p
+		}
+		return 0
+	}
 
 	info := whoamiInfo{
 		Name:            agentName,

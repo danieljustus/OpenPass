@@ -1,16 +1,16 @@
 package cmd
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"fmt"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 
-	"github.com/danieljustus/OpenPass/internal/config"
 	mcpcmd "github.com/danieljustus/OpenPass/cmd/mcp"
+	"github.com/danieljustus/OpenPass/internal/config"
 	"github.com/danieljustus/OpenPass/internal/testutil"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )

@@ -1,9 +1,9 @@
 package crud
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"errors"
 	"fmt"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"sort"
 	"strings"

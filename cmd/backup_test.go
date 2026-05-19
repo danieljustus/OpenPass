@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"archive/tar"
 	"compress/gzip"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
+	admin "github.com/danieljustus/OpenPass/cmd/admin"
 	"github.com/danieljustus/OpenPass/internal/config"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
-	admin "github.com/danieljustus/OpenPass/cmd/admin"
 )
 
 func TestCreateBackup(t *testing.T) {

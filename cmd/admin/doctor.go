@@ -1,9 +1,9 @@
 package admin
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"encoding/json"
 	"fmt"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"strings"
 
 	"github.com/spf13/cobra"

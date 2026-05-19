@@ -14,14 +14,14 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	crud "github.com/danieljustus/OpenPass/cmd/crud"
+	mcpcmd "github.com/danieljustus/OpenPass/cmd/mcp"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	clipboardapp "github.com/danieljustus/OpenPass/internal/clipboard"
 	vaultcrypto "github.com/danieljustus/OpenPass/internal/crypto"
-	mcpcmd "github.com/danieljustus/OpenPass/cmd/mcp"
-	crud "github.com/danieljustus/OpenPass/cmd/crud"
 	"github.com/danieljustus/OpenPass/internal/mcp"
 	"github.com/danieljustus/OpenPass/internal/mcp/serverbootstrap"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 )
 
 func TestMain(m *testing.M) {

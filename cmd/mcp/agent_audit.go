@@ -1,10 +1,10 @@
 package mcp
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"bufio"
 	"encoding/json"
 	"fmt"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
 	"strings"

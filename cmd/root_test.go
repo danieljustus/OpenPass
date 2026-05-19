@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/danieljustus/OpenPass/internal/config"
 	auth "github.com/danieljustus/OpenPass/cmd/auth"
 	cli "github.com/danieljustus/OpenPass/internal/cli"
+	"github.com/danieljustus/OpenPass/internal/config"
 	"github.com/danieljustus/OpenPass/internal/session"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
@@ -236,6 +236,15 @@ func TestExecute_Error(t *testing.T) {
 		panic("os.Exit called")
 	}
 	defer func() { cli.OsExit = origOsExit }()
+
+	// Recover the expected panic from OsExit
+	defer func() {
+		if r := recover(); r != nil {
+			if r != "os.Exit called" {
+				t.Errorf("unexpected panic: %v", r)
+			}
+		}
+	}()
 
 	// Save and restore rootCmd args and settings
 	origArgs := rootCmd.Args

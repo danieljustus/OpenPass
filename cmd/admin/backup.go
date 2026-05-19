@@ -1,11 +1,11 @@
 package admin
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"archive/tar"
 	"compress/gzip"
 	"crypto/sha256"
 	"fmt"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"io"
 	"os"
 	"path/filepath"

@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/danieljustus/OpenPass/internal/config"
 	admin "github.com/danieljustus/OpenPass/cmd/admin"
 	mcpcmd "github.com/danieljustus/OpenPass/cmd/mcp"
 	cli "github.com/danieljustus/OpenPass/internal/cli"
+	"github.com/danieljustus/OpenPass/internal/config"
 	"github.com/danieljustus/OpenPass/internal/mcp"
 	"github.com/danieljustus/OpenPass/internal/mcp/serverbootstrap"
 	"github.com/danieljustus/OpenPass/internal/testutil"

@@ -18,7 +18,7 @@ func TestLoadAgentProfile(t *testing.T) {
 		AllowedPaths: []string{"test/*"},
 		CanWrite:     configpkg.BoolPtr(true),
 	}
-	if err := cfg.SaveTo(filepath.Join(vaultDir, "configpkg.yaml")); err != nil {
+	if err := cfg.SaveTo(filepath.Join(vaultDir, "config.yaml")); err != nil {
 		t.Fatalf("save config error: %v", err)
 	}
 
@@ -45,7 +45,7 @@ func TestLoadAgentProfile_NotFound(t *testing.T) {
 
 	cfg := configpkg.Default()
 	cfg.VaultDir = vaultDir
-	if err := cfg.SaveTo(filepath.Join(vaultDir, "configpkg.yaml")); err != nil {
+	if err := cfg.SaveTo(filepath.Join(vaultDir, "config.yaml")); err != nil {
 		t.Fatalf("save config error: %v", err)
 	}
 

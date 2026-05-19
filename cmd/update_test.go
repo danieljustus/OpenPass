@@ -1,11 +1,11 @@
 package cmd
 
 import (
-	admin "github.com/danieljustus/OpenPass/cmd/admin"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"bytes"
 	"context"
 	"errors"
+	admin "github.com/danieljustus/OpenPass/cmd/admin"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
 	"runtime"

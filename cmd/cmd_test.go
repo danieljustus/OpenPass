@@ -10,13 +10,13 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"github.com/danieljustus/OpenPass/internal/config"
 	"github.com/danieljustus/OpenPass/internal/testutil"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 
-	mcpcmd "github.com/danieljustus/OpenPass/cmd/mcp"
 	crudcmd "github.com/danieljustus/OpenPass/cmd/crud"
+	mcpcmd "github.com/danieljustus/OpenPass/cmd/mcp"
 )
 
 func TestExpandVaultDir(t *testing.T) {

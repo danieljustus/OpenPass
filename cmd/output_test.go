@@ -2,9 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"io"
 	"os"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"strings"
 	"testing"
 )

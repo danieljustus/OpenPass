@@ -1,9 +1,9 @@
 package mcp
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"encoding/json"
 	"fmt"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"os/exec"
 	"path/filepath"

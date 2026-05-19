@@ -18,10 +18,10 @@ import (
 	"time"
 
 	"github.com/danieljustus/OpenPass/internal/config"
-	
+
+	mcpcmd "github.com/danieljustus/OpenPass/cmd/mcp"
 	mcpint "github.com/danieljustus/OpenPass/internal/mcp"
 	"github.com/danieljustus/OpenPass/internal/mcp/serverbootstrap"
-	mcpcmd "github.com/danieljustus/OpenPass/cmd/mcp"
 	"github.com/danieljustus/OpenPass/internal/session"
 	"github.com/danieljustus/OpenPass/internal/testutil"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"

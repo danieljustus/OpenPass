@@ -1,9 +1,9 @@
 package mcp
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"bufio"
 	"fmt"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,8 +35,18 @@ type tierDiff struct {
 func computeTierDiff(old, new configpkg.AgentProfile) []tierDiff {
 	boolVal := func(p *bool) bool { return p != nil && *p }
 	boolStr := func(p *bool) string { return fmt.Sprintf("%t", boolVal(p)) }
-	intStr := func(p *int) string { if p != nil { return fmt.Sprintf("%d", *p) }; return "0" }
-	strVal := func(p *string) string { if p != nil { return *p }; return "" }
+	intStr := func(p *int) string {
+		if p != nil {
+			return fmt.Sprintf("%d", *p)
+		}
+		return "0"
+	}
+	strVal := func(p *string) string {
+		if p != nil {
+			return *p
+		}
+		return ""
+	}
 
 	diffs := []tierDiff{
 		{Field: "canWrite", OldValue: boolStr(old.CanWrite), NewValue: boolStr(new.CanWrite), Changed: boolVal(old.CanWrite) != boolVal(new.CanWrite)},

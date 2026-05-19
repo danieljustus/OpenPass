@@ -3,8 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	cli "github.com/danieljustus/OpenPass/internal/cli"
+	"os"
 
 	"github.com/spf13/cobra"
 

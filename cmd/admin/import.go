@@ -1,10 +1,10 @@
 package admin
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"crypto/rand"
 	"errors"
 	"fmt"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path"
 	"sort"

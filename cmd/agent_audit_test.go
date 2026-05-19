@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/danieljustus/OpenPass/internal/audit"
 	mcp "github.com/danieljustus/OpenPass/cmd/mcp"
+	"github.com/danieljustus/OpenPass/internal/audit"
 )
 
 func writeAuditLogFile(t *testing.T, path string, entries []audit.LogEntry) {

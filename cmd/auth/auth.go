@@ -1,9 +1,9 @@
 package auth
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"context"
 	"fmt"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
 

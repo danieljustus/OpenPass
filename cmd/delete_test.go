@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	crud "github.com/danieljustus/OpenPass/cmd/crud"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"github.com/danieljustus/OpenPass/internal/config"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
-	crud "github.com/danieljustus/OpenPass/cmd/crud"
 )
 
 func TestCmdDelete_Cancel(t *testing.T) {

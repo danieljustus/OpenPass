@@ -1,11 +1,11 @@
 package admin
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
 	"time"

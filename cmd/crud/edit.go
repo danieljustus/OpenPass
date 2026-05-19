@@ -1,10 +1,10 @@
 package crud
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"bytes"
 	"encoding/json"
 	"fmt"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"os/exec"
 

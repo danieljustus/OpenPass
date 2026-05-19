@@ -1,17 +1,17 @@
 package cmd
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"encoding/json"
 	"fmt"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/danieljustus/OpenPass/internal/audit"
 	admin "github.com/danieljustus/OpenPass/cmd/admin"
+	"github.com/danieljustus/OpenPass/internal/audit"
 )
 
 func TestAuditLogPath(t *testing.T) {

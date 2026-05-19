@@ -106,7 +106,7 @@ func testHandleGetValueUnsealed(t *testing.T, autoUnseal bool, classification ta
 		AllowedPaths: []string{"*"},
 		CanWrite:     config.BoolPtr(false),
 		ApprovalMode: config.StrPtr("none"),
-		AutoUnseal: config.BoolPtr(autoUnseal),
+		AutoUnseal:   config.BoolPtr(autoUnseal),
 	}, "stdio", vaultDir)
 	srv.vault.Identity = identity
 

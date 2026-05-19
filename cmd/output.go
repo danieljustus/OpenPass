@@ -3,8 +3,8 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	cli "github.com/danieljustus/OpenPass/internal/cli"
+	"os"
 
 	"gopkg.in/yaml.v3"
 )

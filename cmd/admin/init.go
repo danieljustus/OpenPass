@@ -1,9 +1,9 @@
 package admin
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"context"
 	"fmt"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
 	"strings"
@@ -160,5 +160,3 @@ func resolveInitAuthMethod(method string) (string, error) {
 		return normalized, nil
 	}
 }
-
-

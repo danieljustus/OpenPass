@@ -46,10 +46,10 @@ const manifestFlushInterval = 200 * time.Millisecond
 // pendingVaultState tracks accumulated manifest changes for a single vault
 // directory. All fields are accessed only from the worker goroutine.
 type pendingVaultState struct {
-	updates  map[string][]byte           // path -> ciphertext
-	removes  map[string]bool             // path -> true
-	identity *age.X25519Identity         // identity used for manifest crypto
-	timer    *time.Timer                 // debounce timer (nil when idle)
+	updates  map[string][]byte   // path -> ciphertext
+	removes  map[string]bool     // path -> true
+	identity *age.X25519Identity // identity used for manifest crypto
+	timer    *time.Timer         // debounce timer (nil when idle)
 }
 
 // startManifestWorker launches the background goroutine that serializes all
