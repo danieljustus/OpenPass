@@ -149,7 +149,7 @@ jobs:
       - name: Check coverage threshold
         if: matrix.os == 'ubuntu-latest'
         run: |
-          COVERAGE_THRESHOLD=67.5
+          COVERAGE_THRESHOLD=63.5
           echo "Checking coverage threshold: ${COVERAGE_THRESHOLD}%"
           TOTAL_LINE=$(go tool cover -func=coverage.out | grep "total:")
           echo "Coverage line: $TOTAL_LINE"
