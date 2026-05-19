@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	configpkg "github.com/danieljustus/OpenPass/internal/config"
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
@@ -239,16 +238,11 @@ This shows the raw config file contents as-is.`,
 			return errorspkg.NewCLIError(errorspkg.ExitGeneralError, "cannot determine config file path", nil)
 		}
 
-		root, err := configpkg.LoadConfigNode(path)
+		raw, err := os.ReadFile(path)
 		if err != nil {
 			return errorspkg.NewCLIError(exitConfigError, fmt.Sprintf("cannot load config: %v", err), err)
 		}
-
-		out, err := yaml.Marshal(root)
-		if err != nil {
-			return errorspkg.NewCLIError(exitConfigError, fmt.Sprintf("cannot marshal config: %v", err), err)
-		}
-		printQuietAware("%s", string(out))
+		printQuietAware("%s", string(raw))
 		return nil
 	},
 }

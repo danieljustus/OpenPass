@@ -105,6 +105,10 @@ func ReencryptAll(vaultDir string, identity *age.X25519Identity, recipients []*a
 		}
 	}
 
+	if err := RebuildManifest(vaultDir, identity); err != nil {
+		return fmt.Errorf("rebuild manifest: %w", err)
+	}
+
 	fmt.Fprintf(os.Stderr, "\nRe-encrypted %d entries successfully.\n", len(files))
 	return nil
 }
@@ -133,7 +137,5 @@ func reencryptFile(vaultDir string, path string, identity *age.X25519Identity, r
 		return fmt.Errorf("atomic write: %w", err)
 	}
 
-	relPath := strings.TrimSuffix(strings.TrimPrefix(path, filepath.Join(vaultDir, "entries")+string(filepath.Separator)), ".age")
-	queueManifestUpdate(vaultDir, filepath.ToSlash(relPath), ciphertext, identity)
 	return nil
 }

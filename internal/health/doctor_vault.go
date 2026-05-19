@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -70,7 +71,7 @@ func checkVaultPermissions(vaultDir string, _ Options) Result {
 	r := Result{ID: "vault.permissions", Name: "File permissions"}
 
 	// Unix file permission semantics do not apply on Windows.
-	if osDarwin == "windows" {
+	if runtime.GOOS == "windows" {
 		r.Status = StatusOK
 		r.Message = "not applicable on Windows"
 		return r

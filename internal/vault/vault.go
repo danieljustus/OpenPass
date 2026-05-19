@@ -97,8 +97,7 @@ func Open(vaultDir string, identity *age.X25519Identity) (*Vault, error) {
 	if err := migrateLegacyEntries(vaultDir); err != nil {
 		return nil, fmt.Errorf("migrate legacy entries: %w", err)
 	}
-	// Rebuild manifest if it does not exist — handles both fresh vaults and
-	// crash recovery where deferred manifest updates did not complete.
+	// Rebuild manifest only when missing (fresh vaults or missing manifest file).
 	if _, err := os.Stat(filepath.Join(vaultDir, manifestFileName)); os.IsNotExist(err) {
 		_ = RebuildManifest(vaultDir, identity) // best-effort
 	}

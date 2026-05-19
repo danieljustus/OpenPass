@@ -23,7 +23,7 @@ type manifestOp struct {
 	path       string
 	ciphertext []byte
 	identity   *age.X25519Identity
-	done       chan struct{}
+	done       chan error
 }
 
 var (
@@ -38,14 +38,16 @@ func startManifestWorker() {
 	manifestCh = make(chan manifestOp, 256)
 	go func() {
 		for op := range manifestCh {
+			var err error
 			switch op.opType {
 			case manifestOpUpdate:
-				_ = UpdateManifestEntry(op.vaultDir, op.path, op.ciphertext, op.identity)
+				err = UpdateManifestEntry(op.vaultDir, op.path, op.ciphertext, op.identity)
 			case manifestOpRemove:
-				_ = RemoveManifestEntry(op.vaultDir, op.path, op.identity)
+				err = RemoveManifestEntry(op.vaultDir, op.path, op.identity)
 			case manifestOpFlush:
 			}
 			if op.done != nil {
+				op.done <- err
 				close(op.done)
 			}
 		}
@@ -55,9 +57,9 @@ func startManifestWorker() {
 // queueManifestUpdate enqueues an entry update in the manifest and waits for
 // completion. The caller MUST have written the entry file and released any
 // write lock before calling this.
-func queueManifestUpdate(vaultDir, path string, ciphertext []byte, identity *age.X25519Identity) {
+func queueManifestUpdate(vaultDir, path string, ciphertext []byte, identity *age.X25519Identity) error {
 	manifestChOnce.Do(startManifestWorker)
-	done := make(chan struct{})
+	done := make(chan error, 1)
 	manifestCh <- manifestOp{
 		opType:     manifestOpUpdate,
 		vaultDir:   vaultDir,
@@ -66,15 +68,15 @@ func queueManifestUpdate(vaultDir, path string, ciphertext []byte, identity *age
 		identity:   identity,
 		done:       done,
 	}
-	<-done
+	return <-done
 }
 
 // queueManifestRemove enqueues an entry removal from the manifest and waits
 // for completion. The caller MUST have removed the entry file and released any
 // write lock before calling this.
-func queueManifestRemove(vaultDir, path string, identity *age.X25519Identity) {
+func queueManifestRemove(vaultDir, path string, identity *age.X25519Identity) error {
 	manifestChOnce.Do(startManifestWorker)
-	done := make(chan struct{})
+	done := make(chan error, 1)
 	manifestCh <- manifestOp{
 		opType:   manifestOpRemove,
 		vaultDir: vaultDir,
@@ -82,14 +84,14 @@ func queueManifestRemove(vaultDir, path string, identity *age.X25519Identity) {
 		identity: identity,
 		done:     done,
 	}
-	<-done
+	return <-done
 }
 
 // FlushManifestUpdates blocks until all previously queued manifest operations
 // have completed. This is useful before clean shutdown.
 func FlushManifestUpdates() {
 	manifestChOnce.Do(startManifestWorker)
-	done := make(chan struct{})
+	done := make(chan error, 1)
 	manifestCh <- manifestOp{
 		opType: manifestOpFlush,
 		done:   done,

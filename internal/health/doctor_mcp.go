@@ -14,6 +14,7 @@ import (
 	configpkg "github.com/danieljustus/OpenPass/internal/config"
 	"github.com/danieljustus/OpenPass/internal/mcp"
 	"github.com/danieljustus/OpenPass/internal/update"
+	"github.com/danieljustus/OpenPass/internal/vault"
 )
 
 func checkMCPTokens(vaultDir string, _ Options) Result {
@@ -72,7 +73,7 @@ func checkAuditLog(vaultDir string, _ Options) Result {
 	}
 
 	// HMAC key is shared across all audit logs in the vault directory.
-	ks := audit.NewKeystore(vaultDir, nil)
+	ks := audit.NewKeystore(vaultDir, vault.CurrentSearchIdentity())
 	key, keyErr := ks.LoadHMACKey()
 	if keyErr != nil {
 		r.Status = StatusWarn

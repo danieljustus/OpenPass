@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -12,8 +13,8 @@ import (
 )
 
 // KnownConfigKeys returns all known config key paths for tab completion.
-// Wildcard entries (agents.*.canWrite) expand to actual agent names during
-// completion.
+// Wildcard entries (for example agents.*.canWrite) are used as schema hints
+// and are not returned directly by shell completion.
 func KnownConfigKeys() []string {
 	return []string{
 		// Top-level keys
@@ -129,7 +130,10 @@ func DefaultConfigFilePath() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot determine home directory: %w", err)
 	}
-	return home + "/" + defaultConfigDir + "/" + defaultConfigFile, nil
+	if home == "" {
+		return "", fmt.Errorf("cannot determine home directory: empty path")
+	}
+	return filepath.Join(home, defaultConfigDir, defaultConfigFile), nil
 }
 
 // LoadConfigNode loads a YAML config file and returns its root *yaml.Node.

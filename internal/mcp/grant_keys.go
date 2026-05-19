@@ -107,7 +107,7 @@ func grantGetWithFallback(service, account string) (string, error) {
 // The identity parameter is used by the fallback keystore for encrypting
 // keys at rest and is ignored on OS keyring platforms.
 func LoadOrCreateGrantSigningKey(vaultDir string, identity *age.X25519Identity) ([]byte, error) {
-	key, err := LoadGrantSigningKey(vaultDir, nil)
+	key, err := LoadGrantSigningKey(vaultDir, identity)
 	if err == nil {
 		return key, nil
 	}

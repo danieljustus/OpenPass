@@ -431,7 +431,9 @@ func WriteEntryWithRecipients(vaultDir, path string, entry *Entry, identity *age
 	if err := SafeWriteFile(filePath, ciphertext, 0o600); err != nil {
 		return err
 	}
-	queueManifestUpdate(vaultDir, path, ciphertext, identity)
+	if err := queueManifestUpdate(vaultDir, path, ciphertext, identity); err != nil {
+		return err
+	}
 	return nil
 }
 
