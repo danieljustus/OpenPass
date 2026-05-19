@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"filippo.io/age"
 )
@@ -42,7 +43,7 @@ func SaveEncryptedKey(path string, key []byte, identity *age.X25519Identity) err
 //
 // Returns ErrKeyFileNotFound if the file does not exist.
 func LoadEncryptedKey(path string, identity *age.X25519Identity) ([]byte, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("load encrypted key: %w", ErrKeyFileNotFound)
@@ -70,7 +71,7 @@ func LoadEncryptedKey(path string, identity *age.X25519Identity) ([]byte, error)
 // age-encryption header, indicating it was written by SaveEncryptedKey.
 // A non-existent file returns false, nil.
 func IsEncryptedKeyFile(path string) (bool, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, nil
