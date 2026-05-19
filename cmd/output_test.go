@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"strings"
 	"testing"
 )
@@ -106,7 +107,7 @@ func TestPrintResult(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 	quietMode = false
-	outputFormat = "json"
+	cli.OutputFormat = "json"
 
 	data := map[string]string{"test": "data"}
 	if err := PrintResult(data); err != nil {
@@ -120,7 +121,7 @@ func TestPrintResult(t *testing.T) {
 		t.Errorf("expected JSON output, got: %s", string(out))
 	}
 
-	outputFormat = "text" // reset
+	cli.OutputFormat = "text" // reset
 }
 
 func TestPrintJSON_MarshalError(t *testing.T) {

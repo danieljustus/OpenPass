@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/danieljustus/OpenPass/internal/config"
+	auth "github.com/danieljustus/OpenPass/cmd/auth"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"github.com/danieljustus/OpenPass/internal/session"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
@@ -26,7 +28,7 @@ func resetVaultFlag(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		vault = origVault
+		cli.Vault = origVault
 		if vaultFlag != nil {
 			_ = vaultFlag.Value.Set(origVault)
 			vaultFlag.Changed = origChanged
@@ -84,11 +86,11 @@ func TestVaultPathErrorWhenHomeDirNotAvailable(t *testing.T) {
 	// Save original vault value and restore after test
 	origVaultFlag := vault
 	defer func() {
-		vault = origVaultFlag
+		cli.Vault = origVaultFlag
 	}()
 
 	// Set vault to a path starting with ~ which requires home directory expansion
-	vault = "~/.openpass"
+	cli.Vault = "~/.openpass"
 
 	// Call vaultPath and verify it returns an error
 	path, err := vaultPath()
@@ -121,11 +123,11 @@ func TestVaultPathSuccessWithTildeExpansion(t *testing.T) {
 	// Save original vault value and restore after test
 	origVaultFlag := vault
 	defer func() {
-		vault = origVaultFlag
+		cli.Vault = origVaultFlag
 	}()
 
 	// Set vault to a path starting with ~
-	vault = "~/.openpass"
+	cli.Vault = "~/.openpass"
 
 	// Call vaultPath and verify it returns the expanded path
 	path, err := vaultPath()
@@ -161,11 +163,11 @@ func TestVaultPathSuccessWithoutTilde(t *testing.T) {
 	// Save original vault value and restore after test
 	origVaultFlag := vault
 	defer func() {
-		vault = origVaultFlag
+		cli.Vault = origVaultFlag
 	}()
 
 	// Set vault to an absolute path without tilde
-	vault = "/custom/vault/path"
+	cli.Vault = "/custom/vault/path"
 
 	// Call vaultPath and verify it returns the path as-is
 	path, err := vaultPath()
@@ -186,7 +188,7 @@ func TestVaultPathUsesEnvWhenFlagUnchanged(t *testing.T) {
 	origEnv := os.Getenv("OPENPASS_VAULT")
 	defer func() { _ = os.Setenv("OPENPASS_VAULT", origEnv) }()
 
-	vault = "~/.openpass"
+	cli.Vault = "~/.openpass"
 	_ = os.Setenv("OPENPASS_VAULT", "/env/vault")
 
 	path, err := vaultPath()
@@ -212,7 +214,7 @@ func TestVaultPathPrefersExplicitFlagOverEnv(t *testing.T) {
 		t.Fatalf("set vault flag: %v", err)
 	}
 	vaultFlag.Changed = true
-	vault = "/flag/vault"
+	cli.Vault = "/flag/vault"
 
 	path, err := vaultPath()
 	if err != nil {
@@ -223,15 +225,17 @@ func TestVaultPathPrefersExplicitFlagOverEnv(t *testing.T) {
 	}
 }
 
-// TestExecute_Error verifies that Execute() calls osExit(1) when rootCmd.Execute() returns an error.
+// TestExecute_Error verifies that Execute() calls cli.OsExit(1) when rootCmd.Execute() returns an error.
 func TestExecute_Error(t *testing.T) {
-	// Save and restore original osExit
-	origOsExit := osExit
 	var exitCode int
-	osExit = func(code int) {
+
+	// Save and restore original cli.OsExit
+	origOsExit := cli.OsExit
+	cli.OsExit = func(code int) {
 		exitCode = code
+		panic("os.Exit called")
 	}
-	defer func() { osExit = origOsExit }()
+	defer func() { cli.OsExit = origOsExit }()
 
 	// Save and restore rootCmd args and settings
 	origArgs := rootCmd.Args
@@ -250,7 +254,7 @@ func TestExecute_Error(t *testing.T) {
 	Execute()
 
 	if exitCode != 1 {
-		t.Errorf("Execute() called osExit(%d), want osExit(1)", exitCode)
+		t.Errorf("Execute() called cli.OsExit(%d), want cli.OsExit(1)", exitCode)
 	}
 }
 
@@ -354,10 +358,10 @@ func TestUnlockCommand_UsesConfiguredSessionTimeoutByDefault(t *testing.T) {
 	restoreStdin := pipeStdin(t, string(passphrase)+"\n")
 	defer restoreStdin()
 
-	ttlFlag := unlockCmd.Flags().Lookup("ttl")
+	ttlFlag := auth.AuthUnlockCmd.Flags().Lookup("ttl")
 	origTTLChanged := ttlFlag.Changed
 	origTTLValue := ttlFlag.Value.String()
-	checkFlag := unlockCmd.Flags().Lookup("check")
+	checkFlag := auth.AuthUnlockCmd.Flags().Lookup("check")
 	origCheckChanged := checkFlag.Changed
 	origCheckValue := checkFlag.Value.String()
 	_ = ttlFlag.Value.Set(defaultSessionTTL().String())
@@ -516,9 +520,9 @@ func TestUnlockVault_HiddenInput(t *testing.T) {
 
 func TestConfiguredSessionTTL_WithOverride(t *testing.T) {
 	override := 30 * time.Minute
-	ttl := configuredSessionTTL(nil, override)
+	ttl := cli.ConfiguredSessionTTL(nil, override)
 	if ttl != override {
-		t.Fatalf("configuredSessionTTL() = %v, want %v", ttl, override)
+		t.Fatalf("cli.ConfiguredSessionTTL() = %v, want %v", ttl, override)
 	}
 }
 
@@ -536,24 +540,24 @@ func TestConfiguredSessionTTL_WithVaultConfig(t *testing.T) {
 		t.Fatalf("open vault: %v", err)
 	}
 
-	ttl := configuredSessionTTL(v, 0)
+	ttl := cli.ConfiguredSessionTTL(v, 0)
 	if ttl != cfg.SessionTimeout {
-		t.Fatalf("configuredSessionTTL() = %v, want %v", ttl, cfg.SessionTimeout)
+		t.Fatalf("cli.ConfiguredSessionTTL() = %v, want %v", ttl, cfg.SessionTimeout)
 	}
 }
 
 func TestConfiguredSessionTTL_NilVault(t *testing.T) {
-	ttl := configuredSessionTTL(nil, 0)
+	ttl := cli.ConfiguredSessionTTL(nil, 0)
 	if ttl != defaultSessionTTL() {
-		t.Fatalf("configuredSessionTTL() = %v, want %v", ttl, defaultSessionTTL())
+		t.Fatalf("cli.ConfiguredSessionTTL() = %v, want %v", ttl, defaultSessionTTL())
 	}
 }
 
 func TestConfiguredSessionTTL_VaultWithNilConfig(t *testing.T) {
 	v := &vaultpkg.Vault{}
-	ttl := configuredSessionTTL(v, 0)
+	ttl := cli.ConfiguredSessionTTL(v, 0)
 	if ttl != defaultSessionTTL() {
-		t.Fatalf("configuredSessionTTL() = %v, want %v", ttl, defaultSessionTTL())
+		t.Fatalf("cli.ConfiguredSessionTTL() = %v, want %v", ttl, defaultSessionTTL())
 	}
 }
 
@@ -571,9 +575,9 @@ func TestConfiguredSessionTTL_ZeroSessionTimeout(t *testing.T) {
 		t.Fatalf("open vault: %v", err)
 	}
 
-	ttl := configuredSessionTTL(v, 0)
+	ttl := cli.ConfiguredSessionTTL(v, 0)
 	if ttl != defaultSessionTTL() {
-		t.Fatalf("configuredSessionTTL() = %v, want %v", ttl, defaultSessionTTL())
+		t.Fatalf("cli.ConfiguredSessionTTL() = %v, want %v", ttl, defaultSessionTTL())
 	}
 }
 
@@ -650,49 +654,49 @@ func TestReadHiddenInput_StdinEOF(t *testing.T) {
 }
 
 func TestWarnPipeRead_OnceAndSilenced(t *testing.T) {
-	oldEmitted := pipeWarningEmitted
+	oldEmitted := cli.PipeWarningEmitted
 	oldNoPipe := noPipeWarning
 	oldQuiet := quietMode
 	defer func() {
-		pipeWarningEmitted = oldEmitted
+		cli.PipeWarningEmitted = oldEmitted
 		noPipeWarning = oldNoPipe
 		quietMode = oldQuiet
 	}()
 
 	// Suppressed when --no-pipe-warning is set.
-	pipeWarningEmitted = false
+	cli.PipeWarningEmitted = false
 	noPipeWarning = true
-	warnPipeRead("Passphrase")
-	if pipeWarningEmitted {
+	cli.WarnPipeRead("Passphrase")
+	if cli.PipeWarningEmitted {
 		t.Errorf("warning fired despite --no-pipe-warning")
 	}
 
 	// Suppressed when OPENPASS_NO_PIPE_WARNING is set.
-	pipeWarningEmitted = false
+	cli.PipeWarningEmitted = false
 	noPipeWarning = false
 	t.Setenv("OPENPASS_NO_PIPE_WARNING", "1")
-	warnPipeRead("Passphrase")
-	if pipeWarningEmitted {
+	cli.WarnPipeRead("Passphrase")
+	if cli.PipeWarningEmitted {
 		t.Errorf("warning fired despite OPENPASS_NO_PIPE_WARNING")
 	}
 	t.Setenv("OPENPASS_NO_PIPE_WARNING", "0")
 
 	// Suppressed in quiet mode.
-	pipeWarningEmitted = false
+	cli.PipeWarningEmitted = false
 	quietMode = true
-	warnPipeRead("Passphrase")
-	if pipeWarningEmitted {
+	cli.WarnPipeRead("Passphrase")
+	if cli.PipeWarningEmitted {
 		t.Errorf("warning fired despite --quiet")
 	}
 	quietMode = false
 
 	// Fires once when not suppressed.
-	pipeWarningEmitted = false
-	warnPipeRead("Passphrase")
-	if !pipeWarningEmitted {
+	cli.PipeWarningEmitted = false
+	cli.WarnPipeRead("Passphrase")
+	if !cli.PipeWarningEmitted {
 		t.Errorf("warning did not fire when expected")
 	}
 
 	// Already emitted → second call is silent (idempotent).
-	warnPipeRead("Passphrase")
+	cli.WarnPipeRead("Passphrase")
 }

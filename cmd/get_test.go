@@ -12,6 +12,7 @@ import (
 	clipboardapp "github.com/danieljustus/OpenPass/internal/clipboard"
 	"github.com/danieljustus/OpenPass/internal/config"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
+	crud "github.com/danieljustus/OpenPass/cmd/crud"
 )
 
 func TestGetAutoClearDuration(t *testing.T) {

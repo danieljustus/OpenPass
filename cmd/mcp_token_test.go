@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"fmt"
 	"os"
 	"runtime"
@@ -9,13 +10,14 @@ import (
 	"time"
 
 	"github.com/danieljustus/OpenPass/internal/config"
+	mcpcmd "github.com/danieljustus/OpenPass/cmd/mcp"
 	"github.com/danieljustus/OpenPass/internal/mcp"
 	"github.com/danieljustus/OpenPass/internal/testutil"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 )
 
 func TestMCPTokenCommandRegistration(t *testing.T) {
-	commands := mcpTokenCmd.Commands()
+	commands := mcpcmd.McpTokenCmd.Commands()
 	if len(commands) != 3 {
 		t.Fatalf("expected 3 subcommands, got %d", len(commands))
 	}
@@ -45,13 +47,13 @@ func TestMCPTokenCreate_Defaults(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "create", "--label", "test-default"})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	cli.RootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "create", "--label", "test-default"})
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err := rootCmd.Execute()
+	err := cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -75,19 +77,19 @@ func TestMCPTokenCreate_WithToolsAndAgent(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{
+	cli.RootCmd.SetArgs([]string{
 		"--vault", vaultDir,
 		"mcp", "token", "create",
 		"--tools", "list_entries,get_entry",
 		"--agent", "claude-code",
 		"--label", "scoped-test",
 	})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err := rootCmd.Execute()
+	err := cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -111,19 +113,19 @@ func TestMCPTokenCreate_MultipleToolFlags(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{
+	cli.RootCmd.SetArgs([]string{
 		"--vault", vaultDir,
 		"mcp", "token", "create",
 		"--tools", "list_entries",
 		"--tools", "get_entry",
 		"--label", "multi-flag",
 	})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err := rootCmd.Execute()
+	err := cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -147,18 +149,18 @@ func TestMCPTokenCreate_WithTTL(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{
+	cli.RootCmd.SetArgs([]string{
 		"--vault", vaultDir,
 		"mcp", "token", "create",
 		"--ttl", "7d",
 		"--label", "ttl-test",
 	})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err := rootCmd.Execute()
+	err := cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -185,17 +187,17 @@ func TestMCPTokenCreate_DefaultTTLFromConfig(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{
+	cli.RootCmd.SetArgs([]string{
 		"--vault", vaultDir,
 		"mcp", "token", "create",
 		"--label", "config-ttl",
 	})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err := rootCmd.Execute()
+	err := cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -219,18 +221,18 @@ func TestMCPTokenCreate_InvalidTTL(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{
+	cli.RootCmd.SetArgs([]string{
 		"--vault", vaultDir,
 		"mcp", "token", "create",
 		"--ttl", "not-a-duration",
 		"--label", "invalid",
 	})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err := rootCmd.Execute()
+	err := cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -254,15 +256,15 @@ func TestMCPTokenCreate_VaultPathError(t *testing.T) {
 	defer func() { vault = origVault }()
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{"mcp", "token", "create", "--label", "fail"})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	cli.RootCmd.SetArgs([]string{"mcp", "token", "create", "--label", "fail"})
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
 	var execErr error
 	captureStderr(func() {
-		execErr = rootCmd.Execute()
+		execErr = cli.RootCmd.Execute()
 	})
 
 	if execErr == nil {
@@ -284,13 +286,13 @@ func TestMCPTokenList_Empty(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "list"})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	cli.RootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "list"})
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err := rootCmd.Execute()
+	err := cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -326,13 +328,13 @@ func TestMCPTokenList_WithTokens(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "list"})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	cli.RootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "list"})
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err = rootCmd.Execute()
+	err = cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -368,13 +370,13 @@ func TestMCPTokenRevoke_Success(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "revoke", token.ID})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	cli.RootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "revoke", token.ID})
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err = rootCmd.Execute()
+	err = cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -397,13 +399,13 @@ func TestMCPTokenRevoke_NotFound(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "revoke", "nonexistent-id"})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	cli.RootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "revoke", "nonexistent-id"})
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err := rootCmd.Execute()
+	err := cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -439,12 +441,12 @@ func TestMCPTokenRevoke_DoubleRevoke(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "revoke", token.ID})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
+	cli.RootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "revoke", token.ID})
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
 
-	err = rootCmd.Execute()
+	err = cli.RootCmd.Execute()
 	if err == nil {
 		t.Fatal("expected deprecation error on first revoke")
 	}
@@ -452,8 +454,8 @@ func TestMCPTokenRevoke_DoubleRevoke(t *testing.T) {
 		t.Errorf("expected deprecation message on first revoke, got: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "revoke", token.ID})
-	err = rootCmd.Execute()
+	cli.RootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "revoke", token.ID})
+	err = cli.RootCmd.Execute()
 	if err == nil {
 		t.Fatal("expected deprecation error on second revoke")
 	}
@@ -489,13 +491,13 @@ func TestMCPTokenList_RevokedToken(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "list"})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	cli.RootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "list"})
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err = rootCmd.Execute()
+	err = cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -522,13 +524,13 @@ func TestParseHumanDuration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			got, err := parseHumanDuration(tt.input)
+			got, err := mcpcmd.ParseHumanDuration(tt.input)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("parseHumanDuration(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+				t.Errorf("mcpcmd.ParseHumanDuration(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
 				return
 			}
 			if got != tt.want {
-				t.Errorf("parseHumanDuration(%q) = %v, want %v", tt.input, got, tt.want)
+				t.Errorf("mcpcmd.ParseHumanDuration(%q) = %v, want %v", tt.input, got, tt.want)
 			}
 		})
 	}
@@ -536,7 +538,7 @@ func TestParseHumanDuration(t *testing.T) {
 
 func TestResolveTokenTTL_FromFlag(t *testing.T) {
 	vaultDir := t.TempDir()
-	d, err := resolveTokenTTL(vaultDir, "12h")
+	d, err := mcpcmd.ResolveTokenTTL(vaultDir, "12h")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -547,7 +549,7 @@ func TestResolveTokenTTL_FromFlag(t *testing.T) {
 
 func TestResolveTokenTTL_FromConfig(t *testing.T) {
 	vaultDir := t.TempDir()
-	d, err := resolveTokenTTL(vaultDir, "")
+	d, err := mcpcmd.ResolveTokenTTL(vaultDir, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -558,7 +560,7 @@ func TestResolveTokenTTL_FromConfig(t *testing.T) {
 
 func TestResolveTokenTTL_DefaultFallback(t *testing.T) {
 	vaultDir := t.TempDir()
-	d, err := resolveTokenTTL(vaultDir, "")
+	d, err := mcpcmd.ResolveTokenTTL(vaultDir, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -581,18 +583,18 @@ func TestMCPTokenCreate_ZeroTTL(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{
+	cli.RootCmd.SetArgs([]string{
 		"--vault", vaultDir,
 		"mcp", "token", "create",
 		"--ttl", "0h",
 		"--label", "zero-ttl",
 	})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err := rootCmd.Execute()
+	err := cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -634,13 +636,13 @@ func TestMCPTokenList_ExpiredTokenExcluded(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "list"})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	cli.RootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "list"})
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err = rootCmd.Execute()
+	err = cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -664,18 +666,18 @@ func TestMCPTokenCreate_PreservesInRegistry(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{
+	cli.RootCmd.SetArgs([]string{
 		"--vault", vaultDir,
 		"mcp", "token", "create",
 		"--tools", "list_entries",
 		"--label", "persist-test",
 	})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err := rootCmd.Execute()
+	err := cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -698,15 +700,15 @@ func TestMCPTokenRevoke_MissingArg(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "revoke"})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	cli.RootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "revoke"})
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
 	var execErr error
 	captureStderr(func() {
-		execErr = rootCmd.Execute()
+		execErr = cli.RootCmd.Execute()
 	})
 
 	if execErr == nil {
@@ -745,13 +747,13 @@ func TestMCPTokenCreate_ToolsLongOutput(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "list"})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	cli.RootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "list"})
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err = rootCmd.Execute()
+	err = cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -788,13 +790,13 @@ func TestMCPTokenList_HeaderFormat(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "list"})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	cli.RootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "list"})
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err = rootCmd.Execute()
+	err = cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -806,7 +808,7 @@ func TestMCPTokenList_HeaderFormat(t *testing.T) {
 
 func TestMCPCmdRegistration(t *testing.T) {
 	found := false
-	for _, c := range rootCmd.Commands() {
+	for _, c := range cli.RootCmd.Commands() {
 		if c.Name() == "mcp" {
 			found = true
 			break
@@ -832,18 +834,18 @@ func TestMCPTokenCreate_NegativeDayTTL(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{
+	cli.RootCmd.SetArgs([]string{
 		"--vault", vaultDir,
 		"mcp", "token", "create",
 		"--ttl", "-1d",
 		"--label", "negative",
 	})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err := rootCmd.Execute()
+	err := cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -869,17 +871,17 @@ func TestMCPTokenCreate_RegistryFilePermissions(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{
+	cli.RootCmd.SetArgs([]string{
 		"--vault", vaultDir,
 		"mcp", "token", "create",
 		"--label", "perms-test",
 	})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err := rootCmd.Execute()
+	err := cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -903,16 +905,16 @@ func TestMCPTokenCreate_EmptyLabelOK(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{
+	cli.RootCmd.SetArgs([]string{
 		"--vault", vaultDir,
 		"mcp", "token", "create",
 	})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err := rootCmd.Execute()
+	err := cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -936,15 +938,15 @@ func TestMCPTokenRevoke_VaultPathError(t *testing.T) {
 	defer func() { vault = origVault }()
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{"mcp", "token", "revoke", "some-id"})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	cli.RootCmd.SetArgs([]string{"mcp", "token", "revoke", "some-id"})
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
 	var execErr error
 	captureStderr(func() {
-		execErr = rootCmd.Execute()
+		execErr = cli.RootCmd.Execute()
 	})
 
 	if execErr == nil {
@@ -966,15 +968,15 @@ func TestMCPTokenList_VaultPathError(t *testing.T) {
 	defer func() { vault = origVault }()
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{"mcp", "token", "list"})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	cli.RootCmd.SetArgs([]string{"mcp", "token", "list"})
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
 	var execErr error
 	captureStderr(func() {
-		execErr = rootCmd.Execute()
+		execErr = cli.RootCmd.Execute()
 	})
 
 	if execErr == nil {
@@ -996,18 +998,18 @@ func TestMCPTokenCreate_WithDaySuffixTTL(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{
+	cli.RootCmd.SetArgs([]string{
 		"--vault", vaultDir,
 		"mcp", "token", "create",
 		"--ttl", "7d",
 		"--label", "week-token",
 	})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err := rootCmd.Execute()
+	err := cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -1044,13 +1046,13 @@ func TestMCPTokenList_EmptyAgentAndLabel(t *testing.T) {
 	}
 
 	vaultFlagReset(t)
-	t.Cleanup(func() { resetCobraCommand(rootCmd) })
+	t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-	rootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "list"})
-	t.Cleanup(func() { rootCmd.SetArgs(nil) })
-	t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+	cli.RootCmd.SetArgs([]string{"--vault", vaultDir, "mcp", "token", "list"})
+	t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+	t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-	err = rootCmd.Execute()
+	err = cli.RootCmd.Execute()
 
 	if err == nil {
 		t.Fatal("expected deprecation error")
@@ -1074,17 +1076,17 @@ func TestMCPTokenCreate_RawTokenUnique(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		vaultFlagReset(t)
-		t.Cleanup(func() { resetCobraCommand(rootCmd) })
+		t.Cleanup(func() { resetCobraCommand(cli.RootCmd) })
 
-		rootCmd.SetArgs([]string{
+		cli.RootCmd.SetArgs([]string{
 			"--vault", vaultDir,
 			"mcp", "token", "create",
 			"--label", fmt.Sprintf("token-%d", i),
 		})
-		t.Cleanup(func() { rootCmd.SetArgs(nil) })
-		t.Cleanup(func() { _ = tokenCreateCmd.Flags().Set("ttl", "") })
+		t.Cleanup(func() { cli.RootCmd.SetArgs(nil) })
+		t.Cleanup(func() { _ = mcpcmd.TokenCreateCmd.Flags().Set("ttl", "") })
 
-		err := rootCmd.Execute()
+		err := cli.RootCmd.Execute()
 		if err == nil {
 			t.Fatal("expected deprecation error")
 		}

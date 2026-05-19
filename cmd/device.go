@@ -20,6 +20,7 @@ import (
 	"github.com/danieljustus/OpenPass/internal/git"
 	"github.com/danieljustus/OpenPass/internal/pairing"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 )
 
 var (
@@ -334,7 +335,7 @@ any registered device (unmanaged recipients).`,
 			}
 		}
 
-		if outputFormat == "json" || outputFormat == "yaml" {
+		if cli.OutputFormat == "json" || cli.OutputFormat == "yaml" {
 			type deviceOutput struct {
 				Name      string `json:"name" yaml:"name"`
 				PublicKey string `json:"public_key" yaml:"public_key"`

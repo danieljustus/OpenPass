@@ -9,6 +9,7 @@ import (
 
 	errorspkg "github.com/danieljustus/OpenPass/internal/errors"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 )
 
 var (
@@ -50,7 +51,7 @@ var recipientsListCmd = &cobra.Command{
 		}
 
 		if len(recipients) == 0 {
-			if outputFormat == "text" {
+			if cli.OutputFormat == "text" {
 				printlnQuietAware("No recipients configured.")
 				printlnQuietAware("Use 'openpass recipients add <public-key>' to add a recipient.")
 			} else {
@@ -61,7 +62,7 @@ var recipientsListCmd = &cobra.Command{
 			return nil
 		}
 
-		if outputFormat == "text" {
+		if cli.OutputFormat == "text" {
 			printQuietAware("Recipients (%d):\n\n", len(recipients))
 			for _, r := range recipients {
 				status := "✓"

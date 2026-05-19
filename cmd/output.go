@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	"gopkg.in/yaml.v3"
 )
@@ -68,7 +69,7 @@ func NewPrinter(format string) (Printer, error) {
 
 // PrintResult prints the value using the current output format.
 func PrintResult(v interface{}) error {
-	printer, err := NewPrinter(outputFormat)
+	printer, err := NewPrinter(cli.OutputFormat)
 	if err != nil {
 		return err
 	}
@@ -99,7 +100,7 @@ var jsonDeprecationWarned = false
 // flag. When the legacy bool is true and the persistent flag is not "json", a
 // one-time deprecation warning is written to stderr.
 func wantJSONOutput(legacyJSON bool) bool {
-	if outputFormat == "json" {
+	if cli.OutputFormat == "json" {
 		return true
 	}
 	if legacyJSON {

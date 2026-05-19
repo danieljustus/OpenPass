@@ -9,6 +9,8 @@ import (
 
 	"github.com/danieljustus/OpenPass/internal/config"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
+	crud "github.com/danieljustus/OpenPass/cmd/crud"
 )
 
 func TestCmdDelete_Cancel(t *testing.T) {
@@ -83,8 +85,8 @@ func TestCmdDelete_YesJSON(t *testing.T) {
 	setPassEnv(t, string(passphrase))
 	defer setupVaultFlag(t, vaultDir)()
 	t.Cleanup(func() {
-		deleteYes = false
-		outputFormat = "text"
+		crud.DeleteYes = false
+		cli.OutputFormat = "text"
 	})
 
 	output := captureStdout(func() {

@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	admin "github.com/danieljustus/OpenPass/cmd/admin"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"bytes"
 	"context"
 	"errors"
@@ -46,20 +48,20 @@ func prepareRootCommandOutput(t *testing.T) *bytes.Buffer {
 	return buf
 }
 
-func setUpdateCheckerForTest(t *testing.T, checker updateChecker) {
+func setUpdateCheckerForTest(t *testing.T, checker admin.UpdateChecker) {
 	t.Helper()
 
-	original := updateCheckerFactory
-	updateCheckerFactory = func() updateChecker { return checker }
-	t.Cleanup(func() { updateCheckerFactory = original })
+	original := admin.UpdateCheckerFactory
+	admin.UpdateCheckerFactory = func() admin.UpdateChecker { return checker }
+	t.Cleanup(func() { admin.UpdateCheckerFactory = original })
 }
 
 func setVersionInfoForTest(t *testing.T, version string) {
 	t.Helper()
 
-	originalVersion := appVersion
-	originalCommit := appCommit
-	originalDate := appDate
+	originalVersion := cli.AppVersion
+	originalCommit := cli.AppCommit
+	originalDate := cli.AppDate
 	SetVersionInfo(version, "test-commit", "test-date")
 	t.Cleanup(func() {
 		SetVersionInfo(originalVersion, originalCommit, originalDate)
@@ -301,8 +303,8 @@ func TestUpdateCheckCommandQuietModeUpdateAvailable(t *testing.T) {
 	}
 	setUpdateCheckerForTest(t, checker)
 
-	updateCheckCmd.SilenceUsage = true
-	updateCheckCmd.SilenceErrors = true
+	admin.UpdateCheckCmd.SilenceUsage = true
+	admin.UpdateCheckCmd.SilenceErrors = true
 
 	rootCmd.SetArgs([]string{"update", "check", "--quiet"})
 	t.Cleanup(func() { rootCmd.SetArgs(nil) })
@@ -379,9 +381,9 @@ func TestUpdateCacheTTL_UserHomeDirError(t *testing.T) {
 		_ = os.Setenv("USERPROFILE", origUserProfile)
 	}()
 
-	ttl := updateCacheTTL()
+	ttl := admin.UpdateCacheTTL()
 	if ttl != updatepkg.DefaultCacheTTL {
-		t.Fatalf("updateCacheTTL() = %v, want %v", ttl, updatepkg.DefaultCacheTTL)
+		t.Fatalf("admin.UpdateCacheTTL() = %v, want %v", ttl, updatepkg.DefaultCacheTTL)
 	}
 }
 
@@ -396,9 +398,9 @@ func TestUpdateCacheTTL_ConfigLoadError(t *testing.T) {
 	// Ensure .openpass directory doesn't exist so config load fails
 	_ = os.RemoveAll(filepath.Join(tmpDir, ".openpass"))
 
-	ttl := updateCacheTTL()
+	ttl := admin.UpdateCacheTTL()
 	if ttl != updatepkg.DefaultCacheTTL {
-		t.Fatalf("updateCacheTTL() = %v, want %v", ttl, updatepkg.DefaultCacheTTL)
+		t.Fatalf("admin.UpdateCacheTTL() = %v, want %v", ttl, updatepkg.DefaultCacheTTL)
 	}
 }
 
@@ -429,9 +431,9 @@ func TestUpdateCacheTTL_CustomCacheTTL(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	ttl := updateCacheTTL()
+	ttl := admin.UpdateCacheTTL()
 	if ttl != customTTL {
-		t.Fatalf("updateCacheTTL() = %v, want %v", ttl, customTTL)
+		t.Fatalf("admin.UpdateCacheTTL() = %v, want %v", ttl, customTTL)
 	}
 }
 
@@ -456,8 +458,8 @@ func TestUpdateCacheTTL_DefaultWhenNoUpdateConfig(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	ttl := updateCacheTTL()
+	ttl := admin.UpdateCacheTTL()
 	if ttl != updatepkg.DefaultCacheTTL {
-		t.Fatalf("updateCacheTTL() = %v, want %v", ttl, updatepkg.DefaultCacheTTL)
+		t.Fatalf("admin.UpdateCacheTTL() = %v, want %v", ttl, updatepkg.DefaultCacheTTL)
 	}
 }

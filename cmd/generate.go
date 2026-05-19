@@ -8,6 +8,7 @@ import (
 
 	"github.com/danieljustus/OpenPass/internal/crypto"
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 )
 
 var (
@@ -54,7 +55,7 @@ var generateCmd = &cobra.Command{
 					return fmt.Errorf("auto-commit failed: %w", err)
 				}
 
-				if outputFormat == "text" {
+				if cli.OutputFormat == "text" {
 					if genQuiet {
 						return nil
 					}
@@ -76,7 +77,7 @@ var generateCmd = &cobra.Command{
 			})
 		}
 
-		if outputFormat == "text" {
+		if cli.OutputFormat == "text" {
 			printlnQuietAware(password)
 		} else {
 			if err := PrintResult(map[string]interface{}{"password": password}); err != nil {
