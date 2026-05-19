@@ -3,12 +3,13 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"

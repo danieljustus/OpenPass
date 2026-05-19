@@ -5,11 +5,12 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"fmt"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	"github.com/spf13/cobra"
 

@@ -2,9 +2,10 @@ package auth
 
 import (
 	"fmt"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"time"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	"github.com/spf13/cobra"
 

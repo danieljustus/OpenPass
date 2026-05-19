@@ -601,148 +601,60 @@ func TestAuthorize_NilServer(t *testing.T) {
 }
 
 func TestAuthorize_EmptyPath(t *testing.T) {
-	dir := t.TempDir()
-	identity, err := age.GenerateX25519Identity()
-	if err != nil {
-		t.Fatalf("generate identity: %v", err)
-	}
-
-	cfg := &config.Config{
-		DefaultAgent: "test",
-		Agents: map[string]config.AgentProfile{
-			"test": {
-				Name:         "test",
-				AllowedPaths: []string{"*"},
-				CanWrite:     config.BoolPtr(true),
-				ApprovalMode: config.StrPtr("none"),
-			},
-		},
-	}
-
-	v := &vault.Vault{
-		Dir:      dir,
-		Identity: identity,
-		Config:   cfg,
-	}
-
-	srv, err := New(v, "test", "stdio")
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
+	srv := newTestServerWithVault(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		CanWrite:     config.BoolPtr(true),
+		ApprovalMode: config.StrPtr("none"),
+	}, "stdio", t.TempDir())
 	defer func() { _ = srv.Close() }()
 
-	err = srv.authorize(context.Background(), "", false, false)
+	err := srv.authorize(context.Background(), "", false, false)
 	if err == nil {
 		t.Error("authorize() expected error for empty path")
 	}
 }
 
 func TestAuthorize_WriteWithoutPermission(t *testing.T) {
-	dir := t.TempDir()
-	identity, err := age.GenerateX25519Identity()
-	if err != nil {
-		t.Fatalf("generate identity: %v", err)
-	}
-
-	cfg := &config.Config{
-		DefaultAgent: "test",
-		Agents: map[string]config.AgentProfile{
-			"test": {
-				Name:         "test",
-				AllowedPaths: []string{"*"},
-				CanWrite:     config.BoolPtr(false),
-				ApprovalMode: config.StrPtr("none"),
-			},
-		},
-	}
-
-	v := &vault.Vault{
-		Dir:      dir,
-		Identity: identity,
-		Config:   cfg,
-	}
-
-	srv, err := New(v, "test", "stdio")
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
+	srv := newTestServerWithVault(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		CanWrite:     config.BoolPtr(false),
+		ApprovalMode: config.StrPtr("none"),
+	}, "stdio", t.TempDir())
 	defer func() { _ = srv.Close() }()
 
-	err = srv.authorize(context.Background(), "work/entry", true, false)
+	err := srv.authorize(context.Background(), "work/entry", true, false)
 	if err == nil {
 		t.Error("authorize() expected error for write without permission")
 	}
 }
 
 func TestAuthorize_WriteWithApprovalDeny(t *testing.T) {
-	dir := t.TempDir()
-	identity, err := age.GenerateX25519Identity()
-	if err != nil {
-		t.Fatalf("generate identity: %v", err)
-	}
-
-	cfg := &config.Config{
-		DefaultAgent: "test",
-		Agents: map[string]config.AgentProfile{
-			"test": {
-				Name:         "test",
-				AllowedPaths: []string{"*"},
-				CanWrite:     config.BoolPtr(true),
-				ApprovalMode: config.StrPtr("deny"),
-			},
-		},
-	}
-
-	v := &vault.Vault{
-		Dir:      dir,
-		Identity: identity,
-		Config:   cfg,
-	}
-
-	srv, err := New(v, "test", "stdio")
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
+	srv := newTestServerWithVault(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		CanWrite:     config.BoolPtr(true),
+		ApprovalMode: config.StrPtr("deny"),
+	}, "stdio", t.TempDir())
 	defer func() { _ = srv.Close() }()
 
-	err = srv.authorize(context.Background(), "work/entry", true, false)
+	err := srv.authorize(context.Background(), "work/entry", true, false)
 	if err == nil {
 		t.Error("authorize() expected error for write with approval deny")
 	}
 }
 
 func TestAuthorize_WriteWithApprovalButNotApproved(t *testing.T) {
-	dir := t.TempDir()
-	identity, err := age.GenerateX25519Identity()
-	if err != nil {
-		t.Fatalf("generate identity: %v", err)
-	}
-
-	cfg := &config.Config{
-		DefaultAgent: "test",
-		Agents: map[string]config.AgentProfile{
-			"test": {
-				Name:         "test",
-				AllowedPaths: []string{"*"},
-				CanWrite:     config.BoolPtr(true),
-				ApprovalMode: config.StrPtr("deny"),
-			},
-		},
-	}
-
-	v := &vault.Vault{
-		Dir:      dir,
-		Identity: identity,
-		Config:   cfg,
-	}
-
-	srv, err := New(v, "test", "stdio")
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
+	srv := newTestServerWithVault(t, config.AgentProfile{
+		Name:         "test",
+		AllowedPaths: []string{"*"},
+		CanWrite:     config.BoolPtr(true),
+		ApprovalMode: config.StrPtr("deny"),
+	}, "stdio", t.TempDir())
 	defer func() { _ = srv.Close() }()
 
-	err = srv.authorize(context.Background(), "work/entry", true, false)
+	err := srv.authorize(context.Background(), "work/entry", true, false)
 	if err == nil {
 		t.Error("authorize() expected error when approval required but not approved")
 	}

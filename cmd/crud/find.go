@@ -2,10 +2,11 @@ package crud
 
 import (
 	"fmt"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"runtime"
 	"strings"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	"github.com/spf13/cobra"
 

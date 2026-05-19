@@ -3,10 +3,11 @@ package admin
 import (
 	"context"
 	"fmt"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
 	"strings"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	"github.com/spf13/cobra"
 

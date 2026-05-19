@@ -3,9 +3,10 @@ package auth
 import (
 	"context"
 	"fmt"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	"github.com/spf13/cobra"
 

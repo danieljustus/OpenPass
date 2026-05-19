@@ -3,9 +3,10 @@ package crud
 import (
 	"bufio"
 	"fmt"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"strings"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	"github.com/spf13/cobra"
 

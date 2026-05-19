@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"strings"
 	"testing"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 )
 
 func TestAuthRotate_ValidatesLengthBeforeConfirmation(t *testing.T) {

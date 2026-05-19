@@ -3,12 +3,13 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	admin "github.com/danieljustus/OpenPass/cmd/admin"
 	"github.com/danieljustus/OpenPass/internal/audit"

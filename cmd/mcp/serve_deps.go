@@ -3,10 +3,11 @@ package mcp
 import (
 	"context"
 	"fmt"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"sync"
 	"syscall"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	"net"
 	"strings"

@@ -2,12 +2,13 @@ package cmd
 
 import (
 	"fmt"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	mcpcmd "github.com/danieljustus/OpenPass/cmd/mcp"
 	"github.com/danieljustus/OpenPass/internal/config"

@@ -202,7 +202,7 @@ func startManifestWorker() {
 // Errors from the eventual manifest write are silently dropped — the entry
 // file is already on disk and RebuildManifest will repair the manifest.
 // Callers that need synchronous consistency should call FlushManifestUpdates.
-func queueManifestUpdate(vaultDir, path string, ciphertext []byte, identity *age.X25519Identity) error {
+func queueManifestUpdate(vaultDir, path string, ciphertext []byte, identity *age.X25519Identity) {
 	manifestChOnce.Do(startManifestWorker)
 	manifestCh <- manifestOp{
 		opType:     manifestOpUpdate,
@@ -211,7 +211,6 @@ func queueManifestUpdate(vaultDir, path string, ciphertext []byte, identity *age
 		ciphertext: ciphertext,
 		identity:   identity,
 	}
-	return nil
 }
 
 // queueManifestRemove enqueues an entry removal from the manifest. The update
@@ -222,7 +221,7 @@ func queueManifestUpdate(vaultDir, path string, ciphertext []byte, identity *age
 // Errors from the eventual manifest write are silently dropped — the entry
 // file is already gone and RebuildManifest will repair the manifest.
 // Callers that need synchronous consistency should call FlushManifestUpdates.
-func queueManifestRemove(vaultDir, path string, identity *age.X25519Identity) error {
+func queueManifestRemove(vaultDir, path string, identity *age.X25519Identity) {
 	manifestChOnce.Do(startManifestWorker)
 	manifestCh <- manifestOp{
 		opType:   manifestOpRemove,
@@ -230,7 +229,6 @@ func queueManifestRemove(vaultDir, path string, identity *age.X25519Identity) er
 		path:     path,
 		identity: identity,
 	}
-	return nil
 }
 
 // FlushManifestUpdates blocks until all previously queued manifest operations

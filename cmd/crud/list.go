@@ -2,6 +2,7 @@ package crud
 
 import (
 	"fmt"
+
 	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	"github.com/spf13/cobra"

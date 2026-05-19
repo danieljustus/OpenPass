@@ -3,10 +3,11 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
 	"strings"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	"github.com/spf13/cobra"
 

@@ -1,12 +1,13 @@
 package cmd
 
 import (
-	admin "github.com/danieljustus/OpenPass/cmd/admin"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	admin "github.com/danieljustus/OpenPass/cmd/admin"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"

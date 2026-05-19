@@ -20,6 +20,7 @@ import (
 	"github.com/danieljustus/OpenPass/internal/config"
 
 	mcpcmd "github.com/danieljustus/OpenPass/cmd/mcp"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 	mcpint "github.com/danieljustus/OpenPass/internal/mcp"
 	"github.com/danieljustus/OpenPass/internal/mcp/serverbootstrap"
 	"github.com/danieljustus/OpenPass/internal/session"
@@ -803,8 +804,8 @@ func TestServeCommand_ActiveSessionUsesNonInteractiveUnlock(t *testing.T) {
 	vaultDir, cleanup := setupServeCommandTest(t)
 	defer cleanup()
 
-	sessionIsExpired = func(string) bool { return false }
-	defer func() { sessionIsExpired = session.IsSessionExpired }()
+	cli.SessionIsExpired = func(string) bool { return false }
+	defer func() { cli.SessionIsExpired = session.IsSessionExpired }()
 
 	var unlockCalls []bool
 	mcpcmd.ServeUnlockVault = func(_ string, interactive bool) (*vaultpkg.Vault, error) {
@@ -831,8 +832,8 @@ func TestServeCommand_ExpiredSessionUsesInteractiveUnlock(t *testing.T) {
 	vaultDir, cleanup := setupServeCommandTest(t)
 	defer cleanup()
 
-	sessionIsExpired = func(string) bool { return true }
-	defer func() { sessionIsExpired = session.IsSessionExpired }()
+	cli.SessionIsExpired = func(string) bool { return true }
+	defer func() { cli.SessionIsExpired = session.IsSessionExpired }()
 
 	var unlockCalls []bool
 	mcpcmd.ServeUnlockVault = func(_ string, interactive bool) (*vaultpkg.Vault, error) {
@@ -859,8 +860,8 @@ func TestServeCommand_ActiveSessionFallbackToInteractive(t *testing.T) {
 	vaultDir, cleanup := setupServeCommandTest(t)
 	defer cleanup()
 
-	sessionIsExpired = func(string) bool { return false }
-	defer func() { sessionIsExpired = session.IsSessionExpired }()
+	cli.SessionIsExpired = func(string) bool { return false }
+	defer func() { cli.SessionIsExpired = session.IsSessionExpired }()
 
 	var unlockCalls []bool
 	mcpcmd.ServeUnlockVault = func(_ string, interactive bool) (*vaultpkg.Vault, error) {

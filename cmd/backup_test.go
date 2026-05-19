@@ -3,13 +3,14 @@ package cmd
 import (
 	"archive/tar"
 	"compress/gzip"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	admin "github.com/danieljustus/OpenPass/cmd/admin"
 	"github.com/danieljustus/OpenPass/internal/config"

@@ -2,9 +2,10 @@ package mcp
 
 import (
 	"fmt"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"strings"
 	"time"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	"github.com/spf13/cobra"
 

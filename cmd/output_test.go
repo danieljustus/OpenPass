@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"io"
 	"os"
 	"strings"
 	"testing"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 )
 
 func TestNewPrinter_ValidFormats(t *testing.T) {

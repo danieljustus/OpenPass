@@ -3,8 +3,9 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	"gopkg.in/yaml.v3"
 )

@@ -1,11 +1,12 @@
 package cmd
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	"github.com/danieljustus/OpenPass/internal/config"
 	gitpkg "github.com/danieljustus/OpenPass/internal/git"

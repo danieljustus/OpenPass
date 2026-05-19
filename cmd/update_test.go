@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	admin "github.com/danieljustus/OpenPass/cmd/admin"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	admin "github.com/danieljustus/OpenPass/cmd/admin"
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	"gopkg.in/yaml.v3"
 

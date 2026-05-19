@@ -39,26 +39,26 @@ func resetVaultFlag(t *testing.T) {
 func stubSessionFuncs(t *testing.T) func() {
 	t.Helper()
 
-	oldLoad := sessionLoadPassphrase
-	oldSave := sessionSavePassphrase
-	oldIsExpired := sessionIsExpired
-	oldLoadBiometric := sessionLoadBiometric
-	oldSaveBiometric := sessionSaveBiometric
-	oldSaveIdentity := sessionSaveIdentity
-	oldGetCacheStatus := sessionGetCacheStatus
-	sessionLoadBiometric = func(context.Context, string) ([]byte, error) { return nil, errors.New("not configured") }
-	sessionSaveBiometric = func(context.Context, string, []byte) error { return nil }
-	sessionSaveIdentity = func(string, string, time.Duration) error { return nil }
-	sessionGetCacheStatus = func() session.CacheStatus { return session.CacheStatus{Persistent: true} }
+	oldLoad := cli.SessionLoadPassphrase
+	oldSave := cli.SessionSavePassphrase
+	oldIsExpired := cli.SessionIsExpired
+	oldLoadBiometric := cli.SessionLoadBiometric
+	oldSaveBiometric := cli.SessionSaveBiometric
+	oldSaveIdentity := cli.SessionSaveIdentity
+	oldGetCacheStatus := cli.SessionGetCacheStatus
+	cli.SessionLoadBiometric = func(context.Context, string) ([]byte, error) { return nil, errors.New("not configured") }
+	cli.SessionSaveBiometric = func(context.Context, string, []byte) error { return nil }
+	cli.SessionSaveIdentity = func(string, string, time.Duration) error { return nil }
+	cli.SessionGetCacheStatus = func() session.CacheStatus { return session.CacheStatus{Persistent: true} }
 
 	return func() {
-		sessionLoadPassphrase = oldLoad
-		sessionSavePassphrase = oldSave
-		sessionIsExpired = oldIsExpired
-		sessionLoadBiometric = oldLoadBiometric
-		sessionSaveBiometric = oldSaveBiometric
-		sessionSaveIdentity = oldSaveIdentity
-		sessionGetCacheStatus = oldGetCacheStatus
+		cli.SessionLoadPassphrase = oldLoad
+		cli.SessionSavePassphrase = oldSave
+		cli.SessionIsExpired = oldIsExpired
+		cli.SessionLoadBiometric = oldLoadBiometric
+		cli.SessionSaveBiometric = oldSaveBiometric
+		cli.SessionSaveIdentity = oldSaveIdentity
+		cli.SessionGetCacheStatus = oldGetCacheStatus
 	}
 }
 
@@ -312,10 +312,10 @@ func TestUnlockVault_UsesConfiguredSessionTimeout(t *testing.T) {
 	restoreSessionFuncs := stubSessionFuncs(t)
 	var savedPassphrase string
 	var savedTTL time.Duration
-	sessionLoadPassphrase = func(string) ([]byte, error) {
+	cli.SessionLoadPassphrase = func(string) ([]byte, error) {
 		return nil, errors.New("not found")
 	}
-	sessionSavePassphrase = func(_ string, passphrase []byte, ttl time.Duration) error {
+	cli.SessionSavePassphrase = func(_ string, passphrase []byte, ttl time.Duration) error {
 		savedPassphrase = string(passphrase)
 		savedTTL = ttl
 		return nil
@@ -354,10 +354,10 @@ func TestUnlockCommand_UsesConfiguredSessionTimeoutByDefault(t *testing.T) {
 
 	restoreSessionFuncs := stubSessionFuncs(t)
 	var savedTTL time.Duration
-	sessionLoadPassphrase = func(string) ([]byte, error) {
+	cli.SessionLoadPassphrase = func(string) ([]byte, error) {
 		return nil, errors.New("not found")
 	}
-	sessionSavePassphrase = func(_ string, _ []byte, ttl time.Duration) error {
+	cli.SessionSavePassphrase = func(_ string, _ []byte, ttl time.Duration) error {
 		savedTTL = ttl
 		return nil
 	}
@@ -664,17 +664,17 @@ func TestReadHiddenInput_StdinEOF(t *testing.T) {
 
 func TestWarnPipeRead_OnceAndSilenced(t *testing.T) {
 	oldEmitted := cli.PipeWarningEmitted
-	oldNoPipe := noPipeWarning
-	oldQuiet := quietMode
+	oldNoPipe := cli.NoPipeWarning
+	oldQuiet := cli.QuietMode
 	defer func() {
 		cli.PipeWarningEmitted = oldEmitted
-		noPipeWarning = oldNoPipe
-		quietMode = oldQuiet
+		cli.NoPipeWarning = oldNoPipe
+		cli.QuietMode = oldQuiet
 	}()
 
 	// Suppressed when --no-pipe-warning is set.
 	cli.PipeWarningEmitted = false
-	noPipeWarning = true
+	cli.NoPipeWarning = true
 	cli.WarnPipeRead("Passphrase")
 	if cli.PipeWarningEmitted {
 		t.Errorf("warning fired despite --no-pipe-warning")
@@ -682,7 +682,7 @@ func TestWarnPipeRead_OnceAndSilenced(t *testing.T) {
 
 	// Suppressed when OPENPASS_NO_PIPE_WARNING is set.
 	cli.PipeWarningEmitted = false
-	noPipeWarning = false
+	cli.NoPipeWarning = false
 	t.Setenv("OPENPASS_NO_PIPE_WARNING", "1")
 	cli.WarnPipeRead("Passphrase")
 	if cli.PipeWarningEmitted {
@@ -692,12 +692,12 @@ func TestWarnPipeRead_OnceAndSilenced(t *testing.T) {
 
 	// Suppressed in quiet mode.
 	cli.PipeWarningEmitted = false
-	quietMode = true
+	cli.QuietMode = true
 	cli.WarnPipeRead("Passphrase")
 	if cli.PipeWarningEmitted {
 		t.Errorf("warning fired despite --quiet")
 	}
-	quietMode = false
+	cli.QuietMode = false
 
 	// Fires once when not suppressed.
 	cli.PipeWarningEmitted = false

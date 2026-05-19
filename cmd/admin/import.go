@@ -4,12 +4,13 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"os"
 	"path"
 	"sort"
 	"strings"
 	"time"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	"github.com/spf13/cobra"
 

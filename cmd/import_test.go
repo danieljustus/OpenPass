@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	cli "github.com/danieljustus/OpenPass/internal/cli"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -9,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	cli "github.com/danieljustus/OpenPass/internal/cli"
 
 	vaultpkg "github.com/danieljustus/OpenPass/internal/vault"
 	vaultsvc "github.com/danieljustus/OpenPass/internal/vaultsvc"
