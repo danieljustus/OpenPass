@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -350,13 +351,9 @@ func (l *Logger) EnforceRetention() error {
 	}
 
 	// Sort by modification time, oldest first
-	for i := 0; i < len(rotatedFiles)-1; i++ {
-		for j := i + 1; j < len(rotatedFiles); j++ {
-			if rotatedFiles[i].ModTime().After(rotatedFiles[j].ModTime()) {
-				rotatedFiles[i], rotatedFiles[j] = rotatedFiles[j], rotatedFiles[i]
-			}
-		}
-	}
+	sort.Slice(rotatedFiles, func(i, j int) bool {
+		return rotatedFiles[i].ModTime().Before(rotatedFiles[j].ModTime())
+	})
 
 	// Check max backups policy - keep at most MaxBackups files
 	backupsToDelete := len(rotatedFiles) - config.MaxBackups
