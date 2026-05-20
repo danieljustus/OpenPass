@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"unsafe"
-
 	cryptopkg "github.com/danieljustus/OpenPass/internal/crypto"
 )
 
@@ -159,30 +157,26 @@ func collectTOTP(data map[string]any, reader *bufio.Reader, flags EntryFlags) er
 	}
 
 	fmt.Fprint(os.Stderr, "TOTP Secret (optional): ")
-	totpLine, err := reader.ReadString('\n')
+	totpBytes, err := reader.ReadBytes('\n')
 	if err != nil {
 		return fmt.Errorf("read TOTP secret: %w", err)
 	}
-	totpLine = strings.TrimSpace(totpLine)
+	totpLine := strings.TrimSpace(string(totpBytes))
 	if totpLine == "" {
+		cryptopkg.Wipe(totpBytes)
 		return nil
 	}
 
-	// Make a copy so the original string's backing array can be wiped.
+	// Make a copy so the original backing array can be wiped.
 	secretCopy := string([]byte(totpLine))
 
 	totpData := map[string]any{
 		"secret": secretCopy,
 	}
 
-	// Wipe the original string's backing array to prevent the TOTP secret
+	// Wipe the original backing array to prevent the TOTP secret
 	// from persisting in process memory after the function returns.
-	// #nosec G103 — intentional: unsafe.StringData/Slice create a byte slice
-	// over the original string's backing array so Wipe() clears the only
-	// in-memory copy that is not stored in the vault data map.
-	ptr := unsafe.StringData(totpLine)
-	buf := unsafe.Slice(ptr, len(totpLine))
-	cryptopkg.Wipe(buf)
+	cryptopkg.Wipe(totpBytes)
 
 	if !flags.SkipTOTPDetails {
 		fmt.Fprint(os.Stderr, "TOTP Issuer (optional): ")
