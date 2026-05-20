@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unsafe"
 
 	"filippo.io/age"
 	"github.com/spf13/cobra"
@@ -42,6 +43,23 @@ var IsTerminalFunc func(int) bool = term.IsTerminal
 // PipeWarningEmitted tracks whether the pipe-input warning has already been
 // printed in this process so we only nag once per invocation.
 var PipeWarningEmitted bool
+
+// EnvPassphraseWarningEmitted tracks whether the OPENPASS_PASSPHRASE env-var
+// warning has already been printed in this process.
+var EnvPassphraseWarningEmitted bool
+
+// WarnEnvPassphrase prints a one-shot warning that OPENPASS_PASSPHRASE is set,
+// which makes the passphrase visible in /proc/PID/environ and process listings.
+func WarnEnvPassphrase() {
+	if EnvPassphraseWarningEmitted || QuietMode {
+		return
+	}
+	if v := os.Getenv("OPENPASS_NO_ENV_WARNING"); v != "" && v != "0" {
+		return
+	}
+	EnvPassphraseWarningEmitted = true
+	cliout.Warnf("OPENPASS_PASSPHRASE is set — the passphrase is visible in /proc/PID/environ and may be exposed in process listings and crash dumps.")
+}
 
 // WarnPipeRead prints a one-shot warning that hidden input is being read from
 // a non-TTY (pipe/redirect).
@@ -375,8 +393,15 @@ func resolveUnlockPassphrase(vaultDir string, interactive bool, cfg *configpkg.C
 		}
 		if len(passphrase) == 0 {
 			if envPass := os.Getenv("OPENPASS_PASSPHRASE"); envPass != "" {
-				passphrase = []byte(envPass)
+				// Use unsafe.Slice to alias the string backing array without a heap copy.
+				// This way the deferred Wipe(passphrase) at the call site clears the only
+				// copy of the passphrase in memory, and the os.Unsetenv does not leave a
+				// lingering string on the heap.
+				// #nosec G103 — intentional: unsafe.Slice avoids heap-copying the passphrase
+				// so that the subsequent Wipe clears the only copy in memory.
+				passphrase = unsafe.Slice(unsafe.StringData(envPass), len(envPass))
 				passphraseFromEnv = true
+				WarnEnvPassphrase()
 			}
 			_ = os.Unsetenv("OPENPASS_PASSPHRASE")
 		}
