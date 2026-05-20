@@ -3,9 +3,10 @@ package cli
 import (
 	"bufio"
 	"fmt"
-	cryptopkg "github.com/danieljustus/OpenPass/internal/crypto"
 	"os"
 	"strings"
+
+	cryptopkg "github.com/danieljustus/OpenPass/internal/crypto"
 )
 
 type EntryFlags struct {
