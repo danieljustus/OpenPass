@@ -149,9 +149,14 @@ var ThemePreset string
 var RootCmd = &cobra.Command{
 	Use:   "openpass",
 	Short: "OpenPass is a Go CLI password manager",
-	Long: `OpenPass is a Go CLI password manager with an interactive TUI, multi-device
+	Long: `Quick Start:
+  openpass init            create a vault and identity
+  openpass add <name>      add a credential
+  openpass get <name>      retrieve a credential
+
+OpenPass is a Go CLI password manager with an interactive TUI, multi-device
 sync via Git, and an MCP server for AI-agent integration.
- 
+
 First-time setup:
    1. openpass init         create a vault and identity (non-interactive)
    2. openpass setup        same, plus guided wizard for sync/agents (TTY only)

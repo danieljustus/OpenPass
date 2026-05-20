@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -350,13 +351,9 @@ func (l *Logger) EnforceRetention() error {
 	}
 
 	// Sort by modification time, oldest first
-	for i := 0; i < len(rotatedFiles)-1; i++ {
-		for j := i + 1; j < len(rotatedFiles); j++ {
-			if rotatedFiles[i].ModTime().After(rotatedFiles[j].ModTime()) {
-				rotatedFiles[i], rotatedFiles[j] = rotatedFiles[j], rotatedFiles[i]
-			}
-		}
-	}
+	sort.Slice(rotatedFiles, func(i, j int) bool {
+		return rotatedFiles[i].ModTime().Before(rotatedFiles[j].ModTime())
+	})
 
 	// Check max backups policy - keep at most MaxBackups files
 	backupsToDelete := len(rotatedFiles) - config.MaxBackups
@@ -469,33 +466,71 @@ func (l *Logger) lastNEntries(n int) ([]LogEntry, error) {
 		return nil, nil
 	}
 
-	// Read file content into memory for parsing (avoids bad file descriptor with O_APPEND)
-	data, err := os.ReadFile(l.path)
+	f, err := os.Open(l.path)
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = f.Close() }()
 
+	readSize := int64(4096)
 	var entries []LogEntry
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Split(scanLines)
+	for {
+		if readSize > fileSize {
+			readSize = fileSize
+		}
+		start := fileSize - readSize
 
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+		buf := make([]byte, readSize)
+		if _, err := f.ReadAt(buf, start); err != nil {
+			return nil, err
+		}
+
+		entries = parseTailEntries(buf, start == 0)
+		if len(entries) >= n || readSize >= fileSize {
+			if len(entries) > n {
+				entries = entries[len(entries)-n:]
+			}
+			return entries, nil
+		}
+		readSize *= 2
+	}
+}
+
+// parseTailEntries extracts complete JSON log entries from the tail of a JSONL file.
+// data may start in the middle of a line if atStart is false. Only complete lines
+// (terminated by \n) are parsed. Malformed lines are skipped.
+func parseTailEntries(data []byte, atStart bool) []LogEntry {
+	idx := 0
+	if !atStart && len(data) > 0 && data[0] != '\n' {
+		if nl := bytes.IndexByte(data, '\n'); nl >= 0 {
+			idx = nl + 1
+		} else {
+			return nil
+		}
+	}
+	for idx < len(data) && data[idx] == '\n' {
+		idx++
+	}
+	if idx >= len(data) {
+		return nil
+	}
+
+	lines := strings.Split(string(data[idx:]), "\n")
+	var entries []LogEntry
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
 		var entry LogEntry
 		if err := json.Unmarshal([]byte(line), &entry); err == nil {
 			entries = append(entries, entry)
-			if len(entries) > n {
-				entries = entries[len(entries)-n:]
-			}
 		}
 	}
-
-	return entries, nil
+	return entries
 }
 
+//nolint:unparam // signature required by bufio.SplitFunc
 func scanLines(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if atEOF && len(data) == 0 {
 		return 0, nil, nil
@@ -554,19 +589,58 @@ func (l *Logger) readLastHMAC() ([]byte, error) {
 	if err != nil {
 		return nil, nil
 	}
-	if info.Size() == 0 {
+	fileSize := info.Size()
+	if fileSize == 0 {
 		return nil, nil
 	}
 
-	data, err := os.ReadFile(l.path)
+	f, err := os.Open(l.path)
 	if err != nil {
 		return nil, nil
 	}
+	defer func() { _ = f.Close() }()
 
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	lastLine := lines[len(lines)-1]
-	if lastLine == "" && len(lines) > 1 {
-		lastLine = lines[len(lines)-2]
+	readSize := int64(4096)
+	var lastLine string
+
+	for {
+		if readSize > fileSize {
+			readSize = fileSize
+		}
+		start := fileSize - readSize
+
+		buf := make([]byte, readSize)
+		if _, err := f.ReadAt(buf, start); err != nil {
+			return nil, nil
+		}
+
+		idx := 0
+		if start > 0 {
+			nl := bytes.IndexByte(buf, '\n')
+			if nl >= 0 {
+				idx = nl + 1
+			} else {
+				if readSize >= fileSize {
+					return nil, nil
+				}
+				readSize *= 2
+				continue
+			}
+		}
+
+		text := string(buf[idx:])
+		lines := strings.Split(text, "\n")
+		for i := len(lines) - 1; i >= 0; i-- {
+			if strings.TrimSpace(lines[i]) != "" {
+				lastLine = lines[i]
+				break
+			}
+		}
+		break
+	}
+
+	if lastLine == "" {
+		return nil, nil
 	}
 
 	var lastEntry LogEntry

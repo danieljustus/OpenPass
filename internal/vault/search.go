@@ -327,12 +327,13 @@ func listPseudonymized(vaultDir, prefix string) ([]string, error) {
 		if decryptErr != nil {
 			return nil
 		}
-		defer vaultcrypto.Wipe(plaintext)
 
 		var entry Entry
 		if jsonErr := json.Unmarshal(plaintext, &entry); jsonErr != nil {
+			vaultcrypto.Wipe(plaintext)
 			return nil
 		}
+		vaultcrypto.Wipe(plaintext)
 
 		entryPath := entry.Path
 		if entryPath == "" {

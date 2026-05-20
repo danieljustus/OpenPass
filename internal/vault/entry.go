@@ -258,13 +258,13 @@ func ReadEntry(vaultDir, path string, identity *age.X25519Identity) (*Entry, err
 		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
-	defer vaultcrypto.Wipe(plaintext)
-
 	var entry Entry
 	if err := json.Unmarshal(plaintext, &entry); err != nil {
+		vaultcrypto.Wipe(plaintext)
 		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
+	vaultcrypto.Wipe(plaintext)
 	if entry.Data == nil {
 		entry.Data = map[string]any{}
 	}
